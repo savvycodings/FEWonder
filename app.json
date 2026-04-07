@@ -16,14 +16,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.app"
+      "bundleIdentifier": "com.brrrkyle.wonderport"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.anonymous.app"
+      "package": "com.brrrkyle.wonderport"
     },
     "web": {
       "favicon": "./assets/favicon.png"
