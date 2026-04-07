@@ -2,22 +2,31 @@ import { useContext } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { ThemeContext } from '../context'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 export function Payment({ navigation, route }: any) {
   const { theme } = useContext(ThemeContext)
-  const insets = useSafeAreaInsets()
   const styles = getStyles(theme)
   const value = String(route?.params?.paymentMethod || '').trim()
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
-      <View style={styles.headerRow}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-          <FeatherIcon name="arrow-left" size={18} color="#2a335f" />
-        </Pressable>
-        <Text style={styles.title}>Payment Method</Text>
-      </View>
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeTop} edges={['top']}>
+        <View style={styles.topNavRow}>
+          <View style={styles.headerRow}>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <FeatherIcon name="arrow-left" size={20} color="#2a335f" />
+            </Pressable>
+            <Text style={styles.title}>Payment Method</Text>
+          </View>
+        </View>
+      </SafeAreaView>
 
       <View style={styles.card}>
         <Text style={styles.label}>Saved payment method</Text>
@@ -34,17 +43,23 @@ const getStyles = (theme: any) =>
     container: {
       flex: 1,
       backgroundColor: '#f7f8fb',
+    },
+    safeTop: {
+      backgroundColor: '#f7f8fb',
+    },
+    topNavRow: {
       paddingHorizontal: 16,
+      paddingBottom: 8,
     },
     headerRow: {
+      minHeight: 44,
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: 14,
     },
     backButton: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
       backgroundColor: '#ffffff',
       alignItems: 'center',
       justifyContent: 'center',
@@ -56,6 +71,8 @@ const getStyles = (theme: any) =>
       fontSize: 22,
     },
     card: {
+      marginHorizontal: 16,
+      marginTop: 8,
       backgroundColor: '#ffffff',
       borderRadius: 16,
       borderWidth: 1,

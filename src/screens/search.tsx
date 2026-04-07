@@ -12,18 +12,13 @@ import {
 import { Feather as FeatherIcon } from '@expo/vector-icons'
 import { ShopifyProduct, User } from '../../types'
 import { listDbProducts } from '../utils'
+import { formatMoney } from '../money'
 
 const banners = [
   require('../../public/homepageimgs/searchbanner.webp'),
   require('../../public/homepageimgs/searchbanner2.webp'),
   require('../../public/homepageimgs/searchbanner3.webp'),
 ]
-const trendingTallImages = [
-  require('../../public/homepageimgs/search31.webp'),
-  require('../../public/homepageimgs/search32.webp'),
-  require('../../public/homepageimgs/search33.webp'),
-]
-
 export function Search({
   navigation,
   user,
@@ -49,6 +44,10 @@ export function Search({
     )
   }, [query, products])
   const avatarInitial = (user?.fullName || 'U').slice(0, 1).toUpperCase()
+  const spotlightProducts = useMemo(() => {
+    const list = filtered.length ? filtered : products
+    return list.slice(0, 3)
+  }, [filtered, products])
 
   useEffect(() => {
     let cancelled = false
@@ -202,26 +201,46 @@ export function Search({
             </View>
           </View>
 
-          <View style={styles.resultsHeader}>
-            <Text style={styles.resultsTitle}>Trending Searches</Text>
-          </View>
+          {spotlightProducts.length > 0 ? (
+            <>
+              <View style={styles.resultsHeader}>
+                <Text style={styles.resultsTitle}>Spotlight</Text>
+              </View>
 
-          <View style={styles.tallRow}>
-            {trendingTallImages.map((img, index) => (
-              <Pressable
-                key={index}
-                style={({ pressed }) => [styles.tallCard, pressed ? styles.cardPressed : null]}
-                onPress={() => {
-                  const product = filtered[index]
-                  if (product) {
-                    navigation.navigate('Product', { product })
-                  }
-                }}
-              >
-                <Image source={img} style={styles.tallImage} resizeMode="cover" />
-              </Pressable>
-            ))}
-          </View>
+              <View style={styles.tallRow}>
+                {spotlightProducts.map((product, index) => {
+                  const thumb = getThumbSource(product)
+                  return (
+                    <Pressable
+                      key={`${product.id || product.handle || product.title}-${index}`}
+                      style={({ pressed }) => [styles.tallCard, pressed ? styles.cardPressed : null]}
+                      onPress={() => navigation.navigate('Product', { product })}
+                    >
+                      {thumb ? (
+                        <View style={styles.tallImageFrame}>
+                          <Image source={thumb} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                        </View>
+                      ) : (
+                        <View style={styles.tallFallback}>
+                          <Text style={styles.tallFallbackText} numberOfLines={3}>
+                            {product.title}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={styles.tallCaption}>
+                        <Text style={styles.tallCaptionTitle} numberOfLines={2}>
+                          {product.title}
+                        </Text>
+                        {product.price?.amount != null && product.price.amount !== '' ? (
+                          <Text style={styles.tallCaptionPrice}>{formatMoney(product.price)}</Text>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  )
+                })}
+              </View>
+            </>
+          ) : null}
 
           <View style={styles.popularSection}>
             <Text style={styles.resultsTitle}>Popular Choices</Text>
@@ -237,11 +256,22 @@ export function Search({
                   onPress={() => navigation.navigate('Product', { product })}
                 >
                   <View style={styles.popularImageWrap}>
-                    <Image source={getThumbSource(product)} style={styles.popularImage} resizeMode="cover" />
+                    <Image
+                      source={getThumbSource(product)}
+                      style={StyleSheet.absoluteFillObject}
+                      resizeMode="cover"
+                    />
                   </View>
-                  <Text numberOfLines={1} style={styles.popularName}>
-                    {product.title}
-                  </Text>
+                  <View style={styles.popularTextBlock}>
+                    <Text numberOfLines={2} style={styles.popularName}>
+                      {product.title}
+                    </Text>
+                    {product.price?.amount != null && product.price.amount !== '' ? (
+                      <Text style={styles.popularPrice}>{formatMoney(product.price)}</Text>
+                    ) : (
+                      <Text style={styles.popularPriceMuted}>Tap for price</Text>
+                    )}
+                  </View>
                 </Pressable>
               ))}
             </ScrollView>
@@ -388,14 +418,48 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 14,
     overflow: 'hidden',
-    backgroundColor: '#e9edf5',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e4e9f3',
   },
   cardPressed: {
     opacity: 0.86,
   },
-  tallImage: {
+  tallImageFrame: {
     width: '100%',
-    height: 260,
+    aspectRatio: 3 / 4,
+    backgroundColor: '#eef1f8',
+    overflow: 'hidden',
+  },
+  tallFallback: {
+    aspectRatio: 3 / 4,
+    backgroundColor: '#eef1f8',
+    padding: 8,
+    justifyContent: 'center',
+  },
+  tallFallbackText: {
+    color: '#5c6788',
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 11,
+    lineHeight: 15,
+    textAlign: 'center',
+  },
+  tallCaption: {
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 10,
+  },
+  tallCaptionTitle: {
+    color: '#2a3359',
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  tallCaptionPrice: {
+    marginTop: 4,
+    color: '#e8703a',
+    fontFamily: 'Geist-Bold',
+    fontSize: 13,
   },
   popularSection: {
     marginTop: 12,
@@ -407,7 +471,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   popularCard: {
-    width: 196,
+    width: 172,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#ffffff',
@@ -416,19 +480,33 @@ const styles = StyleSheet.create({
   },
   popularImageWrap: {
     width: '100%',
-    height: 210,
+    aspectRatio: 1,
     backgroundColor: '#e9edf5',
+    overflow: 'hidden',
   },
-  popularImage: {
-    width: '100%',
-    height: '100%',
+  popularTextBlock: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
   },
   popularName: {
     color: '#2a3359',
     fontFamily: 'Geist-SemiBold',
     fontSize: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    lineHeight: 18,
+    minHeight: 36,
+  },
+  popularPrice: {
+    marginTop: 6,
+    color: '#e8703a',
+    fontFamily: 'Geist-Bold',
+    fontSize: 15,
+  },
+  popularPriceMuted: {
+    marginTop: 6,
+    color: '#9aa3b8',
+    fontFamily: 'Geist-Medium',
+    fontSize: 13,
   },
   loadingText: {
     color: '#8b94aa',

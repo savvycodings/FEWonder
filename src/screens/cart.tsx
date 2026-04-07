@@ -2,12 +2,11 @@ import { useContext, useMemo } from 'react'
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { AppContext } from '../context'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { formatMoney, parseMoneyToNumber } from '../money'
 
 export function Cart({ navigation }: any) {
   const { cartItems, updateCartItemQuantity, removeFromCart, clearCart } = useContext(AppContext)
-  const insets = useSafeAreaInsets()
 
   const total = useMemo(() => {
     return cartItems.reduce((sum, item) => {
@@ -20,52 +19,84 @@ export function Cart({ navigation }: any) {
     navigation.navigate('ProfileHome')
   }
 
+  function cartThumbSource(item: any) {
+    if (item?.featuredImageUrl && String(item.featuredImageUrl).trim()) {
+      return { uri: String(item.featuredImageUrl).trim() }
+    }
+    if (item?.image) return item.image
+    return null
+  }
+
   if (!cartItems.length) {
     return (
       <View style={styles.emptyWrap}>
-        <View style={[styles.emptyHeader, { top: insets.top + 8 }]}>
-          <Pressable style={styles.backButton} onPress={goBackToProfile}>
-            <FeatherIcon name="arrow-left" size={16} color="#5f6780" />
-          </Pressable>
+        <SafeAreaView style={styles.safeTop} edges={['top']}>
+          <View style={styles.topNavRow}>
+            <Pressable
+              style={styles.backButton}
+              onPress={goBackToProfile}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <FeatherIcon name="arrow-left" size={20} color="#5f6780" />
+            </Pressable>
+          </View>
+        </SafeAreaView>
+        <View style={styles.emptyBody}>
+          <View style={styles.emptyIconWrap}>
+            <FeatherIcon name="shopping-cart" size={30} color="#7f89a5" />
+          </View>
+          <Text style={styles.emptyTitle}>Your cart is empty</Text>
+          <Text style={styles.emptySub}>Add products from Home, Search, or Product page.</Text>
         </View>
-        <View style={styles.emptyIconWrap}>
-          <FeatherIcon name="shopping-cart" size={30} color="#7f89a5" />
-        </View>
-        <Text style={styles.emptyTitle}>Your cart is empty</Text>
-        <Text style={styles.emptySub}>Add products from Home, Search, or Product page.</Text>
       </View>
     )
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + 10 }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Pressable style={styles.backButton} onPress={goBackToProfile}>
-            <FeatherIcon name="arrow-left" size={16} color="#5f6780" />
-          </Pressable>
-          <Text style={styles.title}>Shopping Cart</Text>
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeTop} edges={['top']}>
+        <View style={styles.topNavRow}>
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <Pressable
+                style={styles.backButton}
+                onPress={goBackToProfile}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <FeatherIcon name="arrow-left" size={20} color="#5f6780" />
+              </Pressable>
+              <Text style={styles.title}>Shopping Cart</Text>
+            </View>
+            <Pressable onPress={clearCart}>
+              <Text style={styles.clearText}>Clear</Text>
+            </Pressable>
+          </View>
         </View>
-        <Pressable onPress={clearCart}>
-          <Text style={styles.clearText}>Clear</Text>
-        </Pressable>
-      </View>
-
-      {cartItems.map((item) => (
+      </SafeAreaView>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+      {cartItems.map((item) => {
+        const thumb = cartThumbSource(item)
+        return (
         <View key={item.title} style={styles.itemCard}>
           <Pressable style={styles.removeButton} onPress={() => removeFromCart(item.title)}>
             <FeatherIcon name="x" size={14} color="#8f97ad" />
           </Pressable>
           <View style={styles.imageWrap}>
-            <Image
-              source={item.featuredImageUrl ? { uri: item.featuredImageUrl } : item.image}
-              style={styles.image}
-              resizeMode="contain"
-            />
+            {thumb ? (
+              <Image source={thumb} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <Text style={styles.imagePlaceholderText}>{String(item.title || '?').slice(0, 1)}</Text>
+              </View>
+            )}
           </View>
           <View style={styles.itemBody}>
             <Text style={styles.itemTitle}>{item.title}</Text>
@@ -89,7 +120,8 @@ export function Cart({ navigation }: any) {
             </View>
           </View>
         </View>
-      ))}
+        )
+      })}
 
       <View style={styles.summaryCard}>
         <View style={styles.summaryRow}>
@@ -109,7 +141,8 @@ export function Cart({ navigation }: any) {
           <Text style={styles.checkoutText}>Checkout</Text>
         </Pressable>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   )
 }
 
@@ -118,20 +151,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f7f8fb',
   },
+  safeTop: {
+    backgroundColor: '#f7f8fb',
+  },
+  topNavRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  scroll: {
+    flex: 1,
+  },
   content: {
     padding: 16,
+    paddingTop: 8,
     paddingBottom: 120,
   },
   header: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  emptyHeader: {
-    position: 'absolute',
-    top: 18,
-    left: 16,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -139,9 +178,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   backButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#eef2f9',
     alignItems: 'center',
     justifyContent: 'center',
@@ -149,7 +188,7 @@ const styles = StyleSheet.create({
   title: {
     color: '#243056',
     fontFamily: 'Geist-Bold',
-    fontSize: 28,
+    fontSize: 22,
   },
   clearText: {
     color: '#f5a25d',
@@ -182,12 +221,19 @@ const styles = StyleSheet.create({
     height: 78,
     borderRadius: 12,
     backgroundColor: '#eff3fa',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  imagePlaceholder: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#e4eaf5',
   },
-  image: {
-    width: '100%',
-    height: '100%',
+  imagePlaceholderText: {
+    color: '#8f97ad',
+    fontFamily: 'Geist-Bold',
+    fontSize: 22,
   },
   itemBody: {
     flex: 1,
@@ -278,6 +324,9 @@ const styles = StyleSheet.create({
   emptyWrap: {
     flex: 1,
     backgroundColor: '#f7f8fb',
+  },
+  emptyBody: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 30,

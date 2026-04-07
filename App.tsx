@@ -19,6 +19,7 @@ import {
 } from '@gorhom/bottom-sheet'
 import { StyleSheet, LogBox } from 'react-native'
 import { Platform } from 'react-native'
+import { SafeAreaProvider } from 'react-native-safe-area-context'
 
 LogBox.ignoreLogs([
   'Key "cancelled" in the image picker result is deprecated and will be removed in SDK 48, use "canceled" instead',
@@ -154,6 +155,7 @@ export default function App() {
   if (!fontsLoaded) return null
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
       <AppContext.Provider
         value={{
           chatType,
@@ -203,6 +205,7 @@ export default function App() {
             </BottomSheetModalProvider>
         </ThemeContext.Provider>
       </AppContext.Provider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   )
 }

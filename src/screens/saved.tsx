@@ -2,12 +2,11 @@ import { useContext } from 'react'
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { AppContext } from '../context'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { formatMoney } from '../money'
 
 export function Saved({ navigation }: any) {
   const { savedItems, removeSavedItem } = useContext(AppContext)
-  const insets = useSafeAreaInsets()
 
   if (!savedItems.length) {
     return (
@@ -22,16 +21,20 @@ export function Saved({ navigation }: any) {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + 10 }]}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>Saved Items</Text>
-        <Text style={styles.count}>{savedItems.length} saved</Text>
-      </View>
-
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeTop} edges={['top']}>
+        <View style={styles.topNavRow}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Saved Items</Text>
+            <Text style={styles.count}>{savedItems.length} saved</Text>
+          </View>
+        </View>
+      </SafeAreaView>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
       {savedItems.map((item) => (
         <Pressable
           key={item.title}
@@ -41,8 +44,8 @@ export function Saved({ navigation }: any) {
           <View style={styles.imageWrap}>
             <Image
               source={item.featuredImageUrl ? { uri: item.featuredImageUrl } : item.image}
-              style={styles.image}
-              resizeMode="contain"
+              style={StyleSheet.absoluteFillObject}
+              resizeMode="cover"
             />
           </View>
           <View style={styles.itemBody}>
@@ -60,7 +63,8 @@ export function Saved({ navigation }: any) {
           </Pressable>
         </Pressable>
       ))}
-    </ScrollView>
+      </ScrollView>
+    </View>
   )
 }
 
@@ -69,20 +73,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f7f8fb',
   },
+  safeTop: {
+    backgroundColor: '#f7f8fb',
+  },
+  topNavRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  scroll: {
+    flex: 1,
+  },
   content: {
     padding: 16,
+    paddingTop: 4,
     paddingBottom: 110,
   },
   header: {
+    minHeight: 44,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
   },
   title: {
     color: '#243056',
     fontFamily: 'Geist-Bold',
-    fontSize: 28,
+    fontSize: 22,
   },
   count: {
     color: '#8f97ad',
@@ -103,12 +118,7 @@ const styles = StyleSheet.create({
     height: 74,
     borderRadius: 12,
     backgroundColor: '#eff3fa',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  image: {
-    width: '100%',
-    height: '100%',
+    overflow: 'hidden',
   },
   itemBody: {
     flex: 1,

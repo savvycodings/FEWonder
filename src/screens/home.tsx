@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from 'react'
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { ThemeContext } from '../context'
 import { listDbProducts } from '../utils'
@@ -13,7 +13,12 @@ function getImageSource(item: any) {
   return item?.image
 }
 
+const GRID_PAD = 16
+const GRID_GAP = 12
+
 export function Home({ navigation }: any) {
+  const { width } = useWindowDimensions()
+  const cardW = (width - GRID_PAD * 2 - GRID_GAP) / 2
   const { theme } = useContext(ThemeContext)
   const styles = getStyles(theme)
   const heroGreeting = useMemo(() => 'Daily Wonderport Drops', [])
@@ -97,22 +102,39 @@ export function Home({ navigation }: any) {
       ) : null}
 
       <View style={styles.grid}>
-        {products.map((item) => (
-          <TouchableOpacity
-            key={item.id || item.handle || item.title}
-            style={styles.card}
-            activeOpacity={0.9}
-            onPress={() => navigation.navigate('Product', { product: item })}
-          >
-            <View style={styles.media}>
-              <Image source={getImageSource(item)} style={styles.mediaImage} resizeMode="contain" />
-            </View>
-            <Text style={styles.itemTitle}>{item.title}</Text>
-            <Text style={styles.priceText}>
-              {item.price?.amount ? formatMoney(item.price) : ''}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {products.map((item) => {
+          const src = getImageSource(item)
+          const priceLabel =
+            item.price?.amount != null && item.price.amount !== ''
+              ? formatMoney(item.price)
+              : 'View details'
+          return (
+            <TouchableOpacity
+              key={item.id || item.handle || item.title}
+              style={[styles.card, { width: cardW }]}
+              activeOpacity={0.9}
+              onPress={() => navigation.navigate('Product', { product: item })}
+            >
+              <View style={styles.media}>
+                {src ? (
+                  <Image source={src} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                ) : (
+                  <View style={styles.mediaPlaceholder}>
+                    <Text style={styles.mediaPlaceholderText} numberOfLines={2}>
+                      {item.title}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.cardBody}>
+                <Text style={styles.itemTitle} numberOfLines={2} ellipsizeMode="tail">
+                  {item.title}
+                </Text>
+                <Text style={styles.priceText}>{priceLabel}</Text>
+              </View>
+            </TouchableOpacity>
+          )
+        })}
       </View>
     </ScrollView>
   )
@@ -196,42 +218,51 @@ const getStyles = (theme: any) => StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: GRID_GAP,
   },
   card: {
-    width: '48%',
     backgroundColor: '#ffffff',
     borderRadius: 18,
-    padding: 4,
-    borderWidth: 0,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#e8ecf4',
   },
   media: {
-    borderRadius: 14,
-    height: 270,
+    width: '100%',
+    aspectRatio: 1,
+    backgroundColor: '#eef1f8',
+    overflow: 'hidden',
+  },
+  mediaPlaceholder: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 0,
-    overflow: 'hidden',
-    backgroundColor: '#ffffff',
+    padding: 10,
   },
-  mediaImage: {
-    width: '100%',
-    height: '100%',
+  mediaPlaceholderText: {
+    color: '#8893ad',
+    fontFamily: theme.mediumFont,
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  cardBody: {
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
   },
   itemTitle: {
     color: '#2b3356',
     fontFamily: theme.semiBoldFont,
     fontSize: 15,
-    lineHeight: 16,
-    marginBottom: 1,
+    lineHeight: 20,
+    marginBottom: 6,
+    minHeight: 40,
   },
   priceText: {
     color: '#f17d3e',
     fontFamily: theme.boldFont,
-    fontSize: 14,
-    lineHeight: 15,
-    marginTop: 0,
-    marginBottom: 0,
+    fontSize: 15,
+    lineHeight: 18,
   },
   loadingText: {
     color: '#9aa2b6',

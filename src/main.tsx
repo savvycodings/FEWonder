@@ -5,10 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import { Home, Search, Profile, Shipping, Payment, Cart, Saved, Product, Chat, Settings, Login } from './screens'
 import { Header } from './components'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemeContext } from './context'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AuthPayload, User } from '../types'
@@ -154,7 +151,7 @@ function Tabs({
           name="Chat"
           children={() => <Chat user={user} sessionToken={sessionToken} />}
           options={{
-            header: () => <Header showLogo={false} />,
+            headerShown: false,
             tabBarIcon: ({ color, size }) => (
               <FeatherIcon
                 name="message-circle"
@@ -236,27 +233,25 @@ export function Main() {
   }
 
   return (
-    <SafeAreaProvider>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!user ? (
-          <Stack.Screen name="Login">
-            {() => <Login onAuthSuccess={onRegisterSuccess} />}
-          </Stack.Screen>
-        ) : (
-          <Stack.Screen name="Tabs">
-            {() => (
-              <Tabs
-                user={user}
-                sessionToken={sessionToken}
-                onLogout={onLogout}
-                onUserUpdated={onUserUpdated}
-              />
-            )}
-          </Stack.Screen>
-        )}
-        <Stack.Screen name="Product" component={Product} />
-      </Stack.Navigator>
-    </SafeAreaProvider>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {!user ? (
+        <Stack.Screen name="Login">
+          {() => <Login onAuthSuccess={onRegisterSuccess} />}
+        </Stack.Screen>
+      ) : (
+        <Stack.Screen name="Tabs">
+          {() => (
+            <Tabs
+              user={user}
+              sessionToken={sessionToken}
+              onLogout={onLogout}
+              onUserUpdated={onUserUpdated}
+            />
+          )}
+        </Stack.Screen>
+      )}
+      <Stack.Screen name="Product" component={Product} />
+    </Stack.Navigator>
   )
 }
 

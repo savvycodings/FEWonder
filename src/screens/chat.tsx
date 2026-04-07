@@ -4,7 +4,6 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  ImageSourcePropType,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -25,58 +24,42 @@ import {
   deleteCommunityMessage,
   editCommunityMessage,
   getCommunityMessages,
+  listDbProducts,
   sendCommunityMessage,
 } from '../utils'
+import { formatMoney } from '../money'
+import { ShopifyProduct } from '../../types'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
 
-const referenceProducts: {
-  title: string
-  price: string
-  category: string
-  image: ImageSourcePropType
-}[] = [
-  {
-    title: 'Vault Pop',
-    price: '$14.99',
-    category: 'Hirono',
-    image: require('../../public/homepageimgs/product1.webp'),
-  },
-  {
-    title: 'Orange Hero',
-    price: '$19.49',
-    category: 'Anime',
-    image: require('../../public/homepageimgs/product2.webp'),
-  },
-  {
-    title: 'Galaxy Figure',
-    price: '$28.00',
-    category: 'Space',
-    image: require('../../public/homepageimgs/product3.webp'),
-  },
-  {
-    title: 'Dragon Mini',
-    price: '$12.99',
-    category: 'Designer Toy',
-    image: require('../../public/homepageimgs/product4.webp'),
-  },
-]
-
 const REF_ITEM_PREFIX = '__REF_ITEM__:'
 
-function getReferenceToken(itemTitle: string) {
-  return `${REF_ITEM_PREFIX}${itemTitle}`
+/** Stored value is product `handle` (new); legacy messages may use `title`. */
+function getReferenceToken(handle: string) {
+  return `${REF_ITEM_PREFIX}${handle.trim()}`
 }
 
 function parseReferenceFromBody(body: string) {
   const lines = String(body || '').split('\n')
   const refLine = lines.find((line) => line.startsWith(REF_ITEM_PREFIX))
-  const referenceItemTitle = refLine ? refLine.slice(REF_ITEM_PREFIX.length).trim() : ''
+  const referenceKey = refLine ? refLine.slice(REF_ITEM_PREFIX.length).trim() : ''
   const cleanBody = lines.filter((line) => !line.startsWith(REF_ITEM_PREFIX)).join('\n').trim()
   return {
     cleanBody,
-    referenceItemTitle: referenceItemTitle || null,
+    referenceKey: referenceKey || null,
   }
+}
+
+function productImageSource(product: ShopifyProduct | null | undefined) {
+  const url = product?.featuredImageUrl?.trim()
+  if (url) return { uri: url }
+  return null
+}
+
+function resolveReferencedProduct(key: string, catalog: ShopifyProduct[]) {
+  const k = String(key || '').trim()
+  if (!k || !catalog.length) return null
+  return catalog.find((p) => p.handle === k) || catalog.find((p) => p.title === k) || null
 }
 
 export function Chat({
@@ -102,10 +85,9 @@ export function Chat({
   const [activeOwnMessageId, setActiveOwnMessageId] = useState<string | null>(null)
   const [showReferencePicker, setShowReferencePicker] = useState(false)
   const [referenceSearch, setReferenceSearch] = useState('')
-  const [pendingReferenceItem, setPendingReferenceItem] = useState<{
-    title: string
-    image: ImageSourcePropType
-  } | null>(null)
+  const [catalogProducts, setCatalogProducts] = useState<ShopifyProduct[]>([])
+  const [dbPickerProducts, setDbPickerProducts] = useState<ShopifyProduct[]>([])
+  const [pendingReferenceItem, setPendingReferenceItem] = useState<ShopifyProduct | null>(null)
   const [pendingImage, setPendingImage] = useState<{
     uri: string
     base64: string
@@ -118,6 +100,58 @@ export function Chat({
     const es = connectStream()
     return () => es?.close()
   }, [sessionToken])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const list = await listDbProducts({ first: 120 })
+        if (!cancelled) setCatalogProducts(list)
+      } catch (error) {
+        console.log('Failed to load catalog for community refs', error)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!showReferencePicker) return
+    let cancelled = false
+    const q = referenceSearch.trim()
+    const t = setTimeout(() => {
+      ;(async () => {
+        try {
+          const list = await listDbProducts({ first: 48, query: q || undefined })
+          if (!cancelled) setDbPickerProducts(list)
+        } catch (error) {
+          console.log('Failed to load products for reference picker', error)
+          if (!cancelled) setDbPickerProducts([])
+        }
+      })()
+    }, 250)
+    return () => {
+      cancelled = true
+      clearTimeout(t)
+    }
+  }, [showReferencePicker, referenceSearch])
+
+  useEffect(() => {
+    if (!dbPickerProducts.length) return
+    setCatalogProducts((prev) => {
+      const byId = new Map<string, ShopifyProduct>()
+      for (const p of prev) {
+        const k = p.id || p.handle
+        if (k) byId.set(k, p)
+      }
+      for (const p of dbPickerProducts) {
+        const k = p.id || p.handle
+        if (k) byId.set(k, p)
+      }
+      return Array.from(byId.values())
+    })
+  }, [dbPickerProducts])
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
@@ -208,7 +242,7 @@ export function Chat({
     setPendingReferenceItem(null)
     try {
       const bodyWithReference = referenceToSend
-        ? [body, getReferenceToken(referenceToSend.title)].filter(Boolean).join('\n')
+        ? [body, getReferenceToken(referenceToSend.handle)].filter(Boolean).join('\n')
         : body
       await sendCommunityMessage({
         sessionToken,
@@ -377,28 +411,59 @@ export function Chat({
                   }}
                 >
                   {(() => {
-                    const { cleanBody, referenceItemTitle } = parseReferenceFromBody(item.body || '')
-                    const referencedItem = referenceItemTitle
-                      ? referenceProducts.find((product) => product.title === referenceItemTitle) || null
+                    const { cleanBody, referenceKey } = parseReferenceFromBody(item.body || '')
+                    const referencedProduct = referenceKey
+                      ? resolveReferencedProduct(referenceKey, catalogProducts)
                       : null
+                    const refImage = referencedProduct ? productImageSource(referencedProduct) : null
                     return (
                       <>
                   <Text style={styles.authorText}>
                     {isMe ? 'You' : item.user.fullName}
                   </Text>
                   {item.imageUrl ? (
-                    <Image source={{ uri: item.imageUrl }} style={styles.messageImage} resizeMode="cover" />
+                    <View style={styles.messageImageFrame}>
+                      <Image
+                        source={{ uri: item.imageUrl }}
+                        style={StyleSheet.absoluteFillObject}
+                        resizeMode="cover"
+                      />
+                    </View>
                   ) : null}
-                        {referencedItem ? (
+                        {referencedProduct ? (
                           <Pressable
                             style={[styles.referencedItemCard, isMe ? styles.referencedItemCardMe : null]}
-                            onPress={() => navigation.navigate('Product', { product: referencedItem })}
+                            onPress={() => navigation.navigate('Product', { product: referencedProduct })}
                           >
-                            <Image source={referencedItem.image} style={styles.referencedItemImage} resizeMode="cover" />
-                            <Text numberOfLines={1} style={[styles.referencedItemName, isMe ? styles.referencedItemNameMe : null]}>
-                              {referencedItem.title}
+                            <View style={styles.referencedItemImageWrap}>
+                              {refImage ? (
+                                <Image source={refImage} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                              ) : (
+                                <View style={styles.referencedItemImagePlaceholder}>
+                                  <Text numberOfLines={2} style={styles.referencedItemPlaceholderText}>
+                                    {referencedProduct.title}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                            <Text numberOfLines={2} style={[styles.referencedItemName, isMe ? styles.referencedItemNameMe : null]}>
+                              {referencedProduct.title}
                             </Text>
+                            {referencedProduct.price?.amount ? (
+                              <Text style={[styles.referencedItemPrice, isMe ? styles.referencedItemPriceMe : null]}>
+                                {formatMoney(referencedProduct.price)}
+                              </Text>
+                            ) : null}
                           </Pressable>
+                        ) : referenceKey ? (
+                          <View style={[styles.referencedItemFallback, isMe ? styles.referencedItemFallbackMe : null]}>
+                            <Text
+                              numberOfLines={2}
+                              style={[styles.referencedItemFallbackText, isMe ? styles.referencedItemFallbackTextMe : null]}
+                            >
+                              Item (unavailable): {referenceKey}
+                            </Text>
+                          </View>
                         ) : null}
                         {cleanBody ? (
                           <Text style={[styles.bodyText, isMe ? styles.meBodyText : null]}>
@@ -477,7 +542,7 @@ export function Chat({
 
       {pendingImage ? (
         <View style={[styles.pendingImageCard, { bottom: keyboardVisible ? insets.bottom + 62 : insets.bottom + 132 }]}>
-          <Image source={{ uri: pendingImage.uri }} style={styles.pendingImagePreview} />
+          <Image source={{ uri: pendingImage.uri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
           <Pressable style={styles.removePendingImage} onPress={() => setPendingImage(null)}>
             <FeatherIcon name="x" size={12} color="#243056" />
           </Pressable>
@@ -485,7 +550,21 @@ export function Chat({
       ) : null}
       {pendingReferenceItem ? (
         <View style={[styles.pendingReferenceCard, { bottom: keyboardVisible ? insets.bottom + 62 : insets.bottom + 132 }]}>
-          <Image source={pendingReferenceItem.image} style={styles.pendingReferenceImage} resizeMode="cover" />
+          <View style={styles.pendingReferenceImageFrame}>
+            {productImageSource(pendingReferenceItem) ? (
+              <Image
+                source={productImageSource(pendingReferenceItem)!}
+                style={StyleSheet.absoluteFillObject}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.pendingReferenceImagePlaceholder}>
+                <Text numberOfLines={2} style={styles.pendingReferencePlaceholderLabel}>
+                  {pendingReferenceItem.title}
+                </Text>
+              </View>
+            )}
+          </View>
           <Text numberOfLines={1} style={styles.pendingReferenceText}>
             {pendingReferenceItem.title}
           </Text>
@@ -509,7 +588,7 @@ export function Chat({
                 <Text style={styles.menuText}>Add image</Text>
               </Pressable>
               <Pressable style={styles.menuRow} onPress={() => handleComposerOption('reference')}>
-                <Text style={styles.menuText}>Refrence item</Text>
+                <Text style={styles.menuText}>Reference product</Text>
               </Pressable>
               <Pressable style={[styles.menuRow, styles.menuRowLast]} onPress={() => handleComposerOption('report')}>
                 <Text style={styles.menuText}>Report message</Text>
@@ -543,16 +622,14 @@ export function Chat({
             />
           </View>
           <FlatList
-            data={referenceProducts.filter((product) =>
-              !referenceSearch.trim()
-                ? true
-                : product.title.toLowerCase().includes(referenceSearch.trim().toLowerCase())
-            )}
-            keyExtractor={(item) => item.title}
+            data={dbPickerProducts}
+            keyExtractor={(item) => `${item.id}:${item.handle}`}
             numColumns={2}
             columnWrapperStyle={styles.referenceGridRow}
             contentContainerStyle={styles.referenceGridContent}
-            renderItem={({ item: product }) => (
+            renderItem={({ item: product }) => {
+              const src = productImageSource(product)
+              return (
               <Pressable
                 style={styles.referenceProductCard}
                 onPress={() => {
@@ -561,12 +638,25 @@ export function Chat({
                   setReferenceSearch('')
                 }}
               >
-                <Image source={product.image} style={styles.referenceProductImage} resizeMode="cover" />
-                <Text numberOfLines={1} style={styles.referenceProductTitle}>
+                <View style={styles.referenceProductImageFrame}>
+                  {src ? (
+                    <Image source={src} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+                  ) : (
+                    <View style={styles.referenceProductImagePlaceholder}>
+                      <Text numberOfLines={2} style={styles.referenceProductImagePlaceholderText}>
+                        {product.title}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Text numberOfLines={2} style={styles.referenceProductTitle}>
                   {product.title}
                 </Text>
+                {product.price?.amount ? (
+                  <Text style={styles.referenceProductPrice}>{formatMoney(product.price)}</Text>
+                ) : null}
               </Pressable>
-            )}
+            )}}
             ListEmptyComponent={
               <View style={styles.referenceEmptyState}>
                 <Text style={styles.referenceEmptyText}>No matching items found.</Text>
@@ -634,7 +724,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     },
     heroCard: {
       marginHorizontal: 12,
-      marginTop: 10,
+      marginTop: insets.top + 8,
       marginBottom: 2,
       paddingHorizontal: 14,
       paddingVertical: 12,
@@ -720,12 +810,14 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       fontFamily: theme.regularFont,
       fontSize: 14,
     },
-    messageImage: {
+    messageImageFrame: {
       width: 170,
       height: 170,
       borderRadius: 10,
+      overflow: 'hidden',
       marginBottom: 6,
       marginTop: 2,
+      backgroundColor: '#dfe5f0',
     },
     inlineActionRow: {
       marginTop: 8,
@@ -861,10 +953,6 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       backgroundColor: '#ffffff',
       zIndex: 4,
     },
-    pendingImagePreview: {
-      width: '100%',
-      height: '100%',
-    },
     removePendingImage: {
       position: 'absolute',
       right: 4,
@@ -888,9 +976,23 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       zIndex: 4,
       paddingBottom: 6,
     },
-    pendingReferenceImage: {
+    pendingReferenceImageFrame: {
       width: '100%',
       height: 68,
+      overflow: 'hidden',
+      backgroundColor: '#edf1f9',
+    },
+    pendingReferenceImagePlaceholder: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 4,
+    },
+    pendingReferencePlaceholderLabel: {
+      color: '#5c6788',
+      fontFamily: theme.mediumFont,
+      fontSize: 9,
+      textAlign: 'center',
     },
     pendingReferenceText: {
       color: '#243056',
@@ -924,19 +1026,67 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       borderColor: 'rgba(255,255,255,.35)',
       backgroundColor: 'rgba(255,255,255,.12)',
     },
-    referencedItemImage: {
+    referencedItemImageWrap: {
       width: '100%',
       height: 130,
+      overflow: 'hidden',
+      backgroundColor: '#edf1f9',
+    },
+    referencedItemImagePlaceholder: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 8,
+    },
+    referencedItemPlaceholderText: {
+      color: '#5c6788',
+      fontFamily: theme.mediumFont,
+      fontSize: 11,
+      textAlign: 'center',
     },
     referencedItemName: {
       color: '#243056',
       fontFamily: theme.semiBoldFont,
       fontSize: 12,
       paddingHorizontal: 8,
-      paddingVertical: 7,
+      paddingTop: 7,
+      paddingBottom: 2,
     },
     referencedItemNameMe: {
       color: '#ffffff',
+    },
+    referencedItemPrice: {
+      color: '#e8703a',
+      fontFamily: theme.boldFont,
+      fontSize: 12,
+      paddingHorizontal: 8,
+      paddingBottom: 7,
+    },
+    referencedItemPriceMe: {
+      color: 'rgba(255,255,255,.9)',
+    },
+    referencedItemFallback: {
+      maxWidth: 200,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: '#d9dee8',
+      backgroundColor: '#f4f6fb',
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      marginBottom: 6,
+      marginTop: 2,
+    },
+    referencedItemFallbackMe: {
+      borderColor: 'rgba(255,255,255,.35)',
+      backgroundColor: 'rgba(255,255,255,.1)',
+    },
+    referencedItemFallbackText: {
+      color: '#5c6788',
+      fontFamily: theme.mediumFont,
+      fontSize: 12,
+    },
+    referencedItemFallbackTextMe: {
+      color: 'rgba(255,255,255,.85)',
     },
     referencePickerOverlay: {
       ...StyleSheet.absoluteFillObject,
@@ -999,17 +1149,38 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       borderWidth: 1,
       borderColor: '#e1e7f2',
     },
-    referenceProductImage: {
+    referenceProductImageFrame: {
       width: '100%',
       height: 160,
+      overflow: 'hidden',
       backgroundColor: '#edf1f9',
+    },
+    referenceProductImagePlaceholder: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 8,
+    },
+    referenceProductImagePlaceholderText: {
+      color: '#5c6788',
+      fontFamily: theme.mediumFont,
+      fontSize: 11,
+      textAlign: 'center',
     },
     referenceProductTitle: {
       color: '#1f2b52',
       fontFamily: theme.semiBoldFont,
       fontSize: 13,
       paddingHorizontal: 10,
-      paddingVertical: 8,
+      paddingTop: 8,
+      paddingBottom: 2,
+    },
+    referenceProductPrice: {
+      color: '#e8703a',
+      fontFamily: theme.boldFont,
+      fontSize: 12,
+      paddingHorizontal: 10,
+      paddingBottom: 8,
     },
     referenceEmptyState: {
       alignItems: 'center',
