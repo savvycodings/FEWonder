@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import { NavigationContainer } from '@react-navigation/native'
 import { Main } from './src/main'
 import { useFonts } from 'expo-font'
+import { Montserrat_700Bold, Montserrat_800ExtraBold } from '@expo-google-fonts/montserrat'
 import { ThemeContext, AppContext } from './src/context'
 import * as themes from './src/theme'
 import { IMAGE_MODELS, MODELS } from './constants'
@@ -42,7 +43,9 @@ export default function App() {
     'Geist-SemiBold': require('./assets/fonts/Geist-SemiBold.otf'),
     'Geist-Thin': require('./assets/fonts/Geist-Thin.otf'),
     'Geist-UltraLight': require('./assets/fonts/Geist-UltraLight.otf'),
-    'Geist-UltraBlack': require('./assets/fonts/Geist-UltraBlack.otf')
+    'Geist-UltraBlack': require('./assets/fonts/Geist-UltraBlack.otf'),
+    Montserrat_700Bold,
+    Montserrat_800ExtraBold,
   })
 
   useEffect(() => {

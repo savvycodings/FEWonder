@@ -36,6 +36,15 @@ function productToSavePayload(item: ShopifyProduct) {
 
 const GRID_GAP = 12
 
+/** Home accent: lime tile background, black labels */
+const HOME_ACCENT_BG = '#CBFF00'
+const HOME_ACCENT_TEXT = '#000000'
+
+/** Montserrat — registered in App.tsx `useFonts` */
+const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
+/** Heavier weight for category chips only */
+const HOME_CHIP_MONTSERRAT = 'Montserrat_800ExtraBold' as const
+
 export function Home({ navigation, sessionToken }: { navigation: any; sessionToken?: string }) {
   const { width } = useWindowDimensions()
   const cardW = (width - 32 - GRID_GAP) / 2
@@ -135,12 +144,7 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
           </View>
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          scrollEnabled={false}
-          contentContainerStyle={styles.chipsRow}
-        >
+        <View style={styles.chipsRow}>
           {categories.map((item) => (
             <Pressable
               key={item}
@@ -152,7 +156,7 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
               </Text>
             </Pressable>
           ))}
-        </ScrollView>
+        </View>
 
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Popular Items</Text>
@@ -291,38 +295,44 @@ const getStyles = (theme: any) =>
     },
     title: {
       color: theme.headingColor || theme.textColor,
-      fontFamily: theme.boldFont,
+      fontFamily: HOME_MONTSERRAT_BOLD,
       fontSize: 36,
       lineHeight: 40,
       width: '78%',
     },
     chipsRow: {
       width: '100%',
+      flexDirection: 'row',
       gap: 8,
       marginBottom: 12,
-      justifyContent: 'space-between',
+      alignItems: 'stretch',
     },
     chip: {
       flex: 1,
+      minWidth: 0,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: 10,
+      paddingHorizontal: 6,
       paddingVertical: 12,
       borderRadius: 16,
-      backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+      backgroundColor: HOME_ACCENT_BG,
       borderWidth: 2,
-      borderColor: theme.tileBorderColor || theme.borderColor,
+      borderColor: HOME_ACCENT_BG,
     },
     chipActive: {
-      backgroundColor: theme.tileActiveBackgroundColor || theme.tintColor,
+      borderColor: HOME_ACCENT_TEXT,
     },
     chipText: {
-      color: theme.textColor,
-      fontFamily: theme.mediumFont,
+      color: HOME_ACCENT_TEXT,
+      fontFamily: HOME_CHIP_MONTSERRAT,
       fontSize: 13,
+      lineHeight: 16,
+      textAlign: 'center',
+      textTransform: 'uppercase',
+      width: '100%',
     },
     chipTextActive: {
-      color: theme.tileActiveTextColor || theme.tintTextColor,
+      color: HOME_ACCENT_TEXT,
     },
     sectionHeaderRow: {
       marginBottom: 6,
@@ -409,14 +419,14 @@ const getStyles = (theme: any) =>
       lineHeight: 18,
     },
     pricePill: {
-      backgroundColor: theme.priceBadgeBackgroundColor || theme.tileActiveBackgroundColor || '#111',
+      backgroundColor: HOME_ACCENT_BG,
       borderRadius: 999,
       paddingVertical: 7,
       paddingHorizontal: 12,
       flexShrink: 0,
     },
     pricePillText: {
-      color: theme.priceBadgeTextColor || theme.tileActiveTextColor || '#fff',
+      color: HOME_ACCENT_TEXT,
       fontFamily: theme.boldFont,
       fontSize: 13,
       lineHeight: 16,
