@@ -27,7 +27,7 @@ LogBox.ignoreLogs([
 ])
 
 export default function App() {
-  const [theme, setTheme] = useState<string>('light')
+  const [theme, setTheme] = useState<string>('dark')
   const [chatType, setChatType] = useState<Model>(MODELS.claudeOpus)
   const [imageModel, setImageModel] = useState<string>(IMAGE_MODELS.nanoBanana.label)
   const [cartItems, setCartItems] = useState<any[]>([])
@@ -232,8 +232,8 @@ function getTheme(theme: any) {
 
   const matched =
     allThemes.find((t) => t?.label === label) ??
-    allThemes.find((t) => t?.label === 'light') ??
-    (themes as any).lightTheme
+    allThemes.find((t) => t?.label === 'dark') ??
+    (themes as any).darkTheme
 
   return matched
 }

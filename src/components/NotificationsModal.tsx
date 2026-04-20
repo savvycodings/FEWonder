@@ -1,15 +1,8 @@
-import { memo, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import Animated, {
-  clamp,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated'
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
+import Animated, { clamp, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { ThemeContext } from '../context'
 
 export type NotificationItem = {
@@ -37,31 +30,32 @@ function SwipeNotificationRow({
   item,
   theme,
   rowStyles,
-  onPress,
-  onDismiss,
+  onOpenById,
+  onDismissById,
 }: {
   item: NotificationItem
   theme: any
   rowStyles: ReturnType<typeof getNotificationStyles>
-  onPress: () => void
-  onDismiss: () => void
+  onOpenById: (id: string) => void
+  onDismissById: (id: string) => void
 }) {
   const translateX = useSharedValue(0)
   const rowOpacity = useSharedValue(1)
   const rowWidth = useSharedValue(280)
   const startX = useSharedValue(0)
-  const onDismissRef = useRef(onDismiss)
-  onDismissRef.current = onDismiss
+  const notificationId = item.id
 
-  const fireDismiss = () => {
-    onDismissRef.current()
-  }
+  const fireDismiss = useCallback(() => {
+    onDismissById(notificationId)
+  }, [onDismissById, notificationId])
+
+  const openJs = useCallback(() => {
+    onOpenById(notificationId)
+  }, [onOpenById, notificationId])
 
   const pan = useMemo(
     () =>
       Gesture.Pan()
-        .activeOffsetX([-10, 10])
-        .failOffsetY([-22, 22])
         .onBegin(() => {
           startX.value = translateX.value
         })
@@ -70,27 +64,31 @@ function SwipeNotificationRow({
           translateX.value = clamp(startX.value + e.translationX, -max, max)
         })
         .onEnd((e) => {
+          const tx = translateX.value
           const threshold = 64
           const v = Math.abs(e.velocityX)
-          const dismiss =
-            Math.abs(translateX.value) > threshold || (v > 520 && Math.abs(translateX.value) > 28)
+          const dismiss = Math.abs(tx) > threshold || (v > 520 && Math.abs(tx) > 28)
           if (dismiss) {
-            const dir = translateX.value >= 0 ? 1 : -1
+            const dir = tx >= 0 ? 1 : -1
             const travel = Math.max(240, rowWidth.value + 28)
-            translateX.value = withTiming(dir * travel, { duration: 185 })
-            rowOpacity.value = withTiming(0, { duration: 185 }, (finished) => {
+            translateX.value = withTiming(dir * travel, { duration: 160 })
+            rowOpacity.value = withTiming(0, { duration: 160 }, (finished) => {
               if (finished) runOnJS(fireDismiss)()
             })
           } else {
-            translateX.value = withSpring(0, {
-              damping: 24,
-              stiffness: 320,
-              mass: 0.65,
-              velocity: e.velocityX,
-            })
+            translateX.value = withTiming(0, { duration: 180 })
+            const tapSlop = 10
+            if (
+              Math.abs(tx) <= tapSlop &&
+              Math.abs(e.translationX) <= tapSlop &&
+              Math.abs(e.translationY) <= tapSlop &&
+              v < 220
+            ) {
+              runOnJS(openJs)()
+            }
           }
         }),
-    []
+    [fireDismiss, notificationId, openJs]
   )
 
   const animStyle = useAnimatedStyle(() => ({
@@ -119,7 +117,7 @@ function SwipeNotificationRow({
         }}
         style={animStyle}
       >
-        <Pressable onPress={onPress} style={[rowStyles.notificationItem, notificationRowStyle]}>
+        <View style={[rowStyles.notificationItem, notificationRowStyle]}>
           <View style={rowStyles.notificationItemHeader}>
             <View style={rowStyles.notificationItemMeta}>
               <View style={[rowStyles.notificationItemType, notificationTypeStyle]}>
@@ -136,13 +134,25 @@ function SwipeNotificationRow({
             <Text style={rowStyles.notificationItemTime}>{item.time}</Text>
           </View>
           <Text style={rowStyles.notificationItemText}>{item.text}</Text>
-        </Pressable>
+        </View>
       </Animated.View>
     </GestureDetector>
   )
 }
 
-const MemoSwipeNotificationRow = memo(SwipeNotificationRow)
+const MemoSwipeNotificationRow = memo(SwipeNotificationRow, (a, b) => {
+  return (
+    a.item.id === b.item.id &&
+    a.item.title === b.item.title &&
+    a.item.text === b.item.text &&
+    a.item.time === b.item.time &&
+    a.item.type === b.item.type &&
+    a.onDismissById === b.onDismissById &&
+    a.onOpenById === b.onOpenById &&
+    a.theme === b.theme &&
+    a.rowStyles === b.rowStyles
+  )
+})
 
 type NotificationsModalProps = {
   visible: boolean
@@ -201,61 +211,85 @@ export function NotificationsModal({
     }
   }, [visible, baseNotifications])
 
-  const openNotification = (item: { id: string; route: string; params?: any }) => {
-    onClose()
-    setTimeout(() => {
-      if (item.route === 'WonderJump') {
-        const tabNav = navigation.getParent?.()
-        const rootNav = tabNav?.getParent?.()
-        ;(rootNav ?? tabNav ?? navigation).navigate('WonderJump' as never)
-        return
-      }
-      if (item.route === 'Chat') {
-        navigation.getParent?.()?.navigate('Chat' as never)
-        return
-      }
-      if (item.params !== undefined) navigation.navigate(item.route as never, item.params as never)
-      else navigation.navigate(item.route as never)
-    }, 25)
-  }
+  const dismissNotificationById = useCallback((id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id))
+  }, [])
+
+  const openNotification = useCallback(
+    (item: { id: string; route: string; params?: any }) => {
+      onClose()
+      setTimeout(() => {
+        if (item.route === 'WonderJump') {
+          const tabNav = navigation.getParent?.()
+          const rootNav = tabNav?.getParent?.()
+          ;(rootNav ?? tabNav ?? navigation).navigate('WonderJump' as never)
+          return
+        }
+        if (item.route === 'Chat') {
+          navigation.getParent?.()?.navigate('Chat' as never)
+          return
+        }
+        if (item.route === 'DailyRewards') {
+          navigation.getParent?.()?.navigate('Home', {
+            screen: 'DailyRewards',
+            params: item.params ?? { sessionToken },
+          })
+          return
+        }
+        if (item.params !== undefined) navigation.navigate(item.route as never, item.params as never)
+        else navigation.navigate(item.route as never)
+      }, 25)
+    },
+    [navigation, onClose]
+  )
+
+  const openById = useCallback(
+    (id: string) => {
+      const item = notifications.find((n) => n.id === id)
+      if (item) openNotification(item)
+    },
+    [notifications, openNotification]
+  )
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={rowStyles.notificationsBackdrop} onPress={onClose}>
-        <Pressable style={rowStyles.notificationsCard} onPress={() => {}}>
-          <View style={rowStyles.notificationsHeader}>
-            <Text style={rowStyles.notificationsTitle}>Notifications</Text>
-            <Pressable
-              style={(state) => [
-                rowStyles.notificationsClose,
-                state.pressed || (state as { hovered?: boolean }).hovered
-                  ? rowStyles.notificationsCloseActive
-                  : null,
-              ]}
-              onPress={onClose}
-            >
-              <FeatherIcon name="x" size={18} color={theme.textColor} />
-            </Pressable>
-          </View>
-
-          {notifications.length === 0 ? (
-            <Text style={rowStyles.notificationsEmpty}>No notifications right now</Text>
-          ) : (
-            <View style={rowStyles.notificationsList}>
-              {notifications.map((item) => (
-                <MemoSwipeNotificationRow
-                  key={item.id}
-                  item={item}
-                  theme={theme}
-                  rowStyles={rowStyles}
-                  onPress={() => openNotification(item)}
-                  onDismiss={() => setNotifications((prev) => prev.filter((n) => n.id !== item.id))}
-                />
-              ))}
+      <GestureHandlerRootView style={rowStyles.modalGestureRoot}>
+        <Pressable style={rowStyles.notificationsBackdrop} onPress={onClose}>
+          <Pressable style={rowStyles.notificationsCard} onPress={() => {}}>
+            <View style={rowStyles.notificationsHeader}>
+              <Text style={rowStyles.notificationsTitle}>Notifications</Text>
+              <Pressable
+                style={(state) => [
+                  rowStyles.notificationsClose,
+                  state.pressed || (state as { hovered?: boolean }).hovered
+                    ? rowStyles.notificationsCloseActive
+                    : null,
+                ]}
+                onPress={onClose}
+              >
+                <FeatherIcon name="x" size={18} color={theme.textColor} />
+              </Pressable>
             </View>
-          )}
+
+            {notifications.length === 0 ? (
+              <Text style={rowStyles.notificationsEmpty}>No notifications right now</Text>
+            ) : (
+              <View style={rowStyles.notificationsList}>
+                {notifications.map((item) => (
+                  <MemoSwipeNotificationRow
+                    key={item.id}
+                    item={item}
+                    theme={theme}
+                    rowStyles={rowStyles}
+                    onOpenById={openById}
+                    onDismissById={dismissNotificationById}
+                  />
+                ))}
+              </View>
+            )}
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </GestureHandlerRootView>
     </Modal>
   )
 }
@@ -263,6 +297,9 @@ export function NotificationsModal({
 function getNotificationStyles(theme: any) {
   const railDefault = theme.contentAccentBorderColor || theme.tintColor || theme.tileBorderColor
   return StyleSheet.create({
+    modalGestureRoot: {
+      flex: 1,
+    },
     notificationsBackdrop: {
       flex: 1,
       backgroundColor: theme.modalOverlayColor || 'rgba(8, 13, 26, 0.46)',

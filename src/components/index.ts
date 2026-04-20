@@ -25,3 +25,4 @@ export {
   useEquippedAvatarFrame,
 } from './AvatarFrame'
 export type { AvatarFrameId, BorderFrameId } from './AvatarFrame'
+export { AccountRowChevron } from './AccountRowChevron'

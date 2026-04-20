@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useState, type ReactNode } from 'react'
 import {
   Image,
   PixelRatio,
@@ -9,36 +9,29 @@ import {
   View,
   ViewStyle,
 } from 'react-native'
-import type { ImageSourcePropType } from 'react-native'
+import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useContext } from 'react'
 import { ThemeContext } from '../context'
 
 const STORAGE_KEY = 'wonderport-avatar-frame-id'
 
-/** Five hand-authored transparent PNG rings (no sprite sheet). */
-export type BorderFrameId = 'neon' | 'ice' | 'fire' | 'gold' | 'purple'
+/** Supported avatar border styles (all vector-based for scalable rendering). */
+export type BorderFrameId = 'neon' | 'gold' | 'rainbow' | 'prism'
 
 export type AvatarFrameId = 'none' | BorderFrameId
 
-const FRAMES: Record<BorderFrameId, ImageSourcePropType> = {
-  neon: require('../../public/homepageimgs/avatar-frames/frame-neon.png'),
-  ice: require('../../public/homepageimgs/avatar-frames/frame-ice.png'),
-  fire: require('../../public/homepageimgs/avatar-frames/frame-fire.png'),
-  gold: require('../../public/homepageimgs/avatar-frames/frame-gold.png'),
-  purple: require('../../public/homepageimgs/avatar-frames/frame-purple.png'),
-}
+const BORDER_FRAME_IDS: BorderFrameId[] = ['neon', 'gold', 'rainbow', 'prism']
 
 export const AVATAR_FRAME_SHOP: { id: BorderFrameId; name: string; tagline: string }[] = [
   { id: 'neon', name: 'Neon glow', tagline: 'Cyan to violet glass ring' },
-  { id: 'ice', name: 'Ice crown', tagline: 'Frost around the face' },
-  { id: 'fire', name: 'Flame ring', tagline: 'Ember swirl border' },
-  { id: 'gold', name: 'Gold band', tagline: 'Polished metal rim' },
-  { id: 'purple', name: 'Plasma plum', tagline: 'Purple and pink gloss' },
+  { id: 'gold', name: 'Gold band', tagline: 'Polished gold halo' },
+  { id: 'rainbow', name: 'Rainbow pop', tagline: 'Full spectrum ring' },
+  { id: 'prism', name: 'Crimson split', tagline: 'Red-black ring with racing stripe' },
 ]
 
 /** Old shop / tab ids that are not avatar frames (never map to `gold` frame). */
-const LEGACY_REMOVED = new Set(['ticket', 'field'])
+const LEGACY_REMOVED = new Set(['ticket', 'field', 'ice', 'fire'])
 
 /** Old keys that are not valid anymore (e.g. removed vine asset). */
 const LEGACY_TO_FRAME: Record<string, BorderFrameId | 'none'> = {
@@ -46,7 +39,7 @@ const LEGACY_TO_FRAME: Record<string, BorderFrameId | 'none'> = {
 }
 
 function isBorderFrameId(value: string): value is BorderFrameId {
-  return value in FRAMES
+  return BORDER_FRAME_IDS.includes(value as BorderFrameId)
 }
 
 function isAvatarFrameId(value: string): value is AvatarFrameId {
@@ -111,10 +104,9 @@ export function useEquippedAvatarFrame() {
  */
 const FRAME_HOLE_ASSET_FRAC: Record<BorderFrameId, number> = {
   neon: 0.7277,
-  ice: 0.5609,
-  fire: 0.5676,
-  gold: 0.7184,
-  purple: 0.6351,
+  gold: 0.7277,
+  rainbow: 0.7277,
+  prism: 0.7277,
 }
 
 const NEON_HOLE_ASSET_FRAC = FRAME_HOLE_ASSET_FRAC.neon
@@ -125,6 +117,7 @@ const NEON_HOLE_ASSET_FRAC = FRAME_HOLE_ASSET_FRAC.neon
  */
 const PHOTO_DISC_INSET = 1
 const PHOTO_DISC_INSET_PREVIEW = 1
+const PHOTO_DISC_INSET_CHAT = 1.26
 
 /**
  * Hole-edge fix (works on iOS + Android; no extra assets):
@@ -195,23 +188,154 @@ function plainRingStyle(): ViewStyle {
 type BorderFrameLayerProps = {
   size: number
   frameId: BorderFrameId
-  fit?: 'default' | 'preview'
+  fit?: 'default' | 'preview' | 'chat'
   innerBackgroundColor: string
   children: ReactNode
 }
 
+function snapToPixel(value: number): number {
+  return PixelRatio.roundToNearestPixel(value)
+}
+
+function NeonVectorFrame({ side, photoDiameter }: { side: number; photoDiameter: number }) {
+  const uid = useId().replace(/[:]/g, '')
+  const gradMainId = `neonGradMain_${uid}`
+  const gradShineId = `neonGradShine_${uid}`
+  const c = side / 2
+  const stroke = Math.max(3.7, side * 0.078)
+  const innerRadius = Math.max(1, photoDiameter / 2)
+  const r = Math.max(2, Math.min(c - stroke / 2 - 0.5, innerRadius + stroke / 2 - 0.6))
+  const edgeStroke = Math.max(1, stroke * 0.22)
+  const glowStroke = stroke * 1.62
+
+  return (
+    <Svg width={side} height={side} viewBox={`0 0 ${side} ${side}`}>
+      <Defs>
+        <LinearGradient id={gradMainId} x1="0%" y1="20%" x2="100%" y2="80%">
+          <Stop offset="0%" stopColor="#63E8FF" />
+          <Stop offset="35%" stopColor="#5A7CFF" />
+          <Stop offset="70%" stopColor="#B058FF" />
+          <Stop offset="100%" stopColor="#FF69D7" />
+        </LinearGradient>
+        <LinearGradient id={gradShineId} x1="25%" y1="10%" x2="85%" y2="100%">
+          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={0.9} />
+          <Stop offset="45%" stopColor="#FFFFFF" stopOpacity={0.25} />
+          <Stop offset="100%" stopColor="#FFFFFF" stopOpacity={0.08} />
+        </LinearGradient>
+      </Defs>
+      <Circle cx={c} cy={c} r={r} fill="none" stroke="#8E73FF" strokeOpacity={0.36} strokeWidth={glowStroke} />
+      <Circle cx={c} cy={c} r={r} fill="none" stroke={`url(#${gradMainId})`} strokeWidth={stroke} />
+      <Circle cx={c} cy={c} r={r} fill="none" stroke={`url(#${gradShineId})`} strokeWidth={edgeStroke} />
+    </Svg>
+  )
+}
+
+function GoldVectorFrame({ side, photoDiameter }: { side: number; photoDiameter: number }) {
+  const uid = useId().replace(/[:]/g, '')
+  const gradMainId = `goldGradMain_${uid}`
+  const c = side / 2
+  const stroke = Math.max(3.7, side * 0.078)
+  const r = Math.max(2, Math.min(c - stroke / 2 - 0.5, photoDiameter / 2 + stroke / 2 - 0.6))
+  const glowStroke = stroke * 1.58
+  return (
+    <Svg width={side} height={side} viewBox={`0 0 ${side} ${side}`}>
+      <Defs>
+        <LinearGradient id={gradMainId} x1="0%" y1="18%" x2="100%" y2="82%">
+          <Stop offset="0%" stopColor="#FFF5B8" />
+          <Stop offset="35%" stopColor="#FFD24A" />
+          <Stop offset="68%" stopColor="#E5A90A" />
+          <Stop offset="100%" stopColor="#FFF0A0" />
+        </LinearGradient>
+      </Defs>
+      <Circle cx={c} cy={c} r={r} fill="none" stroke="#FFC83A" strokeOpacity={0.34} strokeWidth={glowStroke} />
+      <Circle cx={c} cy={c} r={r} fill="none" stroke={`url(#${gradMainId})`} strokeWidth={stroke} />
+      <Circle cx={c} cy={c} r={r} fill="none" stroke="#FFFFFF" strokeOpacity={0.28} strokeWidth={Math.max(1, stroke * 0.2)} />
+    </Svg>
+  )
+}
+
+function RainbowVectorFrame({ side, photoDiameter }: { side: number; photoDiameter: number }) {
+  const uid = useId().replace(/[:]/g, '')
+  const gradMainId = `rainbowGradMain_${uid}`
+  const c = side / 2
+  const stroke = Math.max(3.7, side * 0.078)
+  const r = Math.max(2, Math.min(c - stroke / 2 - 0.5, photoDiameter / 2 + stroke / 2 - 0.6))
+  const glowStroke = stroke * 1.64
+  return (
+    <Svg width={side} height={side} viewBox={`0 0 ${side} ${side}`}>
+      <Defs>
+        <LinearGradient id={gradMainId} x1="0%" y1="10%" x2="100%" y2="90%">
+          <Stop offset="0%" stopColor="#FF5D7A" />
+          <Stop offset="20%" stopColor="#FF9B3D" />
+          <Stop offset="40%" stopColor="#FFD94D" />
+          <Stop offset="60%" stopColor="#44D17A" />
+          <Stop offset="80%" stopColor="#4D8CFF" />
+          <Stop offset="100%" stopColor="#A75CFF" />
+        </LinearGradient>
+      </Defs>
+      <Circle cx={c} cy={c} r={r} fill="none" stroke="#A76EFF" strokeOpacity={0.32} strokeWidth={glowStroke} />
+      <Circle cx={c} cy={c} r={r} fill="none" stroke={`url(#${gradMainId})`} strokeWidth={stroke} />
+      <Circle cx={c} cy={c} r={r} fill="none" stroke="#FFFFFF" strokeOpacity={0.24} strokeWidth={Math.max(1, stroke * 0.18)} />
+    </Svg>
+  )
+}
+
+function PrismVectorFrame({ side, photoDiameter }: { side: number; photoDiameter: number }) {
+  const uid = useId().replace(/[:]/g, '')
+  const gradMainId = `prismGradMain_${uid}`
+  const gradStripeId = `prismGradStripe_${uid}`
+  const c = side / 2
+  const stroke = Math.max(3.7, side * 0.078)
+  const r = Math.max(2, Math.min(c - stroke / 2 - 0.5, photoDiameter / 2 + stroke / 2 - 0.6))
+  const glowStroke = stroke * 1.62
+  const circumference = 2 * Math.PI * r
+  const targetDashCount = Math.max(8, Math.round(side / 4))
+  const dashPeriod = circumference / targetDashCount
+  const dashLen = Math.max(2.2, dashPeriod * 0.36)
+  const gapLen = Math.max(1.6, dashPeriod - dashLen)
+  return (
+    <Svg width={side} height={side} viewBox={`0 0 ${side} ${side}`}>
+      <Defs>
+        <LinearGradient id={gradMainId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <Stop offset="0%" stopColor="#2C0A0A" />
+          <Stop offset="46%" stopColor="#500F0F" />
+          <Stop offset="54%" stopColor="#D71F2D" />
+          <Stop offset="100%" stopColor="#FF4254" />
+        </LinearGradient>
+        <LinearGradient id={gradStripeId} x1="10%" y1="15%" x2="92%" y2="88%">
+          <Stop offset="0%" stopColor="#FFD9DF" />
+          <Stop offset="100%" stopColor="#FFFFFF" />
+        </LinearGradient>
+      </Defs>
+      <Circle cx={c} cy={c} r={r} fill="none" stroke="#FF2E45" strokeOpacity={0.34} strokeWidth={glowStroke} />
+      <Circle cx={c} cy={c} r={r} fill="none" stroke={`url(#${gradMainId})`} strokeWidth={stroke} />
+      <Circle
+        cx={c}
+        cy={c}
+        r={r}
+        fill="none"
+        stroke={`url(#${gradStripeId})`}
+        strokeOpacity={0.95}
+        strokeWidth={Math.max(1.1, stroke * 0.2)}
+        strokeDasharray={`${dashLen} ${gapLen}`}
+        strokeLinecap="round"
+      />
+    </Svg>
+  )
+}
+
 function BorderFrameLayer({ size, frameId, fit = 'default', innerBackgroundColor, children }: BorderFrameLayerProps) {
-  const base = frameImageBaseScale()
+  const base = fit === 'chat' ? 1 : frameImageBaseScale()
   const holeMatch = frameHoleMatchScale(frameId)
-  const imgSide = size * base * holeMatch
-  const offset = (size - imgSide) / 2
-  const inset = fit === 'preview' ? PHOTO_DISC_INSET_PREVIEW : PHOTO_DISC_INSET
+  const imgSide = snapToPixel(size * base * holeMatch)
+  const offset = snapToPixel((size - imgSide) / 2)
+  const inset = fit === 'preview' ? PHOTO_DISC_INSET_PREVIEW : fit === 'chat' ? PHOTO_DISC_INSET_CHAT : PHOTO_DISC_INSET
   // Neon-matched hole + slight bleed so photo fills soft PNG edges (see PHOTO_HOLE_COVER_BLEED).
-  const photoD = Math.max(
+  const photoD = snapToPixel(Math.max(
     14,
     Math.min(size - 1, size * base * NEON_HOLE_ASSET_FRAC * inset * PHOTO_HOLE_COVER_BLEED),
-  )
-  const photoOffset = (size - photoD) / 2
+  ))
+  const photoOffset = snapToPixel((size - photoD) / 2)
   const contentScale = photoContentScale()
 
   return (
@@ -247,7 +371,10 @@ function BorderFrameLayer({ size, frameId, fit = 'default', innerBackgroundColor
           },
         ]}
       >
-        <Image source={FRAMES[frameId]} resizeMode="contain" style={styles.frameImageFill} />
+        {frameId === 'neon' ? <NeonVectorFrame side={imgSide} photoDiameter={photoD} /> : null}
+        {frameId === 'gold' ? <GoldVectorFrame side={imgSide} photoDiameter={photoD} /> : null}
+        {frameId === 'rainbow' ? <RainbowVectorFrame side={imgSide} photoDiameter={photoD} /> : null}
+        {frameId === 'prism' ? <PrismVectorFrame side={imgSide} photoDiameter={photoD} /> : null}
       </View>
     </View>
   )
@@ -256,7 +383,7 @@ function BorderFrameLayer({ size, frameId, fit = 'default', innerBackgroundColor
 type AvatarFrameWrapperProps = {
   frameId: AvatarFrameId
   size: number
-  fit?: 'default' | 'preview'
+  fit?: 'default' | 'preview' | 'chat'
   innerBackgroundColor?: string
   children: ReactNode
 }

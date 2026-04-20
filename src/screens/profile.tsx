@@ -1,4 +1,4 @@
-import { useCallback, useContext, useState } from 'react'
+import { useCallback, useContext, useEffect, useState } from 'react'
 import {
   ScrollView,
   StyleSheet,
@@ -9,10 +9,13 @@ import {
   ActivityIndicator,
   Modal,
   TextInput,
+  Platform,
 } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
+import { SvgUri } from 'react-native-svg'
 import { useFocusEffect } from '@react-navigation/native'
 import {
+  AccountRowChevron,
   AVATAR_FRAME_SIZE_PROFILE,
   AvatarFrameWrapper,
   useEquippedAvatarFrame,
@@ -27,16 +30,51 @@ const recentOrders = [
     id: '#WP-2049',
     name: 'Le Petit Prince Series',
     status: 'Shipped',
-    total: '$48.00',
+    total: 'R48.00',
     image: require('../../public/homepageimgs/product1.webp'),
   },
   {
     id: '#WP-2027',
     name: 'Skullpanda Winter',
     status: 'Delivered',
-    total: '$32.99',
+    total: 'R32.99',
     image: require('../../public/homepageimgs/product2.webp'),
   },
+]
+
+const coinFrameUris = [
+  '/homepageimgs/Coinrotation/CoinFRONT.svg',
+  '/homepageimgs/Coinrotation/Coin2.svg',
+  '/homepageimgs/Coinrotation/Coin3.svg',
+  '/homepageimgs/Coinrotation/Coin4.svg',
+  '/homepageimgs/Coinrotation/Coin5.svg',
+  '/homepageimgs/Coinrotation/Coin6.svg',
+  '/homepageimgs/Coinrotation/Coin7.svg',
+  '/homepageimgs/Coinrotation/Coin8.svg',
+  '/homepageimgs/Coinrotation/Coin9.svg',
+  '/homepageimgs/Coinrotation/Coin10.svg',
+  '/homepageimgs/Coinrotation/Coin11.svg',
+  '/homepageimgs/Coinrotation/Coin12.svg',
+  '/homepageimgs/Coinrotation/Coin13.svg',
+  '/homepageimgs/Coinrotation/Coin14.svg',
+  '/homepageimgs/Coinrotation/Coin15.svg',
+  '/homepageimgs/Coinrotation/Coin16.svg',
+  '/homepageimgs/Coinrotation/Coin17.svg',
+  '/homepageimgs/Coinrotation/Coin18.svg',
+  '/homepageimgs/Coinrotation/Coin19.svg',
+  '/homepageimgs/Coinrotation/Coin20.svg',
+  '/homepageimgs/Coinrotation/Coin21.svg',
+  '/homepageimgs/Coinrotation/Coin22.svg',
+  '/homepageimgs/Coinrotation/Coin23.svg',
+  '/homepageimgs/Coinrotation/Coin24.svg',
+  '/homepageimgs/Coinrotation/Coin25.svg',
+  '/homepageimgs/Coinrotation/Coin26.svg',
+  '/homepageimgs/Coinrotation/Coin27.svg',
+  '/homepageimgs/Coinrotation/Coin28.svg',
+  '/homepageimgs/Coinrotation/Coin29.svg',
+  '/homepageimgs/Coinrotation/Coin30.svg',
+  '/homepageimgs/Coinrotation/Coin31.svg',
+  '/homepageimgs/Coinrotation/Coin32.svg',
 ]
 
 export function Profile({
@@ -53,28 +91,44 @@ export function Profile({
   sessionToken: string
 }) {
   const { theme } = useContext(ThemeContext)
-  const { frameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
-  const [walletBalance, setWalletBalance] = useState(0)
+  const styles = getStyles(theme)
   const { cartItems, savedItems } = useContext(AppContext)
   const cartQuantityTotal = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0)
   const [isUploading, setIsUploading] = useState(false)
   const [localPreviewUri, setLocalPreviewUri] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState('')
   const [showDetailsModal, setShowDetailsModal] = useState(false)
-  const [detailsMode, setDetailsMode] = useState<'shipping' | 'payment'>('shipping')
   const [shippingInput, setShippingInput] = useState(user.shippingAddress?.trim() || '')
   const [paymentInput, setPaymentInput] = useState(user.paymentMethod?.trim() || '')
   const [savingDetails, setSavingDetails] = useState(false)
   const [detailsError, setDetailsError] = useState('')
+  const [showWalletModal, setShowWalletModal] = useState(false)
+  const [coinFrameIndex, setCoinFrameIndex] = useState(0)
+  const [walletBalance, setWalletBalance] = useState(0)
+  const { frameId: avatarFrameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCoinFrameIndex((prev) => (prev + 1) % coinFrameUris.length)
+    }, 80)
+    return () => clearInterval(timer)
+  }, [])
+
+  const loadWalletBalance = useCallback(async () => {
+    if (!sessionToken) return
+    try {
+      const rewards = await getDailyRewardStatus(sessionToken)
+      setWalletBalance(rewards.walletBalance || 0)
+    } catch (error) {
+      console.log('Failed to load wallet balance', error)
+    }
+  }, [sessionToken])
 
   useFocusEffect(
     useCallback(() => {
+      loadWalletBalance()
       refreshAvatarFrame()
-      if (!sessionToken) return
-      getDailyRewardStatus(sessionToken)
-        .then((s) => setWalletBalance(s.walletBalance))
-        .catch(() => {})
-    }, [sessionToken, refreshAvatarFrame])
+    }, [loadWalletBalance, refreshAvatarFrame])
   )
 
   async function handleChangePhoto() {
@@ -115,27 +169,45 @@ export function Profile({
     }
   }
 
-  const accountActions = [
-    { label: 'Shopping Cart', key: 'cart', icon: 'shopping-bag' },
-    { label: 'Saved Items', key: 'saved', icon: 'heart' },
+  const accountShopping = [
+    { label: 'Shopping Cart', key: 'cart', icon: 'shopping-bag' as const },
+    { label: 'Saved Items', key: 'saved', icon: 'heart' as const },
+  ]
+  const shippingPaymentPreview = `${user.shippingAddress?.trim() || 'No address'}\n${user.paymentMethod?.trim() || 'No payment method'}`
+  const accountDetails = [
+    { label: 'Settings', key: 'settings', icon: 'sliders' as const, value: 'Theme & preferences' },
     {
-      label: 'Shipping Address',
-      key: 'shipping',
-      value: user.shippingAddress?.trim() || 'Not added',
-      icon: 'map-pin',
-    },
-    {
-      label: 'Payment Method',
-      key: 'payment',
-      value: user.paymentMethod?.trim() || 'Not added',
-      icon: 'credit-card',
+      label: 'Shipping & payment',
+      key: 'shipping_payment',
+      value: shippingPaymentPreview,
+      icon: 'package' as const,
     },
   ]
 
-  function openDetailsModal(mode: 'shipping' | 'payment') {
-    setDetailsMode(mode)
+  function onAccountRowPress(key: string) {
+    if (key === 'settings') {
+      navigation.navigate('ProfileSettings')
+    } else if (key === 'cart') {
+      navigation.navigate('ProfileCart')
+    } else if (key === 'saved') {
+      navigation.navigate('Saved')
+    } else if (key === 'shipping_payment') {
+      openShippingPaymentModal()
+    }
+  }
+
+  function openShippingPaymentModal() {
+    setShippingInput(user.shippingAddress?.trim() || '')
+    setPaymentInput(user.paymentMethod?.trim() || '')
     setDetailsError('')
     setShowDetailsModal(true)
+  }
+
+  function closeShippingPaymentModal() {
+    setShowDetailsModal(false)
+    setShippingInput(user.shippingAddress?.trim() || '')
+    setPaymentInput(user.paymentMethod?.trim() || '')
+    setDetailsError('')
   }
 
   async function saveDetails() {
@@ -145,14 +217,8 @@ export function Profile({
       setDetailsError('')
       const updatedUser = await updateProfileDetails({
         sessionToken,
-        shippingAddress:
-          detailsMode === 'shipping'
-            ? shippingInput.trim()
-            : (user.shippingAddress || '').trim(),
-        paymentMethod:
-          detailsMode === 'payment'
-            ? paymentInput.trim()
-            : (user.paymentMethod || '').trim(),
+        shippingAddress: shippingInput.trim(),
+        paymentMethod: paymentInput.trim(),
       })
       await onUserUpdated(updatedUser)
       setShowDetailsModal(false)
@@ -172,13 +238,11 @@ export function Profile({
       <View style={styles.headerCard}>
         <Pressable style={styles.avatarPressable} onPress={handleChangePhoto}>
           <AvatarFrameWrapper
-            frameId={frameId}
+            frameId={avatarFrameId}
             size={AVATAR_FRAME_SIZE_PROFILE}
-            innerBackgroundColor={
-              localPreviewUri || user.profilePicture ? 'transparent' : theme.tileBackgroundColor
-            }
+            innerBackgroundColor={(localPreviewUri || user.profilePicture) ? 'transparent' : theme.tileBackgroundColor}
           >
-            {localPreviewUri || user.profilePicture ? (
+            {(localPreviewUri || user.profilePicture) ? (
               <Image
                 source={{ uri: localPreviewUri || user.profilePicture || '' }}
                 style={styles.avatarImage}
@@ -194,16 +258,15 @@ export function Profile({
           <Text style={styles.email}>{user.email}</Text>
         </View>
         <View style={styles.headerRight}>
-          <Pressable
-            style={styles.headerWallet}
-            onPress={() =>
-              navigation.navigate('ProfileDailyRewards', { sessionToken: sessionToken || '' })
-            }
-          >
-            <FeatherIcon name="dollar-sign" size={16} color="#ffffff" />
+          <Pressable style={styles.headerWallet} onPress={() => setShowWalletModal(true)}>
+            {Platform.OS === 'web' ? (
+              <SvgUri uri={coinFrameUris[coinFrameIndex]} width={18} height={18} />
+            ) : (
+              <FeatherIcon name="dollar-sign" size={16} color={theme.tintColor} />
+            )}
             <Text style={styles.headerWalletValue}>{walletBalance}</Text>
           </Pressable>
-          {isUploading ? <ActivityIndicator size="small" color="#ffffff" /> : null}
+          {isUploading ? <ActivityIndicator size="small" color={theme.tintColor} /> : null}
         </View>
       </View>
       {uploadError ? <Text style={styles.errorText}>{uploadError}</Text> : null}
@@ -225,43 +288,52 @@ export function Profile({
         </View>
       </View>
 
-      <Text style={styles.sectionTitle}>Account</Text>
-      <Text style={styles.sectionSubtitle}>Manage your profile, cart, payments, and shipping.</Text>
+      <Text style={styles.accountHeading}>Account</Text>
       <View style={styles.groupCard}>
-        {accountActions.map((item, index) => (
+        <Text style={styles.accountSectionLabel}>Shopping</Text>
+        {accountShopping.map((item, index) => (
           <Pressable
-            key={item.label}
-            style={[styles.actionRow, index !== accountActions.length - 1 ? styles.rowGap : null]}
-            onPress={() => {
-              if (item.key === 'cart') {
-                navigation.navigate('ProfileCart')
-              } else if (item.key === 'saved') {
-                navigation.navigate('Saved')
-              } else if (item.key === 'shipping') {
-                openDetailsModal('shipping')
-              } else if (item.key === 'payment') {
-                openDetailsModal('payment')
-              }
-            }}
+            key={item.key}
+            style={[styles.actionRow, index < accountShopping.length - 1 ? styles.rowGap : null]}
+            onPress={() => onAccountRowPress(item.key)}
           >
             <View style={styles.actionLeft}>
               <View style={styles.iconBubble}>
-                <FeatherIcon name={item.icon as any} size={16} color={theme.tintColor || '#2a335f'} />
+                <FeatherIcon name={item.icon} size={16} color={theme.tintColor} />
               </View>
               <View>
                 <Text style={styles.actionLabel}>{item.label}</Text>
                 <Text style={styles.actionValue}>
-                  {item.key === 'cart'
-                    ? `${cartQuantityTotal} items`
-                    : item.key === 'saved'
-                      ? `${savedItems.length} saved`
-                      : item.value}
+                  {item.key === 'cart' ? `${cartQuantityTotal} items` : `${savedItems.length} saved`}
                 </Text>
               </View>
             </View>
-            <View style={styles.actionRight}>
-              <FeatherIcon name="chevron-right" size={16} color="#97a0b6" />
+            <AccountRowChevron accentColor={theme.tintColor} />
+          </Pressable>
+        ))}
+        <View style={styles.accountSectionDivider} />
+        <Text style={[styles.accountSectionLabel, styles.accountSectionLabelSpaced]}>Profile & billing</Text>
+        {accountDetails.map((item, index) => (
+          <Pressable
+            key={item.key}
+            style={[styles.actionRow, index < accountDetails.length - 1 ? styles.rowGap : null]}
+            onPress={() => onAccountRowPress(item.key)}
+          >
+            <View style={styles.actionLeft}>
+              <View style={styles.iconBubble}>
+                <FeatherIcon name={item.icon} size={16} color={theme.tintColor} />
+              </View>
+              <View>
+                <Text style={styles.actionLabel}>{item.label}</Text>
+                <Text
+                  style={styles.actionValue}
+                  {...(item.key === 'shipping_payment' ? { numberOfLines: 2 } : {})}
+                >
+                  {item.value}
+                </Text>
+              </View>
             </View>
+            <AccountRowChevron accentColor={theme.tintColor} />
           </Pressable>
         ))}
       </View>
@@ -291,49 +363,91 @@ export function Profile({
       </View>
 
       <Pressable style={styles.logoutButton} onPress={onLogout}>
-        <FeatherIcon name="log-out" size={16} color="#ffffff" />
+        <FeatherIcon name="log-out" size={16} color={theme.tintColor} />
         <Text style={styles.logoutText}>Log out</Text>
       </Pressable>
 
+      <Modal visible={showWalletModal} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, styles.walletModalCard]}>
+            <View style={styles.walletHelpIconWrap}>
+              <FeatherIcon name="help-circle" size={18} color={theme.mutedForegroundColor} />
+            </View>
+            <Text style={styles.walletModalTitle}>Wonder Wallet</Text>
+            <Text style={styles.walletModalSubtitle}>Your current Wonder Wallet balance.</Text>
+
+            <View style={styles.walletModalBalanceRow}>
+              {Platform.OS === 'web' ? (
+                <SvgUri uri={coinFrameUris[coinFrameIndex]} width={20} height={20} />
+              ) : (
+                <FeatherIcon name="dollar-sign" size={18} color={theme.textColor} />
+              )}
+              <Text style={styles.walletModalBalanceValue}>{walletBalance}</Text>
+            </View>
+
+            <View style={styles.walletModalButtons}>
+              <Pressable style={styles.walletModalButtonSecondary} onPress={() => setShowWalletModal(false)}>
+                <Text style={styles.walletModalButtonSecondaryText}>Close</Text>
+              </Pressable>
+              <Pressable
+                style={styles.walletModalButtonPrimary}
+                onPress={() => {
+                  setShowWalletModal(false)
+                  navigation.getParent()?.navigate('Home', {
+                    screen: 'DailyRewards',
+                    params: { sessionToken },
+                  })
+                }}
+              >
+                <Text style={styles.modalPrimaryButtonText}>Wonderstore</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={showDetailsModal} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {detailsMode === 'shipping' ? 'Shipping Address' : 'Payment Method'}
-            </Text>
+          <View style={[styles.modalCard, styles.shippingPaymentModalCard]}>
+            <Text style={styles.modalTitle}>Shipping & payment</Text>
             <Text style={styles.modalSubtitle}>
-              {detailsMode === 'shipping'
-                ? 'Update your shipping address.'
-                : 'Update your preferred payment method.'}
+              Update where we ship orders and how you prefer to pay.
             </Text>
 
-            {detailsMode === 'shipping' ? (
+            <ScrollView
+              style={styles.shippingPaymentModalScroll}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.modalFieldLabel}>Shipping address</Text>
               <TextInput
                 value={shippingInput}
                 onChangeText={setShippingInput}
-                placeholder="Shipping address"
-                style={styles.modalInput}
-                placeholderTextColor="#8b94aa"
+                placeholder="Street, city, postal code…"
+                style={[styles.modalInput, styles.modalInputMultiline]}
+                placeholderTextColor={theme.placeholderTextColor}
+                multiline
+                textAlignVertical="top"
               />
-            ) : (
+              <Text style={[styles.modalFieldLabel, styles.modalFieldLabelSpaced]}>Payment method</Text>
               <TextInput
                 value={paymentInput}
                 onChangeText={setPaymentInput}
-                placeholder="Payment method"
+                placeholder="Card, bank transfer, wallet…"
                 style={styles.modalInput}
-                placeholderTextColor="#8b94aa"
+                placeholderTextColor={theme.placeholderTextColor}
               />
-            )}
+            </ScrollView>
 
             {detailsError ? <Text style={styles.modalError}>{detailsError}</Text> : null}
 
             <View style={styles.modalButtons}>
-              <Pressable style={styles.modalSecondaryButton} onPress={() => setShowDetailsModal(false)}>
+              <Pressable style={styles.modalSecondaryButton} onPress={closeShippingPaymentModal}>
                 <Text style={styles.modalSecondaryButtonText}>Cancel</Text>
               </Pressable>
               <Pressable style={styles.modalPrimaryButton} onPress={saveDetails}>
                 {savingDetails ? (
-                  <ActivityIndicator color="#ffffff" />
+                  <ActivityIndicator color={theme.tintTextColor || '#fff'} />
                 ) : (
                   <Text style={styles.modalPrimaryButtonText}>Save</Text>
                 )}
@@ -346,10 +460,10 @@ export function Profile({
   )
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7f8fb',
+    backgroundColor: theme.appBackgroundColor || '#f7f8fb',
   },
   content: {
     paddingHorizontal: 16,
@@ -359,7 +473,9 @@ const styles = StyleSheet.create({
   headerCard: {
     width: '100%',
     alignSelf: 'stretch',
-    backgroundColor: '#313d73',
+    backgroundColor: theme.sheetBackgroundColor || theme.tileBackgroundColor || '#ffffff',
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || '#e7ebf3',
     borderRadius: 24,
     padding: 16,
     flexDirection: 'row',
@@ -372,7 +488,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   avatarPressable: {
-    marginRight: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarImage: {
     width: '100%',
@@ -380,35 +497,36 @@ const styles = StyleSheet.create({
   },
   headerTextWrap: {
     flex: 1,
-    marginLeft: 8,
+    marginLeft: 12,
   },
   headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 8,
   },
   headerWallet: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
+    gap: 6,
+    borderRadius: 999,
+    backgroundColor: theme.sheetRowBackgroundColor || theme.appBackgroundColor || '#f4f6fb',
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || '#e7ebf3',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
   },
   headerWalletValue: {
-    color: '#ffffff',
-    fontFamily: 'Geist-Bold',
-    fontSize: 14,
+    color: theme.textColor,
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 15,
   },
   name: {
-    color: '#ffffff',
+    color: theme.textColor,
     fontFamily: 'Geist-Bold',
     fontSize: 22,
     marginBottom: 2,
   },
   email: {
-    color: 'rgba(255,255,255,.78)',
+    color: theme.mutedForegroundColor,
     fontFamily: 'Geist-Regular',
     fontSize: 12,
   },
@@ -419,26 +537,30 @@ const styles = StyleSheet.create({
   statsGroupCard: {
     width: '100%',
     alignSelf: 'stretch',
-    backgroundColor: '#ececf4',
+    backgroundColor: theme.sheetBackgroundColor || theme.tileBackgroundColor || '#ffffff',
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || '#e7ebf3',
     borderRadius: 18,
     marginBottom: 20,
     padding: 10,
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.sheetRowBackgroundColor || theme.appBackgroundColor || '#f4f6fb',
     borderRadius: 13,
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || '#e7ebf3',
     paddingVertical: 12,
     alignItems: 'center',
   },
   statValue: {
-    color: '#273163',
+    color: theme.textColor,
     fontFamily: 'Geist-Bold',
     fontSize: 22,
     marginBottom: 2,
   },
   statLabel: {
-    color: '#8a93aa',
+    color: theme.mutedForegroundColor,
     fontFamily: 'Geist-Medium',
     fontSize: 12,
   },
@@ -447,51 +569,76 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  accountHeading: {
+    color: theme.textColor,
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 26,
+    lineHeight: 30,
+    marginBottom: 12,
+  },
   sectionTitle: {
-    color: '#243056',
+    color: theme.textColor,
     fontFamily: 'Geist-SemiBold',
     fontSize: 20,
     marginBottom: 4,
   },
-  sectionSubtitle: {
-    color: '#8d95aa',
-    fontFamily: 'Geist-Regular',
-    fontSize: 12,
-    marginBottom: 10,
-  },
   link: {
-    color: '#f5a25d',
+    color: theme.textColor,
     fontFamily: 'Geist-SemiBold',
     fontSize: 12,
   },
   sectionCard: {
     width: '100%',
     alignSelf: 'stretch',
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.tileBackgroundColor || '#ffffff',
     borderRadius: 20,
     marginBottom: 20,
     overflow: 'hidden',
-    shadowColor: '#243056',
+    shadowColor: '#111111',
     shadowOpacity: 0.08,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
     elevation: 3,
     borderWidth: 1,
-    borderColor: '#edf1f8',
+    borderColor: theme.tileBorderColor || '#edf1f8',
   },
   groupCard: {
     width: '100%',
     alignSelf: 'stretch',
-    backgroundColor: '#ececf4',
+    backgroundColor: theme.sheetBackgroundColor || theme.tileBackgroundColor || '#ffffff',
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || '#e7ebf3',
     borderRadius: 18,
     marginBottom: 20,
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  accountSectionLabel: {
+    color: theme.mutedForegroundColor,
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 11,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+    marginTop: 2,
+    paddingHorizontal: 4,
+  },
+  accountSectionLabelSpaced: {
+    marginTop: 0,
+  },
+  accountSectionDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: theme.tileBorderColor || '#e7ebf3',
+    marginVertical: 8,
+    marginHorizontal: 4,
   },
   actionRow: {
     paddingHorizontal: 12,
-    paddingVertical: 12,
-    backgroundColor: '#ffffff',
+    paddingVertical: 10,
+    backgroundColor: theme.sheetRowBackgroundColor || theme.appBackgroundColor || '#f4f6fb',
     borderRadius: 13,
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || '#e7ebf3',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -505,37 +652,33 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#f3f6fb',
+    backgroundColor: theme.tileBackgroundColor || '#ffffff',
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || '#e7ebf3',
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionLabel: {
-    color: '#2f385e',
+    color: theme.textColor,
     fontFamily: 'Geist-SemiBold',
     fontSize: 14,
     marginBottom: 1,
   },
   actionValue: {
-    color: '#8b94aa',
+    color: theme.mutedForegroundColor,
     fontFamily: 'Geist-Regular',
     fontSize: 12,
   },
-  actionRight: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#f3f6fb',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   rowGap: {
-    marginBottom: 8,
+    marginBottom: 6,
   },
   orderRow: {
     paddingHorizontal: 10,
     paddingVertical: 10,
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.sheetRowBackgroundColor || theme.appBackgroundColor || '#f4f6fb',
     borderRadius: 13,
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || '#e7ebf3',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -544,7 +687,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 10,
-    backgroundColor: '#dfe6f5',
+    backgroundColor: theme.appBackgroundColor || '#f2f4f8',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -559,13 +702,13 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   orderName: {
-    color: '#273058',
+    color: theme.textColor,
     fontFamily: 'Geist-SemiBold',
     fontSize: 15,
     marginBottom: 2,
   },
   orderMeta: {
-    color: '#8b94aa',
+    color: theme.mutedForegroundColor,
     fontFamily: 'Geist-Regular',
     fontSize: 12,
   },
@@ -575,18 +718,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statusPill: {
-    backgroundColor: '#ecf6ee',
+    backgroundColor: theme.appBackgroundColor || '#f2f4f8',
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || '#e7ebf3',
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
   statusText: {
-    color: '#3e8c51',
+    color: theme.textColor,
     fontFamily: 'Geist-SemiBold',
     fontSize: 10,
   },
   orderTotal: {
-    color: '#f5a25d',
+    color: theme.textColor,
     fontFamily: 'Geist-Bold',
     fontSize: 15,
   },
@@ -597,14 +742,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderRadius: 14,
     minHeight: 48,
-    backgroundColor: '#2a335f',
+    backgroundColor: theme.tileBackgroundColor || '#ffffff',
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || '#e7ebf3',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   logoutText: {
-    color: '#ffffff',
+    color: theme.textColor,
     fontFamily: 'Geist-SemiBold',
     fontSize: 15,
   },
@@ -617,26 +764,46 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(22, 27, 46, .35)',
+    backgroundColor: theme.modalOverlayColor || 'rgba(22, 27, 46, .35)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
   modalCard: {
     width: '100%',
-    backgroundColor: '#ffffff',
+    backgroundColor: theme.tileBackgroundColor || '#ffffff',
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#e7ebf3',
+    borderColor: theme.tileBorderColor || '#e7ebf3',
+  },
+  shippingPaymentModalCard: {
+    maxHeight: '88%',
+  },
+  shippingPaymentModalScroll: {
+    maxHeight: 320,
+    marginBottom: 4,
+  },
+  modalFieldLabel: {
+    color: theme.textColor,
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  modalFieldLabelSpaced: {
+    marginTop: 4,
+  },
+  modalInputMultiline: {
+    minHeight: 88,
+    marginBottom: 4,
   },
   modalTitle: {
-    color: '#243056',
+    color: theme.textColor,
     fontFamily: 'Geist-SemiBold',
     fontSize: 20,
   },
   modalSubtitle: {
-    color: '#8b94aa',
+    color: theme.mutedForegroundColor,
     fontFamily: 'Geist-Regular',
     fontSize: 12,
     marginTop: 3,
@@ -644,11 +811,11 @@ const styles = StyleSheet.create({
   },
   modalInput: {
     borderWidth: 1,
-    borderColor: '#d7deea',
+    borderColor: theme.tileBorderColor || '#d7deea',
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#243056',
+    color: theme.textColor,
     fontFamily: 'Geist-Medium',
     marginBottom: 10,
   },
@@ -669,13 +836,13 @@ const styles = StyleSheet.create({
     minHeight: 38,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#d7deea',
+    borderColor: theme.tileBorderColor || '#d7deea',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
   modalSecondaryButtonText: {
-    color: '#5f6884',
+    color: theme.textColor,
     fontFamily: 'Geist-SemiBold',
     fontSize: 13,
   },
@@ -683,14 +850,97 @@ const styles = StyleSheet.create({
     minWidth: 80,
     minHeight: 38,
     borderRadius: 10,
-    backgroundColor: '#2a335f',
+    backgroundColor: theme.tintColor || theme.tileActiveBackgroundColor,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
   modalPrimaryButtonText: {
-    color: '#ffffff',
+    color: theme.tintTextColor || '#ffffff',
     fontFamily: 'Geist-SemiBold',
     fontSize: 13,
+  },
+  walletModalBalanceRow: {
+    marginTop: 4,
+    marginBottom: 10,
+    alignSelf: 'center',
+    borderRadius: 12,
+    backgroundColor: theme.sheetRowBackgroundColor || theme.appBackgroundColor || '#f4f6fb',
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || '#e7ebf3',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  walletModalBalanceValue: {
+    color: theme.textColor,
+    fontFamily: 'Geist-Bold',
+    fontSize: 22,
+  },
+  walletModalCard: {
+    position: 'relative',
+  },
+  walletHelpIconWrap: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.tileBackgroundColor || '#ffffff',
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || '#e7ebf3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  walletModalTitle: {
+    color: theme.textColor,
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 20,
+    textAlign: 'center',
+  },
+  walletModalSubtitle: {
+    color: theme.mutedForegroundColor,
+    fontFamily: 'Geist-Regular',
+    fontSize: 12,
+    marginTop: 3,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  walletModalButtons: {
+    marginTop: 2,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  walletModalButtonSecondary: {
+    flex: 1,
+    maxWidth: 150,
+    minHeight: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || '#cfd8ec',
+    backgroundColor: theme.tileBackgroundColor || '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  walletModalButtonSecondaryText: {
+    color: theme.textColor,
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 13,
+  },
+  walletModalButtonPrimary: {
+    flex: 1,
+    maxWidth: 150,
+    minHeight: 40,
+    borderRadius: 10,
+    backgroundColor: theme.tintColor || theme.tileActiveBackgroundColor,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
   },
 })

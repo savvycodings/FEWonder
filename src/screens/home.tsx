@@ -92,12 +92,6 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
       })
   }, [sessionToken])
 
-  function openWonderJump() {
-    const tabNav = navigation.getParent?.()
-    const rootNav = tabNav?.getParent?.()
-    ;(rootNav ?? tabNav ?? navigation).navigate('WonderJump' as never)
-  }
-
   return (
     <View style={styles.container}>
       <ScrollView
@@ -140,19 +134,6 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
             </View>
           </View>
         </View>
-
-        <Pressable
-          onPress={openWonderJump}
-          style={({ pressed }) => [styles.wonderJumpCard, pressed && { opacity: 0.92 }]}
-        >
-          <View style={styles.wonderJumpCardHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.wonderJumpTitle}>Wonder Jump</Text>
-              <Text style={styles.wonderJumpSubtitle}>Endless runner — tap to play</Text>
-            </View>
-            <FeatherIcon name="chevron-right" size={22} color="#d8ddf2" />
-          </View>
-        </Pressable>
 
         <ScrollView
           horizontal
@@ -314,34 +295,6 @@ const getStyles = (theme: any) =>
       fontSize: 36,
       lineHeight: 40,
       width: '78%',
-    },
-    wonderJumpCard: {
-      backgroundColor: '#111111',
-      borderRadius: 16,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      marginBottom: 14,
-      gap: 12,
-      shadowColor: '#1b2242',
-      shadowOpacity: 0.22,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
-    },
-    wonderJumpCardHeader: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      gap: 10,
-    },
-    wonderJumpTitle: {
-      color: '#ffffff',
-      fontFamily: theme.boldFont,
-      fontSize: 16,
-      marginBottom: 2,
-    },
-    wonderJumpSubtitle: {
-      color: '#d8ddf2',
-      fontFamily: theme.mediumFont,
-      fontSize: 12,
     },
     chipsRow: {
       width: '100%',

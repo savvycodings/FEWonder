@@ -17,7 +17,6 @@ import {
   DailyRewards,
 } from './screens'
 import { WonderJump } from './screens/wonderJump'
-import { Header } from './components'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemeContext } from './context'
@@ -88,6 +87,24 @@ function ProfileStackScreen({
       </ProfileStack.Screen>
       <ProfileStack.Screen name="Saved" component={Saved} />
       <ProfileStack.Screen name="ProfileCart" component={Cart} />
+      <ProfileStack.Screen
+        name="ProfileSettings"
+        component={Settings}
+        options={{
+          headerShown: true,
+          headerTitle: 'Settings',
+          headerBackTitle: '',
+          headerStyle: {
+            backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
+          },
+          headerTitleStyle: {
+            color: theme.textColor,
+            fontFamily: theme.boldFont,
+          },
+          headerTintColor: theme.textColor,
+          headerShadowVisible: false,
+        }}
+      />
       <ProfileStack.Screen name="Shipping" component={Shipping} />
       <ProfileStack.Screen name="Payment" component={Payment} />
       <ProfileStack.Screen name="ProfileDailyRewards" component={DailyRewards} />
@@ -206,20 +223,6 @@ function Tabs({
             tabBarIcon: ({ color, size }) => (
               <FeatherIcon
                 name="message-circle"
-                color={color}
-                size={size}
-              />
-            ),
-          }}
-        />
-        <Tab.Screen
-          name="Settings"
-          component={Settings}
-          options={{
-            header: () => <Header />,
-            tabBarIcon: ({ color, size }) => (
-              <FeatherIcon
-                name="sliders"
                 color={color}
                 size={size}
               />

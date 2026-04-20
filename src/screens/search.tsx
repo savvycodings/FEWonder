@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Image,
   Pressable,
@@ -6,10 +6,13 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
   useWindowDimensions,
 } from 'react-native'
+import { useFocusEffect } from '@react-navigation/native'
 import { Feather as FeatherIcon } from '@expo/vector-icons'
+import { AvatarFrameWrapper, useEquippedAvatarFrame } from '../components'
 import { ShopifyProduct, User } from '../../types'
 import { ThemeContext } from '../context'
 import { listDbProducts } from '../utils'
@@ -35,6 +38,13 @@ export function Search({
   const [products, setProducts] = useState<ShopifyProduct[]>([])
   const [loadingProducts, setLoadingProducts] = useState(true)
   const { theme } = useContext(ThemeContext)
+  const { frameId: avatarFrameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshAvatarFrame()
+    }, [refreshAvatarFrame])
+  )
 
   const filtered = useMemo(() => {
     if (!query.trim()) return products
@@ -113,6 +123,10 @@ export function Search({
     return item?.image
   }
 
+  function goToProfile() {
+    navigation.navigate('Profile', { screen: 'ProfileHome' })
+  }
+
   return (
     <View style={[styles.page, { backgroundColor: theme.appBackgroundColor || '#f7f8fb' }]}>
       <ScrollView
@@ -122,13 +136,25 @@ export function Search({
       >
         <View style={styles.hero}>
           <View style={styles.heroTopRow}>
-            <View style={styles.avatar}>
-              {user?.profilePicture ? (
-                <Image source={{ uri: user.profilePicture }} style={styles.avatarImage} />
-              ) : (
-                <Text style={styles.avatarInitial}>{avatarInitial}</Text>
-              )}
-            </View>
+            <TouchableOpacity
+              style={[styles.headerIconButton, styles.headerIconButtonClip]}
+              activeOpacity={0.85}
+              onPress={goToProfile}
+            >
+              <AvatarFrameWrapper
+                frameId={avatarFrameId}
+                size={38}
+                innerBackgroundColor={user?.profilePicture ? 'transparent' : '#ffbd8f'}
+              >
+                {user?.profilePicture ? (
+                  <Image source={{ uri: user.profilePicture }} style={styles.avatarImage} resizeMode="cover" />
+                ) : (
+                  <View style={styles.avatarPlaceholderInner}>
+                    <Text style={styles.avatarInitial}>{avatarInitial}</Text>
+                  </View>
+                )}
+              </AvatarFrameWrapper>
+            </TouchableOpacity>
             <View style={styles.notifyButton}>
               <FeatherIcon name="bell" size={14} color="#f4d26f" />
             </View>
@@ -309,18 +335,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 14,
   },
-  avatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#ffbd8f',
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+  },
+  headerIconButtonClip: {
+    overflow: 'visible',
   },
   avatarImage: {
     width: '100%',
     height: '100%',
+  },
+  avatarPlaceholderInner: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#ffbd8f',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    overflow: 'hidden',
   },
   avatarInitial: {
     color: '#ffffff',

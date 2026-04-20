@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   ActivityIndicator,
@@ -16,7 +16,7 @@ import {
 } from 'react-native'
 import EventSource from 'react-native-sse'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { useNavigation } from '@react-navigation/native'
+import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { ThemeContext } from '../context'
 import { CommunityMessage, User } from '../../types'
 import { DOMAIN } from '../../constants'
@@ -31,6 +31,7 @@ import { formatMoney } from '../money'
 import { ShopifyProduct } from '../../types'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as ImagePicker from 'expo-image-picker'
+import { AvatarFrameWrapper, useEquippedAvatarFrame } from '../components'
 
 const REF_ITEM_PREFIX = '__REF_ITEM__:'
 
@@ -94,6 +95,13 @@ export function Chat({
     mimeType: string
   } | null>(null)
   const listRef = useRef<FlatList<CommunityMessage> | null>(null)
+  const { frameId: avatarFrameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshAvatarFrame()
+    }, [refreshAvatarFrame])
+  )
 
   useEffect(() => {
     loadInitialMessages()
@@ -393,11 +401,20 @@ export function Chat({
               <View style={[styles.messageShell, isMe ? styles.meShell : styles.otherShell]}>
                 {!isMe ? (
                   <View style={styles.avatarBubble}>
-                    {avatarUri ? (
-                      <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
-                    ) : (
-                      <Text style={styles.avatarText}>{initial}</Text>
-                    )}
+                    <AvatarFrameWrapper
+                      frameId={avatarFrameId}
+                      size={34}
+                      fit="chat"
+                      innerBackgroundColor={
+                        avatarUri ? 'transparent' : theme.appBackgroundColor || '#dfe6f5'
+                      }
+                    >
+                      {avatarUri ? (
+                        <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+                      ) : (
+                        <Text style={styles.avatarText}>{initial}</Text>
+                      )}
+                    </AvatarFrameWrapper>
                   </View>
                 ) : null}
                 <Pressable
@@ -499,13 +516,22 @@ export function Chat({
                 </Pressable>
                 {isMe ? (
                   <View style={styles.avatarBubble}>
-                    {avatarUri ? (
-                      <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
-                    ) : (
-                      <Text style={styles.avatarText}>
-                        {(user.fullName || 'Y').slice(0, 1).toUpperCase()}
-                      </Text>
-                    )}
+                    <AvatarFrameWrapper
+                      frameId={avatarFrameId}
+                      size={34}
+                      fit="chat"
+                      innerBackgroundColor={
+                        avatarUri ? 'transparent' : theme.appBackgroundColor || '#dfe6f5'
+                      }
+                    >
+                      {avatarUri ? (
+                        <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+                      ) : (
+                        <Text style={styles.avatarText}>
+                          {(user.fullName || 'Y').slice(0, 1).toUpperCase()}
+                        </Text>
+                      )}
+                    </AvatarFrameWrapper>
                   </View>
                 ) : null}
               </View>
@@ -782,13 +808,11 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       borderWidth: 1.5,
     },
     avatarBubble: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      backgroundColor: '#dfe6f5',
+      width: 36,
+      height: 36,
       alignItems: 'center',
       justifyContent: 'center',
-      overflow: 'hidden',
+      overflow: 'visible',
       marginTop: 2,
     },
     avatarImage: {
