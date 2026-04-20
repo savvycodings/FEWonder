@@ -9,8 +9,18 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native'
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+} from 'react-native-reanimated'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { NotificationsModal, ProductTileImageWithHeart } from '../components'
+import {
+  NotificationsModal,
+  ProductTileImageWithHeart,
+  WonderportAccentCard,
+} from '../components'
 import { ThemeContext } from '../context'
 import { getDailyRewardStatus, listDbProducts, readDailyRewardsCache } from '../utils'
 import { ShopifyProduct } from '../../types'
@@ -36,8 +46,9 @@ function productToSavePayload(item: ShopifyProduct) {
 
 const GRID_GAP = 12
 
-/** Home accent: lime tile background, black labels */
+/** Category chips: neon lime border + text on black fill; price pill keeps lime bg + black label */
 const HOME_ACCENT_BG = '#CBFF00'
+const HOME_CHIP_FILL = '#000000'
 const HOME_ACCENT_TEXT = '#000000'
 
 /** Montserrat — registered in App.tsx `useFonts` */
@@ -146,15 +157,13 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
 
         <View style={styles.chipsRow}>
           {categories.map((item) => (
-            <Pressable
+            <HomeCategoryChip
               key={item}
-              style={[styles.chip, activeCategory === item ? styles.chipActive : null]}
+              label={item}
+              selected={activeCategory === item}
               onPress={() => setActiveCategory(item)}
-            >
-              <Text style={[styles.chipText, activeCategory === item ? styles.chipTextActive : null]}>
-                {item}
-              </Text>
-            </Pressable>
+              styles={styles}
+            />
           ))}
         </View>
 
@@ -307,32 +316,38 @@ const getStyles = (theme: any) =>
       marginBottom: 12,
       alignItems: 'stretch',
     },
-    chip: {
+    chipPressable: {
       flex: 1,
       minWidth: 0,
-      alignItems: 'center',
-      justifyContent: 'center',
+    },
+    chipCardOuter: {
+      width: '100%',
+    },
+    chipAnimWrap: {
+      width: '100%',
+    },
+    chipPlainOuter: {
+      width: '100%',
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: theme.tileBorderColor || theme.borderColor,
+      backgroundColor: HOME_CHIP_FILL,
+      overflow: 'hidden',
+    },
+    chipCardInner: {
       paddingHorizontal: 6,
       paddingVertical: 12,
-      borderRadius: 16,
-      backgroundColor: HOME_ACCENT_BG,
-      borderWidth: 2,
-      borderColor: HOME_ACCENT_BG,
-    },
-    chipActive: {
-      borderColor: HOME_ACCENT_TEXT,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     chipText: {
-      color: HOME_ACCENT_TEXT,
+      color: HOME_ACCENT_BG,
       fontFamily: HOME_CHIP_MONTSERRAT,
       fontSize: 13,
       lineHeight: 16,
       textAlign: 'center',
       textTransform: 'uppercase',
       width: '100%',
-    },
-    chipTextActive: {
-      color: HOME_ACCENT_TEXT,
     },
     sectionHeaderRow: {
       marginBottom: 6,
@@ -438,3 +453,67 @@ const getStyles = (theme: any) =>
       marginBottom: 10,
     },
   })
+
+type HomeStyles = ReturnType<typeof getStyles>
+
+function HomeCategoryChip({
+  label,
+  selected,
+  onPress,
+  styles,
+}: {
+  label: string
+  selected: boolean
+  onPress: () => void
+  styles: HomeStyles
+}) {
+  const scale = useSharedValue(1)
+  const prevSelected = useRef(selected)
+
+  useEffect(() => {
+    if (selected && !prevSelected.current) {
+      scale.value = withSequence(
+        withSpring(1.07, { damping: 13, stiffness: 380 }),
+        withSpring(1, { damping: 15, stiffness: 260 }),
+      )
+    } else if (!selected && prevSelected.current) {
+      scale.value = withSequence(
+        withSpring(0.98, { damping: 16, stiffness: 320 }),
+        withSpring(1, { damping: 18, stiffness: 280 }),
+      )
+    }
+    prevSelected.current = selected
+  }, [selected, scale])
+
+  const popStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }))
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.chipPressable, { opacity: pressed ? 0.9 : 1 }]}
+      onPress={onPress}
+    >
+      <Animated.View style={[styles.chipAnimWrap, popStyle]}>
+        {selected ? (
+          <WonderportAccentCard
+            borderWidth={3}
+            borderRadius={16}
+            innerBackgroundColor={HOME_CHIP_FILL}
+            animatedBorder
+            style={styles.chipCardOuter}
+            contentStyle={styles.chipCardInner}
+          >
+            <Text style={styles.chipText}>{label}</Text>
+          </WonderportAccentCard>
+        ) : (
+          <View style={styles.chipPlainOuter}>
+            <View style={styles.chipCardInner}>
+              <Text style={styles.chipText}>{label}</Text>
+            </View>
+          </View>
+        )}
+      </Animated.View>
+    </Pressable>
+  )
+}

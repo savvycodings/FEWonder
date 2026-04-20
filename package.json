@@ -26,6 +26,7 @@
     "expo-file-system": "~19.0.21",
     "expo-font": "~14.0.11",
     "expo-image-picker": "~17.0.10",
+    "expo-linear-gradient": "~15.0.8",
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.9",
     "punycode": "^2.3.1",
