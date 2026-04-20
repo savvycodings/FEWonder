@@ -220,6 +220,7 @@ function Tabs({
           children={() => <Chat user={user} sessionToken={sessionToken} />}
           options={{
             headerShown: false,
+            tabBarHideOnKeyboard: true,
             tabBarIcon: ({ color, size }) => (
               <FeatherIcon
                 name="message-circle"

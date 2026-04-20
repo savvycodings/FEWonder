@@ -5,13 +5,13 @@ import {
   FlatList,
   Image,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native'
 import EventSource from 'react-native-sse'
@@ -34,6 +34,20 @@ import * as ImagePicker from 'expo-image-picker'
 import { AvatarFrameWrapper, useEquippedAvatarFrame } from '../components'
 
 const REF_ITEM_PREFIX = '__REF_ITEM__:'
+
+/** Matches `TAB_SHELL_TOP_EXTRA` in `main.tsx` — cancels tab shell top padding so the hero sits flush. */
+const TAB_SHELL_TOP_EXTRA = 6
+
+/** Community chat palette: black canvas, lime incoming, dark grey own bubbles + composer */
+const CHAT_LIME = '#CBFF00'
+const CHAT_BLACK = '#000000'
+const CHAT_TILE_GREY = '#2d2d2d'
+
+/** Gap above the floating tab bar when keyboard is hidden (clearance over the pill nav). */
+const CHAT_ABOVE_TAB_BAR = 68
+
+/** Approximate composer row height for list padding / stacking (attach + field + send). */
+const COMPOSER_BAR_HEIGHT = 58
 
 /** Stored value is product `handle` (new); legacy messages may use `title`. */
 function getReferenceToken(handle: string) {
@@ -73,12 +87,14 @@ export function Chat({
   const { theme } = useContext(ThemeContext)
   const navigation = useNavigation<any>()
   const insets = useSafeAreaInsets()
+  const { width: windowWidth } = useWindowDimensions()
   const styles = useMemo(() => getStyles(theme, insets), [theme, insets])
   const [loading, setLoading] = useState(true)
   const [messages, setMessages] = useState<CommunityMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
-  const [keyboardVisible, setKeyboardVisible] = useState(false)
+  /** Keyboard overlap height from screen bottom — drives composer position (avoids tab bar + syncs with keyboard). */
+  const [keyboardHeight, setKeyboardHeight] = useState(0)
   const [showComposerMenu, setShowComposerMenu] = useState(false)
   const [editingMessage, setEditingMessage] = useState<CommunityMessage | null>(null)
   const [editInput, setEditInput] = useState('')
@@ -164,8 +180,11 @@ export function Chat({
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-    const onShow = Keyboard.addListener(showEvent, () => setKeyboardVisible(true))
-    const onHide = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false))
+    const onShow = Keyboard.addListener(showEvent, (e) => {
+      const h = e.endCoordinates?.height ?? 0
+      setKeyboardHeight(h > 0 ? h : 0)
+    })
+    const onHide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0))
     return () => {
       onShow.remove()
       onHide.remove()
@@ -369,29 +388,64 @@ export function Chat({
     }
   }
 
-  const pageBg = { backgroundColor: theme.appBackgroundColor || '#f4f6fb' }
+  const pageBg = { backgroundColor: CHAT_BLACK }
+  const heroBleedWidth = windowWidth + insets.left + insets.right
+
+  /** Distance from screen bottom to composer bar — tracks keyboard pixels directly (no KeyboardAvoidingView lag). */
+  const composerBottom = useMemo(() => {
+    if (keyboardHeight > 0) {
+      return keyboardHeight + (Platform.OS === 'ios' ? 10 : Math.max(insets.bottom, 8))
+    }
+    return insets.bottom + CHAT_ABOVE_TAB_BAR
+  }, [keyboardHeight, insets.bottom])
+
+  /** Keeps last messages scrollable above composer + keyboard. */
+  const listPaddingBottom = useMemo(() => {
+    if (keyboardHeight > 0) {
+      return keyboardHeight + COMPOSER_BAR_HEIGHT + 28
+    }
+    return COMPOSER_BAR_HEIGHT + CHAT_ABOVE_TAB_BAR + insets.bottom + 16
+  }, [keyboardHeight, insets.bottom])
+
+  const kbOpen = keyboardHeight > 0
+
   return (
     <Pressable style={[styles.container, pageBg]} onPress={() => setActiveOwnMessageId(null)}>
-      <KeyboardAvoidingView
-        style={[styles.container, pageBg]}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      <View
+        style={[
+          styles.heroBleed,
+          {
+            marginTop: -(insets.top + TAB_SHELL_TOP_EXTRA),
+            marginLeft: -insets.left,
+            marginRight: -insets.right,
+            width: heroBleedWidth,
+            paddingTop: insets.top + 12,
+            paddingHorizontal: 16,
+            paddingBottom: 14,
+          },
+        ]}
       >
-      <View style={styles.heroCard}>
         <Text style={styles.heroTitle}>Wonderport Community</Text>
         <Text style={styles.heroSubtitle}>
           One shared room for everyone. Keep it friendly and fun.
         </Text>
       </View>
 
+      <View style={[styles.chatShell, pageBg]}>
+      <View style={styles.chatMain}>
       {loading ? (
-        <ActivityIndicator style={styles.loader} />
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={CHAT_LIME} />
+        </View>
       ) : (
         <FlatList
           ref={listRef}
+          style={styles.messagesList}
           data={messages}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: listPaddingBottom }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           renderItem={({ item }) => {
             const isMe = item.user.id === user.id
             const showOwnActions = isMe && activeOwnMessageId === item.id
@@ -406,7 +460,7 @@ export function Chat({
                       size={34}
                       fit="chat"
                       innerBackgroundColor={
-                        avatarUri ? 'transparent' : theme.appBackgroundColor || '#dfe6f5'
+                        avatarUri ? 'transparent' : CHAT_TILE_GREY
                       }
                     >
                       {avatarUri ? (
@@ -436,7 +490,7 @@ export function Chat({
                     const refImage = referencedProduct ? productImageSource(referencedProduct) : null
                     return (
                       <>
-                  <Text style={styles.authorText}>
+                  <Text style={[styles.authorLabel, isMe ? styles.authorLabelMe : styles.authorLabelOther]}>
                     {isMe ? 'You' : item.user.fullName}
                   </Text>
                   {item.imageUrl ? (
@@ -453,12 +507,20 @@ export function Chat({
                             style={[styles.referencedItemCard, isMe ? styles.referencedItemCardMe : null]}
                             onPress={() => navigation.navigate('Product', { product: referencedProduct })}
                           >
-                            <View style={styles.referencedItemImageWrap}>
+                            <View
+                              style={[styles.referencedItemImageWrap, isMe ? styles.referencedItemImageWrapMe : null]}
+                            >
                               {refImage ? (
                                 <Image source={refImage} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
                               ) : (
                                 <View style={styles.referencedItemImagePlaceholder}>
-                                  <Text numberOfLines={2} style={styles.referencedItemPlaceholderText}>
+                                  <Text
+                                    numberOfLines={2}
+                                    style={[
+                                      styles.referencedItemPlaceholderText,
+                                      isMe ? styles.referencedItemPlaceholderTextMe : null,
+                                    ]}
+                                  >
                                     {referencedProduct.title}
                                   </Text>
                                 </View>
@@ -521,7 +583,7 @@ export function Chat({
                       size={34}
                       fit="chat"
                       innerBackgroundColor={
-                        avatarUri ? 'transparent' : theme.appBackgroundColor || '#dfe6f5'
+                        avatarUri ? 'transparent' : CHAT_TILE_GREY
                       }
                     >
                       {avatarUri ? (
@@ -545,30 +607,35 @@ export function Chat({
           }
         />
       )}
+      </View>
 
-      <View
-        style={[
-          styles.inputRow,
-          { marginBottom: keyboardVisible ? insets.bottom + 8 : insets.bottom + 78 },
-        ]}
-      >
+      <View style={[styles.composerDock, { bottom: composerBottom }]}>
+        <View style={styles.inputRow}>
         <TouchableOpacity style={styles.attachButton} onPress={openComposerActions}>
-          <FeatherIcon name="link-2" size={16} color="#2a335f" />
+          <FeatherIcon name="link-2" size={16} color={CHAT_LIME} />
         </TouchableOpacity>
         <TextInput
           style={styles.input}
           placeholder="Message community"
-          placeholderTextColor={theme.placeholderTextColor}
+          placeholderTextColor="#888888"
           value={input}
           onChangeText={setInput}
         />
         <TouchableOpacity style={styles.sendButton} onPress={onSend} disabled={sending}>
-          <FeatherIcon name="send" size={16} color="#ffffff" style={styles.sendIcon} />
+          <FeatherIcon name="send" size={16} color={CHAT_BLACK} style={styles.sendIcon} />
         </TouchableOpacity>
+        </View>
       </View>
 
       {pendingImage ? (
-        <View style={[styles.pendingImageCard, { bottom: keyboardVisible ? insets.bottom + 62 : insets.bottom + 132 }]}>
+        <View
+          style={[
+            styles.pendingImageCard,
+            {
+              bottom: composerBottom + COMPOSER_BAR_HEIGHT + (kbOpen ? 10 : 14),
+            },
+          ]}
+        >
           <Image source={{ uri: pendingImage.uri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
           <Pressable style={styles.removePendingImage} onPress={() => setPendingImage(null)}>
             <FeatherIcon name="x" size={12} color="#243056" />
@@ -576,7 +643,14 @@ export function Chat({
         </View>
       ) : null}
       {pendingReferenceItem ? (
-        <View style={[styles.pendingReferenceCard, { bottom: keyboardVisible ? insets.bottom + 62 : insets.bottom + 132 }]}>
+        <View
+          style={[
+            styles.pendingReferenceCard,
+            {
+              bottom: composerBottom + COMPOSER_BAR_HEIGHT + (kbOpen ? 10 : 14),
+            },
+          ]}
+        >
           <View style={styles.pendingReferenceImageFrame}>
             {productImageSource(pendingReferenceItem) ? (
               <Image
@@ -607,7 +681,9 @@ export function Chat({
           <View
             style={[
               styles.menuAnchorWrap,
-              { bottom: keyboardVisible ? insets.bottom + 64 : insets.bottom + 134 },
+              {
+                bottom: composerBottom + COMPOSER_BAR_HEIGHT + 10,
+              },
             ]}
           >
             <View style={styles.menuCard}>
@@ -693,6 +769,8 @@ export function Chat({
         </View>
       ) : null}
 
+      </View>
+
       {editingMessage ? (
         <>
           <Pressable
@@ -738,7 +816,6 @@ export function Chat({
           </View>
         </>
       ) : null}
-      </KeyboardAvoidingView>
     </Pressable>
   )
 }
@@ -747,30 +824,51 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: '#f4f6fb',
+      backgroundColor: CHAT_BLACK,
     },
-    heroCard: {
-      marginHorizontal: 12,
-      marginTop: insets.top + 8,
+    chatShell: {
+      flex: 1,
+      minHeight: 0,
+      position: 'relative',
+    },
+    composerDock: {
+      position: 'absolute',
+      left: 12,
+      right: 12,
+      zIndex: 3,
+    },
+    chatMain: {
+      flex: 1,
+      minHeight: 0,
+      width: '100%',
+    },
+    messagesList: {
+      flex: 1,
+      minHeight: 0,
+    },
+    loadingWrap: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 120,
+    },
+    heroBleed: {
+      backgroundColor: CHAT_TILE_GREY,
+      borderBottomLeftRadius: 16,
+      borderBottomRightRadius: 16,
       marginBottom: 2,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      borderRadius: 16,
-      backgroundColor: '#2a335f',
+      overflow: 'hidden',
     },
     heroTitle: {
-      color: '#ffffff',
+      color: CHAT_LIME,
       fontFamily: theme.boldFont,
       fontSize: 18,
       marginBottom: 2,
     },
     heroSubtitle: {
-      color: 'rgba(255,255,255,.75)',
+      color: 'rgba(255,255,255,.7)',
       fontFamily: theme.regularFont,
       fontSize: 12,
-    },
-    loader: {
-      marginTop: 28,
     },
     listContent: {
       paddingHorizontal: 12,
@@ -798,14 +896,14 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     },
     meRow: {
       alignSelf: 'flex-end',
-      backgroundColor: '#2a335f',
-      borderColor: '#2a335f',
+      backgroundColor: CHAT_TILE_GREY,
+      borderColor: '#404040',
     },
     otherRow: {
       alignSelf: 'flex-start',
-      backgroundColor: '#eef2fa',
-      borderColor: '#cfd7e8',
-      borderWidth: 1.5,
+      backgroundColor: CHAT_LIME,
+      borderColor: '#b8e020',
+      borderWidth: 1,
     },
     avatarBubble: {
       width: 36,
@@ -820,18 +918,23 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       height: '100%',
     },
     avatarText: {
-      color: '#2a335f',
+      color: CHAT_LIME,
       fontFamily: theme.boldFont,
       fontSize: 11,
     },
-    authorText: {
+    authorLabel: {
       fontSize: 11,
       marginBottom: 2,
-      color: '#8b94aa',
       fontFamily: theme.mediumFont,
     },
+    authorLabelMe: {
+      color: 'rgba(255,255,255,.55)',
+    },
+    authorLabelOther: {
+      color: 'rgba(0,0,0,.55)',
+    },
     bodyText: {
-      color: '#1a2445',
+      color: CHAT_BLACK,
       fontFamily: theme.regularFont,
       fontSize: 14,
     },
@@ -842,7 +945,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       overflow: 'hidden',
       marginBottom: 6,
       marginTop: 2,
-      backgroundColor: '#dfe5f0',
+      backgroundColor: '#000000',
     },
     inlineActionRow: {
       marginTop: 8,
@@ -880,35 +983,34 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       alignItems: 'center',
     },
     emptyTitle: {
-      color: '#2a335f',
+      color: CHAT_LIME,
       fontFamily: theme.semiBoldFont,
       fontSize: 16,
       marginBottom: 4,
     },
     emptyText: {
-      color: '#8b94aa',
+      color: '#9aa0a8',
       fontFamily: theme.regularFont,
       fontSize: 13,
     },
     inputRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginHorizontal: 12,
-      marginBottom: 10,
+      flexShrink: 0,
       marginTop: 4,
       paddingHorizontal: 8,
       paddingVertical: 8,
       gap: 8,
       borderRadius: 16,
-      backgroundColor: '#ffffff',
+      backgroundColor: CHAT_TILE_GREY,
       borderWidth: 1,
-      borderColor: '#e7ebf3',
+      borderColor: '#404040',
     },
     attachButton: {
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: '#edf1f9',
+      backgroundColor: '#3a3a3a',
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -948,18 +1050,19 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     input: {
       flex: 1,
       borderWidth: 1,
-      borderColor: '#d9dee8',
+      borderColor: '#4a4a4a',
       borderRadius: 999,
       paddingHorizontal: 14,
       paddingVertical: 10,
-      color: '#243056',
+      backgroundColor: '#1a1a1a',
+      color: '#f2f2f2',
       fontFamily: theme.mediumFont,
     },
     sendButton: {
       width: 38,
       height: 38,
       borderRadius: 19,
-      backgroundColor: '#2a335f',
+      backgroundColor: CHAT_LIME,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -1041,21 +1144,24 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       width: 170,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: '#d9dee8',
+      borderColor: '#333333',
       overflow: 'hidden',
       backgroundColor: '#ffffff',
       marginBottom: 6,
       marginTop: 2,
     },
     referencedItemCardMe: {
-      borderColor: 'rgba(255,255,255,.35)',
-      backgroundColor: 'rgba(255,255,255,.12)',
+      borderColor: '#525252',
+      backgroundColor: '#252525',
     },
     referencedItemImageWrap: {
       width: '100%',
       height: 130,
       overflow: 'hidden',
-      backgroundColor: '#edf1f9',
+      backgroundColor: '#e8e8e8',
+    },
+    referencedItemImageWrapMe: {
+      backgroundColor: '#1f1f1f',
     },
     referencedItemImagePlaceholder: {
       ...StyleSheet.absoluteFillObject,
@@ -1064,13 +1170,16 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       paddingHorizontal: 8,
     },
     referencedItemPlaceholderText: {
-      color: '#5c6788',
+      color: '#555555',
       fontFamily: theme.mediumFont,
       fontSize: 11,
       textAlign: 'center',
     },
+    referencedItemPlaceholderTextMe: {
+      color: 'rgba(255,255,255,.75)',
+    },
     referencedItemName: {
-      color: '#243056',
+      color: '#111111',
       fontFamily: theme.semiBoldFont,
       fontSize: 12,
       paddingHorizontal: 8,
@@ -1081,32 +1190,32 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       color: '#ffffff',
     },
     referencedItemPrice: {
-      color: '#e8703a',
+      color: '#333333',
       fontFamily: theme.boldFont,
       fontSize: 12,
       paddingHorizontal: 8,
       paddingBottom: 7,
     },
     referencedItemPriceMe: {
-      color: 'rgba(255,255,255,.9)',
+      color: CHAT_LIME,
     },
     referencedItemFallback: {
       maxWidth: 200,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: '#d9dee8',
-      backgroundColor: '#f4f6fb',
+      borderColor: '#333333',
+      backgroundColor: '#ffffff',
       paddingHorizontal: 10,
       paddingVertical: 8,
       marginBottom: 6,
       marginTop: 2,
     },
     referencedItemFallbackMe: {
-      borderColor: 'rgba(255,255,255,.35)',
-      backgroundColor: 'rgba(255,255,255,.1)',
+      borderColor: '#525252',
+      backgroundColor: '#363636',
     },
     referencedItemFallbackText: {
-      color: '#5c6788',
+      color: '#444444',
       fontFamily: theme.mediumFont,
       fontSize: 12,
     },
@@ -1269,7 +1378,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       height: 38,
       paddingHorizontal: 14,
       borderRadius: 10,
-      backgroundColor: '#2a335f',
+      backgroundColor: CHAT_LIME,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -1277,7 +1386,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       opacity: 0.55,
     },
     editPrimaryText: {
-      color: '#ffffff',
+      color: CHAT_BLACK,
       fontFamily: theme.semiBoldFont,
       fontSize: 13,
     },
