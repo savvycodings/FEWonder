@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useMemo, useState } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -254,7 +254,16 @@ function Tabs({
   const insets = useSafeAreaInsets()
   const { theme } = useContext(ThemeContext)
   const styles = getStyles({ theme, insets })
-  
+
+  /** Stable component identity so Chat does not remount every Tabs render (would cancel hero timer). */
+  const ChatTabScreen = useMemo(
+    () =>
+      function ChatTabScreen() {
+        return <Chat user={user} sessionToken={sessionToken} />
+      },
+    [user, sessionToken]
+  )
+
   return (
     <View style={styles.container}>
       <Tab.Navigator
@@ -344,10 +353,10 @@ function Tabs({
         />
         <Tab.Screen
           name="Chat"
-          children={() => <Chat user={user} sessionToken={sessionToken} />}
+          component={ChatTabScreen}
           options={{
             headerShown: false,
-            tabBarHideOnKeyboard: true,
+            tabBarHideOnKeyboard: false,
             tabBarIcon: ({ color, size }) => (
               <FeatherIcon
                 name="message-circle"

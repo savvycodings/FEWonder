@@ -4,7 +4,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  Keyboard,
+  LayoutChangeEvent,
   Platform,
   Pressable,
   StyleSheet,
@@ -30,6 +30,17 @@ import {
 import { formatMoney } from '../money'
 import { ShopifyProduct } from '../../types'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import Animated, {
+  cancelAnimation,
+  Easing,
+  KeyboardState,
+  runOnUI,
+  useAnimatedKeyboard,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated'
 import * as ImagePicker from 'expo-image-picker'
 import { AvatarFrameWrapper, useEquippedAvatarFrame } from '../components'
 
@@ -38,7 +49,7 @@ const REF_ITEM_PREFIX = '__REF_ITEM__:'
 /** Matches `TAB_SHELL_TOP_EXTRA` in `main.tsx` — cancels tab shell top padding so the hero sits flush. */
 const TAB_SHELL_TOP_EXTRA = 6
 
-/** Community chat palette: black canvas, lime incoming, dark grey own bubbles + composer */
+/** Community chat palette: black canvas, lime-framed incoming bubbles, grey own bubbles + composer */
 const CHAT_LIME = '#CBFF00'
 const CHAT_BLACK = '#000000'
 const CHAT_TILE_GREY = '#2d2d2d'
@@ -48,6 +59,59 @@ const CHAT_ABOVE_TAB_BAR = 68
 
 /** Approximate composer row height for list padding / stacking (attach + field + send). */
 const COMPOSER_BAR_HEIGHT = 58
+
+/** Extra px between the visible keyboard top and the composer bottom (0 = hug the adjusted frame). */
+const KEYBOARD_GAP = 0
+
+/** Small cushion above the composer row inside the scroll area (list + composer lift together). */
+const LIST_SCROLL_TAIL = 8
+
+/**
+ * Pulls composer toward the visible keyboard (more negative = tighter).
+ * Halved keyboard–dock gap vs prior -16/-10 step.
+ */
+const KEYBOARD_FRAME_NUDGE = Platform.select({ ios: -24, android: -15, default: -15 })!
+
+/**
+ * Keyboard lift: timing + easing keeps motion fluid and in-family with OS keyboard (~280ms),
+ * without spring overshoot / micro-jitter from stiff springs.
+ */
+const CHAT_LIFT_TIMING = {
+  duration: 280,
+  easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+}
+
+/** Delay before the hero banner swipes up off-screen after opening Chat; dismiss animation duration. */
+const HERO_DISMISS_DELAY_MS = 3000
+const HERO_DISMISS_DURATION_MS = 580
+
+/**
+ * Composer `bottom` in screen space: idle above tab bar, or `keyboardHeight + gap` when typing.
+ * Uses keyboard state so closing does not snap from ~gap px to the idle inset (common Reanimated pitfall).
+ */
+function composerDockBottomFromKeyboard(
+  kb: number,
+  keyboardState: KeyboardState,
+  closedBottom: number,
+  gap: number,
+  frameNudge: number
+) {
+  'worklet'
+  const lift = kb + frameNudge
+  if (keyboardState === KeyboardState.CLOSED) {
+    return closedBottom
+  }
+  if (keyboardState === KeyboardState.CLOSING) {
+    return Math.max(closedBottom, lift + gap)
+  }
+  if (keyboardState === KeyboardState.OPENING && kb < 1) {
+    return closedBottom
+  }
+  if (kb < 1 && keyboardState !== KeyboardState.OPEN) {
+    return closedBottom
+  }
+  return lift + gap
+}
 
 /** Stored value is product `handle` (new); legacy messages may use `title`. */
 function getReferenceToken(handle: string) {
@@ -93,8 +157,6 @@ export function Chat({
   const [messages, setMessages] = useState<CommunityMessage[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
-  /** Keyboard overlap height from screen bottom — drives composer position (avoids tab bar + syncs with keyboard). */
-  const [keyboardHeight, setKeyboardHeight] = useState(0)
   const [showComposerMenu, setShowComposerMenu] = useState(false)
   const [editingMessage, setEditingMessage] = useState<CommunityMessage | null>(null)
   const [editInput, setEditInput] = useState('')
@@ -112,6 +174,11 @@ export function Chat({
   } | null>(null)
   const listRef = useRef<FlatList<CommunityMessage> | null>(null)
   const { frameId: avatarFrameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
+
+  const heroLayoutHeight = useSharedValue(108)
+  const heroTranslateY = useSharedValue(0)
+  /** Keeps messages below the banner — does not shrink when banner slides away (banner is an overlay). */
+  const [messagesTopPad, setMessagesTopPad] = useState(108)
 
   useFocusEffect(
     useCallback(() => {
@@ -176,20 +243,6 @@ export function Chat({
       return Array.from(byId.values())
     })
   }, [dbPickerProducts])
-
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-    const onShow = Keyboard.addListener(showEvent, (e) => {
-      const h = e.endCoordinates?.height ?? 0
-      setKeyboardHeight(h > 0 ? h : 0)
-    })
-    const onHide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0))
-    return () => {
-      onShow.remove()
-      onHide.remove()
-    }
-  }, [])
 
   async function loadInitialMessages() {
     try {
@@ -390,48 +443,88 @@ export function Chat({
 
   const pageBg = { backgroundColor: CHAT_BLACK }
   const heroBleedWidth = windowWidth + insets.left + insets.right
+  const closedComposerBottom = useMemo(
+    () => insets.bottom + CHAT_ABOVE_TAB_BAR,
+    [insets.bottom]
+  )
 
-  /** Distance from screen bottom to composer bar — tracks keyboard pixels directly (no KeyboardAvoidingView lag). */
-  const composerBottom = useMemo(() => {
-    if (keyboardHeight > 0) {
-      return keyboardHeight + (Platform.OS === 'ios' ? 10 : Math.max(insets.bottom, 8))
-    }
-    return insets.bottom + CHAT_ABOVE_TAB_BAR
-  }, [keyboardHeight, insets.bottom])
+  const keyboard = useAnimatedKeyboard()
+  const chatLiftY = useSharedValue(0)
 
-  /** Keeps last messages scrollable above composer + keyboard. */
-  const listPaddingBottom = useMemo(() => {
-    if (keyboardHeight > 0) {
-      return keyboardHeight + COMPOSER_BAR_HEIGHT + 28
-    }
-    return COMPOSER_BAR_HEIGHT + CHAT_ABOVE_TAB_BAR + insets.bottom + 16
-  }, [keyboardHeight, insets.bottom])
+  useAnimatedReaction(
+    () => {
+      const kb = keyboard.height.value
+      const st = keyboard.state.value
+      const dockBottom = composerDockBottomFromKeyboard(
+        kb,
+        st,
+        closedComposerBottom,
+        KEYBOARD_GAP,
+        KEYBOARD_FRAME_NUDGE
+      )
+      return -(dockBottom - closedComposerBottom)
+    },
+    (targetY) => {
+      chatLiftY.value = withTiming(targetY, CHAT_LIFT_TIMING)
+    },
+    [closedComposerBottom]
+  )
 
-  const kbOpen = keyboardHeight > 0
+  const chatGroupLiftStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: chatLiftY.value }],
+  }))
+
+  const onHeroLayout = useCallback(
+    (e: LayoutChangeEvent) => {
+      const h = e.nativeEvent.layout.height
+      if (h <= 0) return
+      heroLayoutHeight.value = h
+      setMessagesTopPad(h + 12)
+    },
+    [heroLayoutHeight]
+  )
+
+  useFocusEffect(
+    useCallback(() => {
+      cancelAnimation(heroTranslateY)
+      heroTranslateY.value = 0
+
+      const timer = setTimeout(() => {
+        runOnUI(() => {
+          'worklet'
+          const H = heroLayoutHeight.value
+          if (H <= 1) return
+          heroTranslateY.value = withTiming(-H, {
+            duration: HERO_DISMISS_DURATION_MS,
+            easing: Easing.out(Easing.cubic),
+          })
+        })()
+      }, HERO_DISMISS_DELAY_MS)
+
+      return () => {
+        clearTimeout(timer)
+        cancelAnimation(heroTranslateY)
+        heroTranslateY.value = 0
+      }
+    }, [])
+  )
+
+  const heroOverlayAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: heroTranslateY.value }],
+  }))
+
+  const menuAnchorBottom = closedComposerBottom + COMPOSER_BAR_HEIGHT + 6
 
   return (
     <Pressable style={[styles.container, pageBg]} onPress={() => setActiveOwnMessageId(null)}>
-      <View
+      <View style={[styles.chatShell, pageBg]}>
+      <Animated.View
         style={[
-          styles.heroBleed,
-          {
-            marginTop: -(insets.top + TAB_SHELL_TOP_EXTRA),
-            marginLeft: -insets.left,
-            marginRight: -insets.right,
-            width: heroBleedWidth,
-            paddingTop: insets.top + 12,
-            paddingHorizontal: 16,
-            paddingBottom: 14,
-          },
+          styles.chatKeyboardGroup,
+          chatGroupLiftStyle,
+          { paddingBottom: closedComposerBottom },
         ]}
       >
-        <Text style={styles.heroTitle}>Wonderport Community</Text>
-        <Text style={styles.heroSubtitle}>
-          One shared room for everyone. Keep it friendly and fun.
-        </Text>
-      </View>
-
-      <View style={[styles.chatShell, pageBg]}>
       <View style={styles.chatMain}>
       {loading ? (
         <View style={styles.loadingWrap}>
@@ -443,9 +536,14 @@ export function Chat({
           style={styles.messagesList}
           data={messages}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.listContent, { paddingBottom: listPaddingBottom }]}
+          contentContainerStyle={[
+            styles.listContent,
+            styles.listScrollPad,
+            { paddingTop: messagesTopPad },
+          ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+          removeClippedSubviews={false}
           renderItem={({ item }) => {
             const isMe = item.user.id === user.id
             const showOwnActions = isMe && activeOwnMessageId === item.id
@@ -490,7 +588,7 @@ export function Chat({
                     const refImage = referencedProduct ? productImageSource(referencedProduct) : null
                     return (
                       <>
-                  <Text style={[styles.authorLabel, isMe ? styles.authorLabelMe : styles.authorLabelOther]}>
+                  <Text style={[styles.authorLabel, isMe ? styles.authorLabelMe : styles.authorLabelOtherOnDark]}>
                     {isMe ? 'You' : item.user.fullName}
                   </Text>
                   {item.imageUrl ? (
@@ -504,49 +602,44 @@ export function Chat({
                   ) : null}
                         {referencedProduct ? (
                           <Pressable
-                            style={[styles.referencedItemCard, isMe ? styles.referencedItemCardMe : null]}
+                            style={[styles.referencedItemCard, styles.referencedItemCardMe]}
                             onPress={() => navigation.navigate('Product', { product: referencedProduct })}
                           >
-                            <View
-                              style={[styles.referencedItemImageWrap, isMe ? styles.referencedItemImageWrapMe : null]}
-                            >
+                            <View style={[styles.referencedItemImageWrap, styles.referencedItemImageWrapMe]}>
                               {refImage ? (
                                 <Image source={refImage} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
                               ) : (
                                 <View style={styles.referencedItemImagePlaceholder}>
                                   <Text
                                     numberOfLines={2}
-                                    style={[
-                                      styles.referencedItemPlaceholderText,
-                                      isMe ? styles.referencedItemPlaceholderTextMe : null,
-                                    ]}
+                                    style={[styles.referencedItemPlaceholderText, styles.referencedItemPlaceholderTextMe]}
                                   >
                                     {referencedProduct.title}
                                   </Text>
                                 </View>
                               )}
                             </View>
-                            <Text numberOfLines={2} style={[styles.referencedItemName, isMe ? styles.referencedItemNameMe : null]}>
+                            <Text numberOfLines={2} style={[styles.referencedItemName, styles.referencedItemNameMe]}>
                               {referencedProduct.title}
                             </Text>
                             {referencedProduct.price?.amount ? (
-                              <Text style={[styles.referencedItemPrice, isMe ? styles.referencedItemPriceMe : null]}>
+                              <Text style={[styles.referencedItemPrice, styles.referencedItemPriceMe]}>
                                 {formatMoney(referencedProduct.price)}
                               </Text>
                             ) : null}
                           </Pressable>
                         ) : referenceKey ? (
-                          <View style={[styles.referencedItemFallback, isMe ? styles.referencedItemFallbackMe : null]}>
+                          <View style={[styles.referencedItemFallback, styles.referencedItemFallbackMe]}>
                             <Text
                               numberOfLines={2}
-                              style={[styles.referencedItemFallbackText, isMe ? styles.referencedItemFallbackTextMe : null]}
+                              style={[styles.referencedItemFallbackText, styles.referencedItemFallbackTextMe]}
                             >
                               Item (unavailable): {referenceKey}
                             </Text>
                           </View>
                         ) : null}
                         {cleanBody ? (
-                          <Text style={[styles.bodyText, isMe ? styles.meBodyText : null]}>
+                          <Text style={[styles.bodyText, isMe ? styles.meBodyText : styles.otherBodyText]}>
                             {cleanBody}
                           </Text>
                         ) : null}
@@ -609,83 +702,66 @@ export function Chat({
       )}
       </View>
 
-      <View style={[styles.composerDock, { bottom: composerBottom }]}>
+      {(pendingImage || pendingReferenceItem) ? (
+        <View style={styles.pendingThumbnailRow}>
+          {pendingImage ? (
+            <View style={styles.pendingImageCard}>
+              <Image source={{ uri: pendingImage.uri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+              <Pressable style={styles.removePendingImage} onPress={() => setPendingImage(null)}>
+                <FeatherIcon name="x" size={12} color="#243056" />
+              </Pressable>
+            </View>
+          ) : null}
+          {pendingReferenceItem ? (
+            <View style={styles.pendingReferenceCard}>
+              <View style={styles.pendingReferenceImageFrame}>
+                {productImageSource(pendingReferenceItem) ? (
+                  <Image
+                    source={productImageSource(pendingReferenceItem)!}
+                    style={StyleSheet.absoluteFillObject}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.pendingReferenceImagePlaceholder}>
+                    <Text numberOfLines={2} style={styles.pendingReferencePlaceholderLabel}>
+                      {pendingReferenceItem.title}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Text numberOfLines={1} style={styles.pendingReferenceText}>
+                {pendingReferenceItem.title}
+              </Text>
+              <Pressable style={styles.removePendingReference} onPress={() => setPendingReferenceItem(null)}>
+                <FeatherIcon name="x" size={12} color="#243056" />
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      <View style={styles.composerDock}>
         <View style={styles.inputRow}>
-        <TouchableOpacity style={styles.attachButton} onPress={openComposerActions}>
-          <FeatherIcon name="link-2" size={16} color={CHAT_LIME} />
-        </TouchableOpacity>
-        <TextInput
-          style={styles.input}
-          placeholder="Message community"
-          placeholderTextColor="#888888"
-          value={input}
-          onChangeText={setInput}
-        />
-        <TouchableOpacity style={styles.sendButton} onPress={onSend} disabled={sending}>
-          <FeatherIcon name="send" size={16} color={CHAT_BLACK} style={styles.sendIcon} />
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.attachButton} onPress={openComposerActions}>
+            <FeatherIcon name="link-2" size={16} color={CHAT_LIME} />
+          </TouchableOpacity>
+          <TextInput
+            style={styles.input}
+            placeholder="Message community"
+            placeholderTextColor="#888888"
+            value={input}
+            onChangeText={setInput}
+          />
+          <TouchableOpacity style={styles.sendButton} onPress={onSend} disabled={sending}>
+            <FeatherIcon name="send" size={16} color={CHAT_BLACK} style={styles.sendIcon} />
+          </TouchableOpacity>
         </View>
       </View>
-
-      {pendingImage ? (
-        <View
-          style={[
-            styles.pendingImageCard,
-            {
-              bottom: composerBottom + COMPOSER_BAR_HEIGHT + (kbOpen ? 10 : 14),
-            },
-          ]}
-        >
-          <Image source={{ uri: pendingImage.uri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
-          <Pressable style={styles.removePendingImage} onPress={() => setPendingImage(null)}>
-            <FeatherIcon name="x" size={12} color="#243056" />
-          </Pressable>
-        </View>
-      ) : null}
-      {pendingReferenceItem ? (
-        <View
-          style={[
-            styles.pendingReferenceCard,
-            {
-              bottom: composerBottom + COMPOSER_BAR_HEIGHT + (kbOpen ? 10 : 14),
-            },
-          ]}
-        >
-          <View style={styles.pendingReferenceImageFrame}>
-            {productImageSource(pendingReferenceItem) ? (
-              <Image
-                source={productImageSource(pendingReferenceItem)!}
-                style={StyleSheet.absoluteFillObject}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={styles.pendingReferenceImagePlaceholder}>
-                <Text numberOfLines={2} style={styles.pendingReferencePlaceholderLabel}>
-                  {pendingReferenceItem.title}
-                </Text>
-              </View>
-            )}
-          </View>
-          <Text numberOfLines={1} style={styles.pendingReferenceText}>
-            {pendingReferenceItem.title}
-          </Text>
-          <Pressable style={styles.removePendingReference} onPress={() => setPendingReferenceItem(null)}>
-            <FeatherIcon name="x" size={12} color="#243056" />
-          </Pressable>
-        </View>
-      ) : null}
 
       {showComposerMenu ? (
         <>
           <Pressable style={styles.menuDismissOverlay} onPress={() => setShowComposerMenu(false)} />
-          <View
-            style={[
-              styles.menuAnchorWrap,
-              {
-                bottom: composerBottom + COMPOSER_BAR_HEIGHT + 10,
-              },
-            ]}
-          >
+          <View style={[styles.menuAnchorWrap, { bottom: menuAnchorBottom }]}>
             <View style={styles.menuCard}>
               <Pressable style={styles.menuRow} onPress={() => handleComposerOption('image')}>
                 <Text style={styles.menuText}>Add image</Text>
@@ -700,6 +776,42 @@ export function Chat({
           </View>
         </>
       ) : null}
+
+      </Animated.View>
+
+      </View>
+
+      <Animated.View
+        pointerEvents="box-none"
+        style={[
+          styles.heroBleedOuter,
+          heroOverlayAnimatedStyle,
+          {
+            top: -(insets.top + TAB_SHELL_TOP_EXTRA),
+            marginLeft: -insets.left,
+            marginRight: -insets.right,
+            width: heroBleedWidth,
+          },
+        ]}
+      >
+        <View
+          onLayout={onHeroLayout}
+          style={[
+            styles.heroBleed,
+            {
+              paddingTop: insets.top + 12,
+              paddingHorizontal: 16,
+              paddingBottom: 14,
+            },
+          ]}
+        >
+          <Text style={styles.heroTitle}>Wonderport Community</Text>
+          <Text style={styles.heroSubtitle}>
+            One shared room for everyone. Keep it friendly and fun.
+          </Text>
+        </View>
+      </Animated.View>
+
       {showReferencePicker ? (
         <View style={styles.referencePickerOverlay}>
           <View style={styles.referencePickerHeader}>
@@ -769,8 +881,6 @@ export function Chat({
         </View>
       ) : null}
 
-      </View>
-
       {editingMessage ? (
         <>
           <Pressable
@@ -825,16 +935,24 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     container: {
       flex: 1,
       backgroundColor: CHAT_BLACK,
+      position: 'relative',
     },
     chatShell: {
       flex: 1,
       minHeight: 0,
       position: 'relative',
+      zIndex: 1,
+    },
+    chatKeyboardGroup: {
+      flex: 1,
+      minHeight: 0,
+      width: '100%',
+      flexDirection: 'column',
+      position: 'relative',
+      zIndex: 1,
     },
     composerDock: {
-      position: 'absolute',
-      left: 12,
-      right: 12,
+      marginHorizontal: 12,
       zIndex: 3,
     },
     chatMain: {
@@ -852,11 +970,15 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       justifyContent: 'center',
       minHeight: 120,
     },
+    heroBleedOuter: {
+      position: 'absolute',
+      zIndex: 25,
+      elevation: 12,
+    },
     heroBleed: {
       backgroundColor: CHAT_TILE_GREY,
       borderBottomLeftRadius: 16,
       borderBottomRightRadius: 16,
-      marginBottom: 2,
       overflow: 'hidden',
     },
     heroTitle: {
@@ -872,8 +994,10 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     },
     listContent: {
       paddingHorizontal: 12,
-      paddingVertical: 12,
       gap: 8,
+    },
+    listScrollPad: {
+      paddingBottom: 12 + LIST_SCROLL_TAIL,
     },
     messageShell: {
       width: '100%',
@@ -901,9 +1025,9 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     },
     otherRow: {
       alignSelf: 'flex-start',
-      backgroundColor: CHAT_LIME,
-      borderColor: '#b8e020',
-      borderWidth: 1,
+      backgroundColor: CHAT_BLACK,
+      borderColor: CHAT_LIME,
+      borderWidth: 3,
     },
     avatarBubble: {
       width: 36,
@@ -930,8 +1054,10 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     authorLabelMe: {
       color: 'rgba(255,255,255,.55)',
     },
-    authorLabelOther: {
-      color: 'rgba(0,0,0,.55)',
+    /** Incoming bubbles sit on black — lime label matches border. */
+    authorLabelOtherOnDark: {
+      color: CHAT_LIME,
+      opacity: 0.85,
     },
     bodyText: {
       color: CHAT_BLACK,
@@ -977,6 +1103,9 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     },
     meBodyText: {
       color: '#ffffff',
+    },
+    otherBodyText: {
+      color: 'rgba(255,255,255,.92)',
     },
     emptyState: {
       marginTop: 40,
@@ -1069,9 +1198,15 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     sendIcon: {
       transform: [{ translateX: 0.5 }, { translateY: 0.5 }],
     },
+    pendingThumbnailRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      paddingHorizontal: 18,
+      marginBottom: 8,
+      gap: 8,
+      zIndex: 4,
+    },
     pendingImageCard: {
-      position: 'absolute',
-      left: 18,
       width: 72,
       height: 72,
       borderRadius: 10,
@@ -1079,7 +1214,6 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       borderWidth: 1,
       borderColor: '#d9dee8',
       backgroundColor: '#ffffff',
-      zIndex: 4,
     },
     removePendingImage: {
       position: 'absolute',
@@ -1093,15 +1227,12 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       justifyContent: 'center',
     },
     pendingReferenceCard: {
-      position: 'absolute',
-      left: 98,
       width: 86,
       borderRadius: 10,
       overflow: 'hidden',
       borderWidth: 1,
       borderColor: '#d9dee8',
       backgroundColor: '#ffffff',
-      zIndex: 4,
       paddingBottom: 6,
     },
     pendingReferenceImageFrame: {
@@ -1224,7 +1355,8 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     },
     referencePickerOverlay: {
       ...StyleSheet.absoluteFillObject,
-      zIndex: 8,
+      zIndex: 40,
+      elevation: 24,
       backgroundColor: '#f4f6fb',
       paddingTop: insets.top + 12,
       paddingHorizontal: 14,
@@ -1327,7 +1459,8 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     },
     editCardWrap: {
       ...StyleSheet.absoluteFillObject,
-      zIndex: 5,
+      zIndex: 45,
+      elevation: 26,
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: 18,
