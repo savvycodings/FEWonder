@@ -24,23 +24,7 @@ import { AppContext, ThemeContext } from '../context'
 import { User } from '../../types'
 import * as ImagePicker from 'expo-image-picker'
 import { getDailyRewardStatus, updateProfileDetails, uploadProfilePicture } from '../utils'
-
-const recentOrders = [
-  {
-    id: '#WP-2049',
-    name: 'Le Petit Prince Series',
-    status: 'Shipped',
-    total: 'R48.00',
-    image: require('../../public/homepageimgs/product1.webp'),
-  },
-  {
-    id: '#WP-2027',
-    name: 'Skullpanda Winter',
-    status: 'Delivered',
-    total: 'R32.99',
-    image: require('../../public/homepageimgs/product2.webp'),
-  },
-]
+import { fetchMyOrders } from '../ordersApi'
 
 const coinFrameUris = [
   '/homepageimgs/Coinrotation/CoinFRONT.svg',
@@ -105,6 +89,17 @@ export function Profile({
   const [showWalletModal, setShowWalletModal] = useState(false)
   const [coinFrameIndex, setCoinFrameIndex] = useState(0)
   const [walletBalance, setWalletBalance] = useState(0)
+  const [ordersPreview, setOrdersPreview] = useState<
+    {
+      id: string
+      referenceCode: string
+      status: string
+      paymentMethod: string
+      totalCents: number
+      currencyCode: string
+    }[]
+  >([])
+  const [orderTotalCount, setOrderTotalCount] = useState(0)
   const { frameId: avatarFrameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
 
   useEffect(() => {
@@ -124,11 +119,25 @@ export function Profile({
     }
   }, [sessionToken])
 
+  const loadOrdersPreview = useCallback(async () => {
+    if (!sessionToken) return
+    try {
+      const { orders } = await fetchMyOrders()
+      const list = orders || []
+      setOrderTotalCount(list.length)
+      setOrdersPreview(list.slice(0, 4))
+    } catch {
+      setOrdersPreview([])
+      setOrderTotalCount(0)
+    }
+  }, [sessionToken])
+
   useFocusEffect(
     useCallback(() => {
       loadWalletBalance()
       refreshAvatarFrame()
-    }, [loadWalletBalance, refreshAvatarFrame])
+      loadOrdersPreview()
+    }, [loadWalletBalance, refreshAvatarFrame, loadOrdersPreview])
   )
 
   async function handleChangePhoto() {
@@ -172,6 +181,7 @@ export function Profile({
   const accountShopping = [
     { label: 'Shopping Cart', key: 'cart', icon: 'shopping-bag' as const },
     { label: 'Saved Items', key: 'saved', icon: 'heart' as const },
+    { label: 'My orders', key: 'my_orders', icon: 'inbox' as const },
   ]
   const shippingPaymentPreview = `${user.shippingAddress?.trim() || 'No address'}\n${user.paymentMethod?.trim() || 'No payment method'}`
   const accountDetails = [
@@ -191,6 +201,8 @@ export function Profile({
       navigation.navigate('ProfileCart')
     } else if (key === 'saved') {
       navigation.navigate('Saved')
+    } else if (key === 'my_orders') {
+      navigation.navigate('ProfileMyOrders')
     } else if (key === 'shipping_payment') {
       openShippingPaymentModal()
     }
@@ -273,10 +285,10 @@ export function Profile({
 
       <View style={styles.statsGroupCard}>
         <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>14</Text>
+          <Pressable style={styles.statCard} onPress={() => navigation.navigate('ProfileMyOrders')}>
+            <Text style={styles.statValue}>{orderTotalCount}</Text>
             <Text style={styles.statLabel}>Orders</Text>
-          </View>
+          </Pressable>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{cartItems.length}</Text>
             <Text style={styles.statLabel}>In Cart</Text>
@@ -304,7 +316,13 @@ export function Profile({
               <View>
                 <Text style={styles.actionLabel}>{item.label}</Text>
                 <Text style={styles.actionValue}>
-                  {item.key === 'cart' ? `${cartQuantityTotal} items` : `${savedItems.length} saved`}
+                  {item.key === 'cart'
+                    ? `${cartQuantityTotal} items`
+                    : item.key === 'saved'
+                      ? `${savedItems.length} saved`
+                      : item.key === 'my_orders'
+                        ? `${orderTotalCount} order${orderTotalCount === 1 ? '' : 's'}`
+                        : ''}
                 </Text>
               </View>
             </View>
@@ -339,27 +357,39 @@ export function Profile({
       </View>
 
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Previously Ordered</Text>
-        <Text style={styles.link}>View all</Text>
+        <Text style={styles.sectionTitle}>My orders</Text>
+        <Pressable onPress={() => navigation.navigate('ProfileMyOrders')}>
+          <Text style={styles.link}>View all</Text>
+        </Pressable>
       </View>
       <View style={styles.groupCard}>
-        {recentOrders.map((order, index) => (
-          <View key={order.id} style={[styles.orderRow, index !== recentOrders.length - 1 ? styles.rowGap : null]}>
-            <View style={styles.orderThumb}>
-              <Image source={order.image} style={styles.orderThumbImage} resizeMode="cover" />
-            </View>
-            <View style={styles.orderTextWrap}>
-              <Text style={styles.orderName}>{order.name}</Text>
-              <View style={styles.orderMetaRow}>
-                <Text style={styles.orderMeta}>{order.id}</Text>
-                <View style={styles.statusPill}>
-                  <Text style={styles.statusText}>{order.status}</Text>
+        {ordersPreview.length === 0 ? (
+          <Text style={styles.orderEmpty}>No orders yet. Buy something with EFT or Peach to see it here.</Text>
+        ) : (
+          ordersPreview.map((order, index) => (
+            <Pressable
+              key={order.id}
+              style={[styles.orderRow, index !== ordersPreview.length - 1 ? styles.rowGap : null]}
+              onPress={() => navigation.navigate('ProfileMyOrderDetail', { orderId: order.id })}
+            >
+              <View style={styles.orderThumb}>
+                <FeatherIcon name="package" size={20} color={theme.tintColor} />
+              </View>
+              <View style={styles.orderTextWrap}>
+                <Text style={styles.orderName}>{order.referenceCode}</Text>
+                <View style={styles.orderMetaRow}>
+                  <Text style={styles.orderMeta}>{order.paymentMethod?.toUpperCase()}</Text>
+                  <View style={styles.statusPill}>
+                    <Text style={styles.statusText}>{order.status}</Text>
+                  </View>
                 </View>
               </View>
-            </View>
-            <Text style={styles.orderTotal}>{order.total}</Text>
-          </View>
-        ))}
+              <Text style={styles.orderTotal}>
+                {(order.totalCents / 100).toFixed(2)} {order.currencyCode}
+              </Text>
+            </Pressable>
+          ))
+        )}
       </View>
 
       <Pressable style={styles.logoutButton} onPress={onLogout}>
@@ -671,6 +701,14 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   rowGap: {
     marginBottom: 6,
+  },
+  orderEmpty: {
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    fontFamily: theme.mediumFont,
+    fontSize: 13,
+    color: theme.mutedForegroundColor,
+    textAlign: 'center',
   },
   orderRow: {
     paddingHorizontal: 10,

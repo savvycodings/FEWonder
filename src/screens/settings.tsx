@@ -8,6 +8,7 @@ import {
   Image
 } from 'react-native'
 import { useContext } from 'react'
+import { useNavigation } from '@react-navigation/native'
 import { AppContext, ThemeContext } from '../context'
 import {
   AnthropicIcon,
@@ -28,6 +29,7 @@ const _themes = Object.values(themes).map(v => ({
 }))
 
 export function Settings() {
+  const navigation = useNavigation<any>()
   const { theme, setTheme, themeName } = useContext(ThemeContext)
   const {
     chatType,
@@ -95,6 +97,17 @@ export function Settings() {
         </TouchableHighlight>
         ))
       }
+      <View style={styles.titleContainer}>
+        <Text style={styles.mainText}>Admin</Text>
+      </View>
+      <TouchableHighlight
+        underlayColor="transparent"
+        onPress={() => navigation.navigate('AdminOrdersLogin')}
+      >
+        <View style={styles.chatChoiceButton}>
+          <Text style={styles.chatTypeText}>View orders (Peach / EFT)</Text>
+        </View>
+      </TouchableHighlight>
       <View
         style={styles.titleContainer}
       >

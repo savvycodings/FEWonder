@@ -1,5 +1,7 @@
 import { useContext, useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
 import {
@@ -15,6 +17,12 @@ import {
   Settings,
   Login,
   DailyRewards,
+  AdminOrdersLogin,
+  AdminOrdersHub,
+  AdminOrderDetail,
+  AdminUserOrders,
+  MyOrders,
+  MyOrderDetail,
 } from './screens'
 import { WonderJump } from './screens/wonderJump'
 import FeatherIcon from '@expo/vector-icons/Feather'
@@ -26,6 +34,48 @@ import { logoutUser } from './utils'
 
 /** Tab shell padding below status bar; Search hero bleed should match. */
 const TAB_SHELL_TOP_EXTRA = 6
+
+/** Matches `tabBarStyle.borderRadius` — clips blur + tint to the floating pill. */
+const TAB_BAR_RADIUS = 18
+
+/**
+ * Frosted charcoal glass behind the tab bar: native blur + grey/black wash (no green).
+ */
+function FrostedTabBarBackground() {
+  /** Slightly stronger blur so content behind reads softer (platform caps differ). */
+  const blurIntensity = Platform.OS === 'ios' ? 92 : Platform.OS === 'android' ? 58 : 78
+  return (
+    <View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFill, { borderRadius: TAB_BAR_RADIUS, overflow: 'hidden' }]}
+    >
+      <BlurView
+        intensity={blurIntensity}
+        tint="dark"
+        style={StyleSheet.absoluteFill}
+      />
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(24, 24, 26, 0.62)', 'rgba(12, 12, 14, 0.7)', 'rgba(4, 4, 6, 0.66)']}
+        locations={[0, 0.52, 1]}
+        start={{ x: 0.15, y: 0 }}
+        end={{ x: 0.85, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          {
+            borderRadius: TAB_BAR_RADIUS,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+          },
+        ]}
+      />
+    </View>
+  )
+}
 
 const Tab = createBottomTabNavigator()
 const Stack = createNativeStackNavigator()
@@ -88,6 +138,32 @@ function ProfileStackScreen({
       <ProfileStack.Screen name="Saved" component={Saved} />
       <ProfileStack.Screen name="ProfileCart" component={Cart} />
       <ProfileStack.Screen
+        name="ProfileMyOrders"
+        component={MyOrders}
+        options={{
+          headerShown: true,
+          headerTitle: 'My orders',
+          headerBackTitle: '',
+          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
+          headerTintColor: theme.textColor,
+          headerShadowVisible: false,
+        }}
+      />
+      <ProfileStack.Screen
+        name="ProfileMyOrderDetail"
+        component={MyOrderDetail}
+        options={{
+          headerShown: true,
+          headerTitle: 'Order detail',
+          headerBackTitle: '',
+          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
+          headerTintColor: theme.textColor,
+          headerShadowVisible: false,
+        }}
+      />
+      <ProfileStack.Screen
         name="ProfileSettings"
         component={Settings}
         options={{
@@ -108,6 +184,58 @@ function ProfileStackScreen({
       <ProfileStack.Screen name="Shipping" component={Shipping} />
       <ProfileStack.Screen name="Payment" component={Payment} />
       <ProfileStack.Screen name="ProfileDailyRewards" component={DailyRewards} />
+      <ProfileStack.Screen
+        name="AdminOrdersLogin"
+        component={AdminOrdersLogin}
+        options={{
+          headerShown: true,
+          headerTitle: 'Admin orders',
+          headerBackTitle: '',
+          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
+          headerTintColor: theme.textColor,
+          headerShadowVisible: false,
+        }}
+      />
+      <ProfileStack.Screen
+        name="AdminOrdersHub"
+        component={AdminOrdersHub}
+        options={{
+          headerShown: true,
+          headerTitle: 'Orders',
+          headerBackTitle: '',
+          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
+          headerTintColor: theme.textColor,
+          headerShadowVisible: false,
+        }}
+      />
+      <ProfileStack.Screen
+        name="AdminOrderDetail"
+        component={AdminOrderDetail}
+        options={{
+          headerShown: true,
+          headerTitle: 'Order',
+          headerBackTitle: '',
+          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
+          headerTintColor: theme.textColor,
+          headerShadowVisible: false,
+        }}
+      />
+      <ProfileStack.Screen
+        name="AdminUserOrders"
+        component={AdminUserOrders}
+        options={{
+          headerShown: true,
+          headerTitle: 'User orders',
+          headerBackTitle: '',
+          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
+          headerTintColor: theme.textColor,
+          headerShadowVisible: false,
+        }}
+      />
     </ProfileStack.Navigator>
   )
 }
@@ -142,26 +270,25 @@ function Tabs({
           tabBarItemStyle: {
             paddingVertical: 4,
           },
+          tabBarBackground: () => <FrostedTabBarBackground />,
           tabBarStyle: {
             position: 'absolute',
             left: 36,
             right: 36,
             bottom: 8,
             height: 64,
-            borderRadius: 18,
-            borderTopWidth: 1,
-            borderColor: theme.tabBarBorderColor,
-            backgroundColor:
-              theme.tabBarBackgroundColor ||
-              theme.tileActiveBackgroundColor ||
-              '#111111',
-            elevation: 6,
-            shadowColor: theme.tabBarBackgroundColor || '#111111',
-            shadowOpacity: 0.22,
-            shadowRadius: 14,
+            borderRadius: TAB_BAR_RADIUS,
+            overflow: 'hidden',
+            borderTopWidth: 0,
+            borderWidth: 0,
+            backgroundColor: 'transparent',
+            elevation: 8,
+            shadowColor: '#000000',
+            shadowOpacity: 0.35,
+            shadowRadius: 16,
             shadowOffset: {
               width: 0,
-              height: 6,
+              height: 8,
             },
           },
         }}
