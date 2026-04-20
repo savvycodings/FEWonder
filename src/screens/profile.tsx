@@ -1,4 +1,4 @@
-import { useContext, useState } from 'react'
+import { useCallback, useContext, useState } from 'react'
 import {
   ScrollView,
   StyleSheet,
@@ -11,10 +11,16 @@ import {
   TextInput,
 } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { AppContext } from '../context'
+import { useFocusEffect } from '@react-navigation/native'
+import {
+  AVATAR_FRAME_SIZE_PROFILE,
+  AvatarFrameWrapper,
+  useEquippedAvatarFrame,
+} from '../components'
+import { AppContext, ThemeContext } from '../context'
 import { User } from '../../types'
 import * as ImagePicker from 'expo-image-picker'
-import { updateProfileDetails, uploadProfilePicture } from '../utils'
+import { getDailyRewardStatus, updateProfileDetails, uploadProfilePicture } from '../utils'
 
 const recentOrders = [
   {
@@ -46,6 +52,9 @@ export function Profile({
   onUserUpdated: (user: User) => Promise<void>
   sessionToken: string
 }) {
+  const { theme } = useContext(ThemeContext)
+  const { frameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
+  const [walletBalance, setWalletBalance] = useState(0)
   const { cartItems, savedItems } = useContext(AppContext)
   const cartQuantityTotal = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0)
   const [isUploading, setIsUploading] = useState(false)
@@ -57,6 +66,16 @@ export function Profile({
   const [paymentInput, setPaymentInput] = useState(user.paymentMethod?.trim() || '')
   const [savingDetails, setSavingDetails] = useState(false)
   const [detailsError, setDetailsError] = useState('')
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshAvatarFrame()
+      if (!sessionToken) return
+      getDailyRewardStatus(sessionToken)
+        .then((s) => setWalletBalance(s.walletBalance))
+        .catch(() => {})
+    }, [sessionToken, refreshAvatarFrame])
+  )
 
   async function handleChangePhoto() {
     if (isUploading) return
@@ -82,7 +101,7 @@ export function Profile({
       }
       const updatedUser = await uploadProfilePicture({
         sessionToken,
-        imageBase64: asset.base64,
+        imageBase64: asset.base64 ?? '',
         mimeType: asset.mimeType || 'image/jpeg',
       })
       await onUserUpdated(updatedUser)
@@ -151,18 +170,41 @@ export function Profile({
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.headerCard}>
-        <Pressable style={styles.avatarWrap} onPress={handleChangePhoto}>
-          {(localPreviewUri || user.profilePicture) ? (
-            <Image source={{ uri: localPreviewUri || user.profilePicture || '' }} style={styles.avatarImage} />
-          ) : (
-            <FeatherIcon name="user" size={24} color="#ffffff" />
-          )}
+        <Pressable style={styles.avatarPressable} onPress={handleChangePhoto}>
+          <AvatarFrameWrapper
+            frameId={frameId}
+            size={AVATAR_FRAME_SIZE_PROFILE}
+            innerBackgroundColor={
+              localPreviewUri || user.profilePicture ? 'transparent' : theme.tileBackgroundColor
+            }
+          >
+            {localPreviewUri || user.profilePicture ? (
+              <Image
+                source={{ uri: localPreviewUri || user.profilePicture || '' }}
+                style={styles.avatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <FeatherIcon name="user" size={22} color={theme.textColor} />
+            )}
+          </AvatarFrameWrapper>
         </Pressable>
         <View style={styles.headerTextWrap}>
           <Text style={styles.name}>{user.fullName}</Text>
           <Text style={styles.email}>{user.email}</Text>
         </View>
-        {isUploading ? <ActivityIndicator size="small" color="#ffffff" /> : null}
+        <View style={styles.headerRight}>
+          <Pressable
+            style={styles.headerWallet}
+            onPress={() =>
+              navigation.navigate('ProfileDailyRewards', { sessionToken: sessionToken || '' })
+            }
+          >
+            <FeatherIcon name="dollar-sign" size={16} color="#ffffff" />
+            <Text style={styles.headerWalletValue}>{walletBalance}</Text>
+          </Pressable>
+          {isUploading ? <ActivityIndicator size="small" color="#ffffff" /> : null}
+        </View>
       </View>
       {uploadError ? <Text style={styles.errorText}>{uploadError}</Text> : null}
 
@@ -204,7 +246,7 @@ export function Profile({
           >
             <View style={styles.actionLeft}>
               <View style={styles.iconBubble}>
-                <FeatherIcon name={item.icon as any} size={16} color="#2a335f" />
+                <FeatherIcon name={item.icon as any} size={16} color={theme.tintColor || '#2a335f'} />
               </View>
               <View>
                 <Text style={styles.actionLabel}>{item.label}</Text>
@@ -329,14 +371,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 10 },
     elevation: 8,
   },
-  avatarWrap: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#ffb178',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+  avatarPressable: {
+    marginRight: 2,
   },
   avatarImage: {
     width: '100%',
@@ -344,7 +380,26 @@ const styles = StyleSheet.create({
   },
   headerTextWrap: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 8,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerWallet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  headerWalletValue: {
+    color: '#ffffff',
+    fontFamily: 'Geist-Bold',
+    fontSize: 14,
   },
   name: {
     color: '#ffffff',

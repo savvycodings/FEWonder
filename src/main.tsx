@@ -2,7 +2,21 @@ import { useContext, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack'
-import { Home, Search, Profile, Shipping, Payment, Cart, Saved, Product, Chat, Settings, Login } from './screens'
+import {
+  Home,
+  Search,
+  Profile,
+  Shipping,
+  Payment,
+  Cart,
+  Saved,
+  Product,
+  Chat,
+  Settings,
+  Login,
+  DailyRewards,
+} from './screens'
+import { WonderJump } from './screens/wonderJump'
 import { Header } from './components'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -11,9 +25,34 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AuthPayload, User } from '../types'
 import { logoutUser } from './utils'
 
+/** Tab shell padding below status bar; Search hero bleed should match. */
+const TAB_SHELL_TOP_EXTRA = 6
+
 const Tab = createBottomTabNavigator()
 const Stack = createNativeStackNavigator()
 const ProfileStack = createNativeStackNavigator()
+const HomeStack = createNativeStackNavigator()
+
+function HomeStackScreen({ sessionToken }: { sessionToken: string }) {
+  const { theme } = useContext(ThemeContext)
+  return (
+    <HomeStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
+        },
+      }}
+    >
+      <HomeStack.Screen name="HomeMain">
+        {({ navigation }) => (
+          <Home navigation={navigation} sessionToken={sessionToken} />
+        )}
+      </HomeStack.Screen>
+      <HomeStack.Screen name="DailyRewards" component={DailyRewards} />
+    </HomeStack.Navigator>
+  )
+}
 
 function ProfileStackScreen({
   user,
@@ -26,8 +65,16 @@ function ProfileStackScreen({
   onUserUpdated: (user: User) => Promise<void>
   sessionToken: string
 }) {
+  const { theme } = useContext(ThemeContext)
   return (
-    <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
+    <ProfileStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: {
+          backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
+        },
+      }}
+    >
       <ProfileStack.Screen name="ProfileHome">
         {({ navigation }) => (
           <Profile
@@ -43,6 +90,7 @@ function ProfileStackScreen({
       <ProfileStack.Screen name="ProfileCart" component={Cart} />
       <ProfileStack.Screen name="Shipping" component={Shipping} />
       <ProfileStack.Screen name="Payment" component={Payment} />
+      <ProfileStack.Screen name="ProfileDailyRewards" component={DailyRewards} />
     </ProfileStack.Navigator>
   )
 }
@@ -66,8 +114,8 @@ function Tabs({
     <View style={styles.container}>
       <Tab.Navigator
         screenOptions={{
-          tabBarActiveTintColor: '#ffffff',
-          tabBarInactiveTintColor: 'rgba(255, 255, 255, .6)',
+          tabBarActiveTintColor: theme.tabBarActiveTintColor,
+          tabBarInactiveTintColor: theme.tabBarInactiveTintColor,
           tabBarShowLabel: true,
           tabBarLabelStyle: {
             fontFamily: theme.mediumFont,
@@ -79,15 +127,19 @@ function Tabs({
           },
           tabBarStyle: {
             position: 'absolute',
-            left: 12,
-            right: 12,
+            left: 36,
+            right: 36,
             bottom: 8,
             height: 64,
             borderRadius: 18,
-            borderTopWidth: 0,
-            backgroundColor: '#2a335f',
+            borderTopWidth: 1,
+            borderColor: theme.tabBarBorderColor,
+            backgroundColor:
+              theme.tabBarBackgroundColor ||
+              theme.tileActiveBackgroundColor ||
+              '#111111',
             elevation: 6,
-            shadowColor: '#2a335f',
+            shadowColor: theme.tabBarBackgroundColor || '#111111',
             shadowOpacity: 0.22,
             shadowRadius: 14,
             shadowOffset: {
@@ -99,7 +151,7 @@ function Tabs({
       >
         <Tab.Screen
           name="Home"
-          component={Home}
+          children={() => <HomeStackScreen sessionToken={sessionToken} />}
           options={{
             headerShown: false,
             tabBarIcon: ({ color, size }) => (
@@ -137,7 +189,6 @@ function Tabs({
           )}
           options={{
             headerShown: false,
-            unmountOnBlur: true,
             tabBarIcon: ({ color, size }) => (
               <FeatherIcon
                 name="user"
@@ -251,15 +302,16 @@ export function Main() {
         </Stack.Screen>
       )}
       <Stack.Screen name="Product" component={Product} />
+      <Stack.Screen name="WonderJump" component={WonderJump} />
     </Stack.Navigator>
   )
 }
 
 const getStyles = ({ theme, insets } : { theme: any, insets: any}) => StyleSheet.create({
   container: {
-    backgroundColor: '#f4f6fb',
+    backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
     flex: 1,
-    paddingTop: 0,
+    paddingTop: insets.top + TAB_SHELL_TOP_EXTRA,
     paddingBottom: insets.bottom + 8,
     paddingLeft: insets.left,
     paddingRight: insets.right,

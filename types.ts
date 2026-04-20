@@ -44,6 +44,21 @@ export interface CommunityMessage {
   }
 }
 
+export interface DailyRewardItem {
+  day: number
+  amount: number
+  status: 'claimed' | 'unlocked' | 'locked'
+}
+
+export interface DailyRewardStatus {
+  walletBalance: number
+  claimedCount: number
+  currentStreakDays: number
+  canClaim: boolean
+  nextUnlockAt: string | null
+  rewards: DailyRewardItem[]
+}
+
 export interface ShopifyMoney {
   amount: string
   currencyCode: string

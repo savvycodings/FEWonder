@@ -361,10 +361,11 @@ export function Chat({
     }
   }
 
+  const pageBg = { backgroundColor: theme.appBackgroundColor || '#f4f6fb' }
   return (
-    <Pressable style={styles.container} onPress={() => setActiveOwnMessageId(null)}>
+    <Pressable style={[styles.container, pageBg]} onPress={() => setActiveOwnMessageId(null)}>
       <KeyboardAvoidingView
-        style={styles.container}
+        style={[styles.container, pageBg]}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
       >

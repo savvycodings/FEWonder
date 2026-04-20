@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Image,
   Pressable,
@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import { Feather as FeatherIcon } from '@expo/vector-icons'
 import { ShopifyProduct, User } from '../../types'
+import { ThemeContext } from '../context'
 import { listDbProducts } from '../utils'
 import { formatMoney } from '../money'
 
@@ -33,6 +34,7 @@ export function Search({
   const bannerWidth = width - 32
   const [products, setProducts] = useState<ShopifyProduct[]>([])
   const [loadingProducts, setLoadingProducts] = useState(true)
+  const { theme } = useContext(ThemeContext)
 
   const filtered = useMemo(() => {
     if (!query.trim()) return products
@@ -112,7 +114,7 @@ export function Search({
   }
 
   return (
-    <View style={styles.page}>
+    <View style={[styles.page, { backgroundColor: theme.appBackgroundColor || '#f7f8fb' }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}

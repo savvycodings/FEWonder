@@ -13,7 +13,7 @@ const colors = {
   matrixBlack: '#0d0d0d',
   pinkPrimary: '#e91e8c',
   pinkBackground: '#fff0f6',
-  pinkMuted: 'rgba(233, 30, 140, .4)'
+  pinkMuted: 'rgba(233, 30, 140, .4)',
 }
 
 const fonts = {
@@ -39,10 +39,23 @@ const lightTheme = {
   placeholderTextColor: colors.gray,
   secondaryBackgroundColor: colors.black,
   borderColor: 'rgba(0, 0, 0, .15)',
-  tintColor: '#0281ff',
+  tintColor: colors.black,
   tintTextColor: colors.white,
-  tabBarActiveTintColor: colors.black,
-  tabBarInactiveTintColor: colors.gray,
+  tabBarActiveTintColor: colors.white,
+  tabBarInactiveTintColor: 'rgba(255, 255, 255, .6)',
+  tabBarBackgroundColor: '#111111',
+  tabBarBorderColor: '#2a2a2a',
+  appBackgroundColor: '#f4f6fb',
+  tileBackgroundColor: colors.white,
+  tileBorderColor: '#e7ebf3',
+  tileActiveBackgroundColor: colors.black,
+  tileActiveTextColor: colors.white,
+  modalOverlayColor: 'rgba(22, 27, 46, .35)',
+  headingColor: colors.black,
+  sheetBackgroundColor: '#ffffff',
+  sheetRowBackgroundColor: '#f4f6fb',
+  priceBadgeBackgroundColor: colors.black,
+  priceBadgeTextColor: colors.white,
 }
 
 const darkTheme = {
@@ -56,10 +69,23 @@ const darkTheme = {
   placeholderTextColor: colors.lightWhite,
   secondaryBackgroundColor: colors.white,
   borderColor: 'rgba(255, 255, 255, .2)',
-  tintColor: '#0281ff',
-  tintTextColor: colors.white,
-  tabBarActiveTintColor: colors.blueTintColor,
-  tabBarInactiveTintColor: colors.lightWhite,
+  tintColor: '#f4f4f4',
+  tintTextColor: colors.black,
+  tabBarActiveTintColor: colors.white,
+  tabBarInactiveTintColor: 'rgba(255, 255, 255, .6)',
+  tabBarBackgroundColor: '#111111',
+  tabBarBorderColor: '#2a2a2a',
+  appBackgroundColor: colors.black,
+  tileBackgroundColor: '#1f1f1f',
+  tileBorderColor: '#303030',
+  tileActiveBackgroundColor: '#3a3a3a',
+  tileActiveTextColor: colors.white,
+  modalOverlayColor: 'rgba(0, 0, 0, .6)',
+  headingColor: colors.white,
+  sheetBackgroundColor: '#3a3a3a',
+  sheetRowBackgroundColor: '#1f1f1f',
+  priceBadgeBackgroundColor: '#3a3a3a',
+  priceBadgeTextColor: colors.white,
 }
 
 const hackerNews = {
@@ -68,6 +94,8 @@ const hackerNews = {
   label: 'hackerNews',
   backgroundColor: '#e4e4e4',
   tintColor: '#ed702d',
+  priceBadgeBackgroundColor: colors.black,
+  priceBadgeTextColor: colors.white,
 }
 
 const miami = {
@@ -75,9 +103,21 @@ const miami = {
   name: 'Miami',
   label: 'miami',
   backgroundColor: '#231F20',
+  appBackgroundColor: '#231F20',
+  tileBackgroundColor: '#2f282a',
+  tileBorderColor: '#4d4145',
+  headingColor: colors.lightPink,
+  tileActiveBackgroundColor: colors.lightPink,
+  tileActiveTextColor: '#231F20',
   tintColor: colors.lightPink,
   tintTextColor: '#231F20',
-  tabBarActiveTintColor: colors.lightPink
+  tabBarActiveTintColor: colors.lightPink,
+  tabBarInactiveTintColor: 'rgba(247, 181, 205, .55)',
+  tabBarBackgroundColor: '#2a2325',
+  tabBarBorderColor: '#4d4145',
+  modalOverlayColor: 'rgba(35, 31, 32, .72)',
+  priceBadgeBackgroundColor: '#2a2325',
+  priceBadgeTextColor: colors.lightPink,
 }
 
 const vercel = {
@@ -85,6 +125,7 @@ const vercel = {
   name: 'Vercel',
   label: 'vercel',
   backgroundColor: colors.black,
+  appBackgroundColor: colors.black,
   tintColor: '#171717',
   tintTextColor: colors.white,
   tabBarActiveTintColor: colors.white,
@@ -95,12 +136,23 @@ const cyberpunk = {
   ...darkTheme,
   name: 'Cyberpunk',
   label: 'cyberpunk',
-  backgroundColor: colors.cyberpunkDark,
+  backgroundColor: colors.black,
+  appBackgroundColor: colors.black,
+  tileBackgroundColor: '#1f1f1f',
+  tileBorderColor: '#303030',
+  tileActiveBackgroundColor: colors.neonMagenta,
+  tileActiveTextColor: colors.white,
   tintColor: colors.neonCyan,
-  tintTextColor: colors.cyberpunkDark,
+  tintTextColor: colors.white,
+  headingColor: colors.neonCyan,
   tabBarActiveTintColor: colors.neonCyan,
   tabBarInactiveTintColor: colors.neonMagenta,
   borderColor: 'rgba(0, 240, 255, .3)',
+  sheetBackgroundColor: '#3a3a3a',
+  sheetRowBackgroundColor: '#1f1f1f',
+  contentAccentBorderColor: 'rgba(0, 240, 255, 0.45)',
+  priceBadgeBackgroundColor: colors.neonCyan,
+  priceBadgeTextColor: colors.black,
 }
 
 const matrix = {
@@ -108,11 +160,25 @@ const matrix = {
   name: 'Matrix',
   label: 'matrix',
   backgroundColor: colors.matrixBlack,
+  appBackgroundColor: colors.matrixBlack,
+  tileBackgroundColor: '#121a12',
+  tileBorderColor: 'rgba(0, 255, 65, 0.22)',
+  tileActiveBackgroundColor: colors.matrixDarkGreen,
+  tileActiveTextColor: colors.matrixGreen,
+  headingColor: colors.matrixGreen,
   tintColor: colors.matrixGreen,
   tintTextColor: colors.matrixBlack,
   tabBarActiveTintColor: colors.matrixGreen,
   tabBarInactiveTintColor: colors.matrixDarkGreen,
+  tabBarBackgroundColor: '#080b08',
+  tabBarBorderColor: 'rgba(0, 255, 65, 0.28)',
   borderColor: 'rgba(0, 255, 65, .3)',
+  modalOverlayColor: 'rgba(0, 10, 0, 0.75)',
+  sheetBackgroundColor: '#1a241b',
+  sheetRowBackgroundColor: '#101810',
+  contentAccentBorderColor: 'rgba(0, 255, 65, 0.42)',
+  priceBadgeBackgroundColor: colors.matrixGreen,
+  priceBadgeTextColor: colors.matrixBlack,
 }
 
 const pink = {
@@ -120,6 +186,7 @@ const pink = {
   name: 'Pink',
   label: 'pink',
   backgroundColor: colors.pinkBackground,
+  appBackgroundColor: colors.pinkBackground,
   tintColor: colors.pinkPrimary,
   tintTextColor: colors.white,
   tabBarActiveTintColor: colors.pinkPrimary,
@@ -128,5 +195,12 @@ const pink = {
 }
 
 export {
-  lightTheme, darkTheme, hackerNews, miami, vercel, cyberpunk, matrix, pink
+  lightTheme,
+  darkTheme,
+  hackerNews,
+  miami,
+  vercel,
+  cyberpunk,
+  matrix,
+  pink,
 }

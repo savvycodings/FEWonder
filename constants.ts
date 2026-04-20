@@ -1,19 +1,49 @@
+import { NativeModules, Platform } from 'react-native'
 import { AnthropicIcon } from './src/components/AnthropicIcon'
 import { GeminiIcon } from './src/components/GeminiIcon'
 import { OpenAIIcon } from './src/components/OpenAIIcon'
 
 const normalizeDomain = (value?: string) => {
   if (!value) return ''
-  if (value.startsWith('http://') || value.startsWith('https://')) {
-    return value
+  let v = value.trim()
+  if (!v.startsWith('http://') && !v.startsWith('https://')) {
+    v = `http://${v}`
   }
-  return `http://${value}`
+  return v.replace(/\/+$/, '')
+}
+
+/** Android physical device: localhost in .env is the phone, not your PC. Metro’s bundle URL shares the PC’s LAN IP (or 10.0.2.2 on emulator). */
+function androidDevApiHostFromMetro(): string | null {
+  if (Platform.OS !== 'android' || !__DEV__) return null
+  try {
+    const scriptURL = NativeModules.SourceCode?.scriptURL as string | undefined
+    if (!scriptURL) return null
+    const m = scriptURL.match(/^https?:\/\/([^/:?]+)/)
+    return m ? m[1] : null
+  } catch {
+    return null
+  }
+}
+
+function devPortFromUrl(url?: string): number {
+  const m = (url || '').match(/:(\d+)(?:\/|$)/)
+  return m ? parseInt(m[1], 10) : 3050
 }
 
 const env = (process.env.EXPO_PUBLIC_ENV || 'DEVELOPMENT').toUpperCase()
 const devUrl = process.env.EXPO_PUBLIC_DEV_API_URL
 const prodUrl = process.env.EXPO_PUBLIC_PROD_API_URL
-const rawDomain = env === 'DEVELOPMENT' ? devUrl : prodUrl
+let rawDomain = env === 'DEVELOPMENT' ? devUrl : prodUrl
+if (env === 'DEVELOPMENT' && __DEV__) {
+  const configured = normalizeDomain(rawDomain || devUrl || '')
+  const metroHost = androidDevApiHostFromMetro()
+  const pointsAtLoopback =
+    !configured || /localhost|127\.0\.0\.1/i.test(configured)
+  if (metroHost && pointsAtLoopback) {
+    const port = devPortFromUrl(devUrl)
+    rawDomain = `http://${metroHost}:${port}`
+  }
+}
 
 export const DOMAIN = normalizeDomain(rawDomain || devUrl || prodUrl || '')
 

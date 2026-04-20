@@ -36,3 +36,9 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# Never commit OS / IDE installers (they break GitHub's 100MB limit if dropped under public/)
+public/**/*.exe
+public/**/*.msi
+public/**/*.dmg
+public/**/*.pkg

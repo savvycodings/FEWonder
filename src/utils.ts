@@ -1,6 +1,40 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { DOMAIN } from '../constants'
 import EventSource from 'react-native-sse'
-import { AuthPayload, CommunityMessage, Model, ShopifyProduct, User } from '../types'
+import {
+  AuthPayload,
+  CommunityMessage,
+  DailyRewardStatus,
+  Model,
+  ShopifyProduct,
+  User,
+} from '../types'
+
+/** Client cache so Daily Rewards streak UI can render immediately; refreshed on each fetch. */
+export const DAILY_REWARDS_CACHE_KEY = 'wonderport-daily-rewards-cache-v1'
+const DAILY_REWARDS_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+export async function readDailyRewardsCache(): Promise<DailyRewardStatus | null> {
+  try {
+    const raw = await AsyncStorage.getItem(DAILY_REWARDS_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { at?: number; data?: DailyRewardStatus }
+    if (!parsed?.data?.rewards?.length) return null
+    if (typeof parsed.at === 'number' && Date.now() - parsed.at > DAILY_REWARDS_CACHE_MAX_AGE_MS)
+      return null
+    return parsed.data
+  } catch {
+    return null
+  }
+}
+
+export async function writeDailyRewardsCache(data: DailyRewardStatus): Promise<void> {
+  try {
+    await AsyncStorage.setItem(DAILY_REWARDS_CACHE_KEY, JSON.stringify({ at: Date.now(), data }))
+  } catch {
+    /* ignore */
+  }
+}
 
 export function getEventSource({
   headers,
@@ -257,6 +291,61 @@ export async function updateProfileDetails(payload: {
     throw new Error(data?.error || 'Unable to update profile details')
   }
   return data.user as User
+}
+
+export async function getDailyRewardStatus(sessionToken: string): Promise<DailyRewardStatus> {
+  const response = await fetch(`${DOMAIN}/auth/daily-rewards`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+    },
+  })
+
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { raw }
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to load daily rewards')
+  }
+
+  const status = data as DailyRewardStatus
+  await writeDailyRewardsCache(status)
+  return status
+}
+
+export async function claimDailyReward(sessionToken: string): Promise<DailyRewardStatus> {
+  const response = await fetch(`${DOMAIN}/auth/daily-rewards/claim`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+    },
+  })
+
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { raw }
+  }
+
+  if (response.status === 409 && data?.rewards?.length) {
+    const status = data as DailyRewardStatus
+    await writeDailyRewardsCache(status)
+    return status
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to claim daily reward')
+  }
+
+  const status = data as DailyRewardStatus
+  await writeDailyRewardsCache(status)
+  return status
 }
 
 export async function getCommunityMessages(sessionToken: string): Promise<CommunityMessage[]> {
