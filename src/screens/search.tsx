@@ -1,6 +1,7 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Image,
+  ImageSourcePropType,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,11 +13,29 @@ import {
 } from 'react-native'
 import { useFocusEffect } from '@react-navigation/native'
 import { Feather as FeatherIcon } from '@expo/vector-icons'
-import { AvatarFrameWrapper, useEquippedAvatarFrame } from '../components'
+import { AvatarFrameWrapper, ProductTileImageWithHeart, useEquippedAvatarFrame } from '../components'
 import { ShopifyProduct, User } from '../../types'
 import { ThemeContext } from '../context'
 import { listDbProducts } from '../utils'
 import { formatMoney } from '../money'
+
+const GRID_GAP = 12
+
+function getImageSource(item: ShopifyProduct): ImageSourcePropType | undefined {
+  if (item?.featuredImageUrl) return { uri: item.featuredImageUrl }
+  return (item as { image?: ImageSourcePropType }).image
+}
+
+function productToSavePayload(item: ShopifyProduct) {
+  const priceLabel =
+    item.price?.amount != null && item.price.amount !== '' ? formatMoney(item.price) : undefined
+  return {
+    title: item.title,
+    price: priceLabel,
+    image: getImageSource(item),
+    category: item.productType || undefined,
+  }
+}
 
 const banners = [
   require('../../public/homepageimgs/searchbanner.webp'),
@@ -56,10 +75,14 @@ export function Search({
     )
   }, [query, products])
   const avatarInitial = (user?.fullName || 'U').slice(0, 1).toUpperCase()
-  const spotlightProducts = useMemo(() => {
-    const list = filtered.length ? filtered : products
-    return list.slice(0, 3)
-  }, [filtered, products])
+  const displayProducts = useMemo(
+    () => (filtered.length ? filtered : products),
+    [filtered, products]
+  )
+  const topSellers = useMemo(() => displayProducts.slice(0, 2), [displayProducts])
+  const newArrivals = useMemo(() => displayProducts.slice(2, 4), [displayProducts])
+  const cardW = (width - 32 - GRID_GAP) / 2
+  const gridStyles = useMemo(() => getProductGridStyles(theme), [theme])
 
   useEffect(() => {
     let cancelled = false
@@ -118,13 +141,60 @@ export function Search({
     return () => clearInterval(id)
   }, [bannerWidth])
 
-  function getThumbSource(item: any) {
-    if (item?.featuredImageUrl) return { uri: item.featuredImageUrl }
-    return item?.image
-  }
-
   function goToProfile() {
     navigation.navigate('Profile', { screen: 'ProfileHome' })
+  }
+
+  function renderProductCard(item: ShopifyProduct) {
+    const src = getImageSource(item)
+    const priceLabel =
+      item.price?.amount != null && item.price.amount !== ''
+        ? formatMoney(item.price)
+        : 'View details'
+    const savePayload = productToSavePayload(item)
+    return (
+      <View key={item.id || item.handle || item.title} style={[gridStyles.card, { width: cardW }]}>
+        {src ? (
+          <ProductTileImageWithHeart
+            product={savePayload}
+            source={src}
+            resizeMode="cover"
+            imageTranslateY={0}
+            wrapStyle={gridStyles.media}
+            imageStyle={gridStyles.mediaImage}
+            onPress={() => navigation.navigate('Product', { product: item })}
+          />
+        ) : (
+          <Pressable
+            style={gridStyles.media}
+            onPress={() => navigation.navigate('Product', { product: item })}
+          >
+            <View style={gridStyles.mediaPlaceholder}>
+              <Text style={gridStyles.mediaPlaceholderText} numberOfLines={2}>
+                {item.title}
+              </Text>
+            </View>
+          </Pressable>
+        )}
+        <View style={gridStyles.footerBand}>
+          <Pressable
+            style={gridStyles.cardFooter}
+            onPress={() => navigation.navigate('Product', { product: item })}
+          >
+            <View style={gridStyles.titleCell}>
+              <Text style={gridStyles.itemTitle} numberOfLines={2}>
+                {item.title}
+              </Text>
+            </View>
+            <View style={gridStyles.priceCell}>
+              <View style={gridStyles.pricePill}>
+                <Text style={gridStyles.pricePillText}>{priceLabel}</Text>
+              </View>
+            </View>
+          </Pressable>
+        </View>
+      </View>
+    )
   }
 
   return (
@@ -182,9 +252,9 @@ export function Search({
 
         <View style={styles.body}>
           {loadingProducts ? (
-            <Text style={styles.loadingText}>Loading products…</Text>
+            <Text style={[styles.loadingText, { color: theme.mutedForegroundColor }]}>Loading products…</Text>
           ) : !products.length ? (
-            <Text style={styles.loadingText}>No products found.</Text>
+            <Text style={[styles.loadingText, { color: theme.mutedForegroundColor }]}>No products found.</Text>
           ) : null}
           <View style={styles.searchBannerWrap}>
             <ScrollView
@@ -203,9 +273,8 @@ export function Search({
                   key={index}
                   style={[styles.searchBannerSlide, { width: bannerWidth }]}
                   onPress={() => {
-                    if (filtered[0]) {
-                      navigation.navigate('Product', { product: filtered[0] })
-                    }
+                    const first = (filtered.length ? filtered : products)[0]
+                    if (first) navigation.navigate('Product', { product: first })
                   }}
                 >
                   <Image
@@ -229,85 +298,113 @@ export function Search({
             </View>
           </View>
 
-          {spotlightProducts.length > 0 ? (
-            <>
+          {topSellers.length > 0 ? (
+            <View style={styles.productSection}>
               <View style={styles.resultsHeader}>
-                <Text style={styles.resultsTitle}>Spotlight</Text>
+                <Text style={[styles.resultsTitle, { color: theme.textColor }]}>Top sellers</Text>
               </View>
-
-              <View style={styles.tallRow}>
-                {spotlightProducts.map((product, index) => {
-                  const thumb = getThumbSource(product)
-                  return (
-                    <Pressable
-                      key={`${product.id || product.handle || product.title}-${index}`}
-                      style={({ pressed }) => [styles.tallCard, pressed ? styles.cardPressed : null]}
-                      onPress={() => navigation.navigate('Product', { product })}
-                    >
-                      {thumb ? (
-                        <View style={styles.tallImageFrame}>
-                          <Image source={thumb} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
-                        </View>
-                      ) : (
-                        <View style={styles.tallFallback}>
-                          <Text style={styles.tallFallbackText} numberOfLines={3}>
-                            {product.title}
-                          </Text>
-                        </View>
-                      )}
-                      <View style={styles.tallCaption}>
-                        <Text style={styles.tallCaptionTitle} numberOfLines={2}>
-                          {product.title}
-                        </Text>
-                        {product.price?.amount != null && product.price.amount !== '' ? (
-                          <Text style={styles.tallCaptionPrice}>{formatMoney(product.price)}</Text>
-                        ) : null}
-                      </View>
-                    </Pressable>
-                  )
-                })}
-              </View>
-            </>
+              <View style={gridStyles.grid}>{topSellers.map((item) => renderProductCard(item))}</View>
+            </View>
           ) : null}
 
-          <View style={styles.popularSection}>
-            <Text style={styles.resultsTitle}>Popular Choices</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.popularCarousel}
-            >
-              {(filtered.length ? filtered : products).slice(0, 12).map((product, index) => (
-                <Pressable
-                  key={`${product.id || product.handle || product.title}-${index}`}
-                  style={({ pressed }) => [styles.popularCard, pressed ? styles.cardPressed : null]}
-                  onPress={() => navigation.navigate('Product', { product })}
-                >
-                  <View style={styles.popularImageWrap}>
-                    <Image
-                      source={getThumbSource(product)}
-                      style={StyleSheet.absoluteFillObject}
-                      resizeMode="cover"
-                    />
-                  </View>
-                  <View style={styles.popularTextBlock}>
-                    <Text numberOfLines={2} style={styles.popularName}>
-                      {product.title}
-                    </Text>
-                    {product.price?.amount != null && product.price.amount !== '' ? (
-                      <Text style={styles.popularPrice}>{formatMoney(product.price)}</Text>
-                    ) : (
-                      <Text style={styles.popularPriceMuted}>Tap for price</Text>
-                    )}
-                  </View>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
+          {newArrivals.length > 0 ? (
+            <View style={styles.productSection}>
+              <View style={styles.resultsHeader}>
+                <Text style={[styles.resultsTitle, { color: theme.textColor }]}>New arrivals</Text>
+              </View>
+              <View style={gridStyles.grid}>{newArrivals.map((item) => renderProductCard(item))}</View>
+            </View>
+          ) : null}
         </View>
       </ScrollView>
     </View>
   )
+}
+
+function getProductGridStyles(theme: any) {
+  return StyleSheet.create({
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: GRID_GAP,
+    },
+    card: {
+      flexDirection: 'column',
+      backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+      borderRadius: 18,
+      paddingHorizontal: 4,
+      paddingTop: 8,
+      paddingBottom: 4,
+      borderWidth: 1,
+      borderColor: theme.tileBorderColor || theme.borderColor,
+      overflow: 'hidden',
+    },
+    media: {
+      position: 'relative',
+      width: '100%',
+      height: 250,
+      paddingTop: 6,
+      overflow: 'hidden',
+      backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+      borderRadius: 14,
+    },
+    mediaImage: {
+      width: '100%',
+      height: '100%',
+    },
+    mediaPlaceholder: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 10,
+    },
+    mediaPlaceholderText: {
+      color: theme.mutedForegroundColor,
+      fontFamily: theme.mediumFont,
+      fontSize: 12,
+      textAlign: 'center',
+    },
+    footerBand: {
+      minHeight: 56,
+      justifyContent: 'center',
+      paddingVertical: 4,
+    },
+    cardFooter: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      justifyContent: 'space-between',
+      gap: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 0,
+    },
+    titleCell: {
+      flex: 1,
+      justifyContent: 'center',
+      paddingRight: 4,
+    },
+    priceCell: {
+      justifyContent: 'center',
+    },
+    itemTitle: {
+      color: theme.textColor,
+      fontFamily: theme.semiBoldFont,
+      fontSize: 15,
+      lineHeight: 18,
+    },
+    pricePill: {
+      backgroundColor: theme.priceBadgeBackgroundColor || theme.tileActiveBackgroundColor || '#111',
+      borderRadius: 999,
+      paddingVertical: 7,
+      paddingHorizontal: 12,
+      flexShrink: 0,
+    },
+    pricePillText: {
+      color: theme.priceBadgeTextColor || theme.tileActiveTextColor || '#fff',
+      fontFamily: theme.boldFont,
+      fontSize: 13,
+      lineHeight: 16,
+    },
+  })
 }
 
 const styles = StyleSheet.create({
@@ -322,7 +419,7 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   hero: {
-    backgroundColor: '#2a335f',
+    backgroundColor: '#000000',
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     paddingHorizontal: 16,
@@ -436,6 +533,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#ffffff',
   },
+  productSection: {
+    marginBottom: 22,
+  },
   resultsHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -446,105 +546,6 @@ const styles = StyleSheet.create({
     color: '#2b3559',
     fontFamily: 'Geist-SemiBold',
     fontSize: 18,
-  },
-  tallRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
-  },
-  tallCard: {
-    flex: 1,
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e4e9f3',
-  },
-  cardPressed: {
-    opacity: 0.86,
-  },
-  tallImageFrame: {
-    width: '100%',
-    aspectRatio: 3 / 4,
-    backgroundColor: '#eef1f8',
-    overflow: 'hidden',
-  },
-  tallFallback: {
-    aspectRatio: 3 / 4,
-    backgroundColor: '#eef1f8',
-    padding: 8,
-    justifyContent: 'center',
-  },
-  tallFallbackText: {
-    color: '#5c6788',
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 11,
-    lineHeight: 15,
-    textAlign: 'center',
-  },
-  tallCaption: {
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 10,
-  },
-  tallCaptionTitle: {
-    color: '#2a3359',
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  tallCaptionPrice: {
-    marginTop: 4,
-    color: '#e8703a',
-    fontFamily: 'Geist-Bold',
-    fontSize: 13,
-  },
-  popularSection: {
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  popularCarousel: {
-    paddingTop: 10,
-    paddingRight: 8,
-    gap: 12,
-  },
-  popularCard: {
-    width: 172,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e4e9f3',
-  },
-  popularImageWrap: {
-    width: '100%',
-    aspectRatio: 1,
-    backgroundColor: '#e9edf5',
-    overflow: 'hidden',
-  },
-  popularTextBlock: {
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 12,
-  },
-  popularName: {
-    color: '#2a3359',
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 14,
-    lineHeight: 18,
-    minHeight: 36,
-  },
-  popularPrice: {
-    marginTop: 6,
-    color: '#e8703a',
-    fontFamily: 'Geist-Bold',
-    fontSize: 15,
-  },
-  popularPriceMuted: {
-    marginTop: 6,
-    color: '#9aa3b8',
-    fontFamily: 'Geist-Medium',
-    fontSize: 13,
   },
   loadingText: {
     color: '#8b94aa',
