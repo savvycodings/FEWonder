@@ -16,6 +16,7 @@ import {
   Chat,
   Settings,
   ProfileAccountSettings,
+  RedeemCode,
   Login,
   DailyRewards,
   AdminOrdersLogin,
@@ -249,6 +250,19 @@ function ProfileStackScreen({
           />
         )}
       </ProfileStack.Screen>
+      <ProfileStack.Screen
+        name="RedeemCode"
+        component={RedeemCode}
+        options={{
+          headerShown: true,
+          headerTitle: 'Redeem code',
+          headerBackTitle: '',
+          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
+          headerTintColor: theme.textColor,
+          headerShadowVisible: false,
+        }}
+      />
       <ProfileStack.Screen name="ProfileDailyRewards" component={DailyRewards} />
       <ProfileStack.Screen
         name="AdminOrdersLogin"

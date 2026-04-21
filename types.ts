@@ -62,6 +62,8 @@ export interface DailyRewardItem {
 
 export interface DailyRewardStatus {
   walletBalance: number
+  /** Wonder Store items already purchased (server-backed). */
+  ownedStoreItemIds: string[]
   claimedCount: number
   currentStreakDays: number
   canClaim: boolean

@@ -22,7 +22,11 @@ export async function readDailyRewardsCache(): Promise<DailyRewardStatus | null>
     if (!parsed?.data?.rewards?.length) return null
     if (typeof parsed.at === 'number' && Date.now() - parsed.at > DAILY_REWARDS_CACHE_MAX_AGE_MS)
       return null
-    return parsed.data
+    const data = parsed.data
+    if (!Array.isArray(data.ownedStoreItemIds)) {
+      data.ownedStoreItemIds = []
+    }
+    return data
   } catch {
     return null
   }
@@ -356,6 +360,9 @@ export async function getDailyRewardStatus(sessionToken: string): Promise<DailyR
   }
 
   const status = data as DailyRewardStatus
+  if (!Array.isArray(status.ownedStoreItemIds)) {
+    status.ownedStoreItemIds = []
+  }
   await writeDailyRewardsCache(status)
   return status
 }
@@ -378,6 +385,9 @@ export async function claimDailyReward(sessionToken: string): Promise<DailyRewar
 
   if (response.status === 409 && data?.rewards?.length) {
     const status = data as DailyRewardStatus
+    if (!Array.isArray(status.ownedStoreItemIds)) {
+      status.ownedStoreItemIds = []
+    }
     await writeDailyRewardsCache(status)
     return status
   }
@@ -387,6 +397,51 @@ export async function claimDailyReward(sessionToken: string): Promise<DailyRewar
   }
 
   const status = data as DailyRewardStatus
+  if (!Array.isArray(status.ownedStoreItemIds)) {
+    status.ownedStoreItemIds = []
+  }
+  await writeDailyRewardsCache(status)
+  return status
+}
+
+export async function purchaseWonderStoreItem(
+  sessionToken: string,
+  itemId: string
+): Promise<DailyRewardStatus> {
+  const response = await fetch(`${DOMAIN}/auth/wonder-store/purchase`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify({ itemId }),
+  })
+
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { raw }
+  }
+
+  if ((response.status === 409 || response.status === 402) && data?.rewards?.length) {
+    const status = data as DailyRewardStatus
+    if (!Array.isArray(status.ownedStoreItemIds)) {
+      status.ownedStoreItemIds = []
+    }
+    await writeDailyRewardsCache(status)
+    throw new Error(String(data?.error || (response.status === 402 ? 'Not enough coins' : 'Already purchased')))
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to purchase')
+  }
+
+  const status = data as DailyRewardStatus
+  if (!Array.isArray(status.ownedStoreItemIds)) {
+    status.ownedStoreItemIds = []
+  }
   await writeDailyRewardsCache(status)
   return status
 }

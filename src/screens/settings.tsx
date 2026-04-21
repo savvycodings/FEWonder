@@ -68,7 +68,7 @@ export function Settings({ user, sessionToken, onUserUpdated }: SettingsProps) {
         </Pressable>
 
         <Pressable
-          style={styles.bannerRow}
+          style={[styles.bannerRow, styles.rowGap]}
           onPress={() => navigation.navigate('Payment')}
         >
           <View style={styles.leftWrap}>
@@ -80,6 +80,19 @@ export function Settings({ user, sessionToken, onUserUpdated }: SettingsProps) {
               <Text style={styles.rowSub}>
                 {user.eftBankName?.trim() || user.phone?.trim() || 'Manage EFT and billing details'}
               </Text>
+            </View>
+          </View>
+          <FeatherIcon name="chevron-right" size={18} color={theme.tintColor} />
+        </Pressable>
+
+        <Pressable style={styles.bannerRow} onPress={() => navigation.navigate('RedeemCode')}>
+          <View style={styles.leftWrap}>
+            <View style={styles.iconBubble}>
+              <FeatherIcon name="gift" size={17} color={theme.tintColor} />
+            </View>
+            <View style={styles.textWrap}>
+              <Text style={styles.rowTitle}>Redeem code</Text>
+              <Text style={styles.rowSub}>Enter a promotional or reward code</Text>
             </View>
           </View>
           <FeatherIcon name="chevron-right" size={18} color={theme.tintColor} />

@@ -6,7 +6,13 @@ import { useFocusEffect } from '@react-navigation/native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { DailyRewardItem, DailyRewardStatus, User } from '../../types'
 import { DOMAIN } from '../../constants'
-import { claimDailyReward, getDailyRewardStatus, readDailyRewardsCache, syncEquippedAvatarFrame } from '../utils'
+import {
+  claimDailyReward,
+  getDailyRewardStatus,
+  purchaseWonderStoreItem,
+  readDailyRewardsCache,
+  syncEquippedAvatarFrame,
+} from '../utils'
 import {
   AVATAR_FRAME_SHOP,
   AVATAR_FRAME_SIZE_PREVIEW_TILE,
@@ -98,9 +104,8 @@ export function DailyRewards({ navigation, route }: any) {
   const [loadingRewards, setLoadingRewards] = useState(true)
   const [claimingReward, setClaimingReward] = useState(false)
   const [rewardsError, setRewardsError] = useState('')
-  const [spentCoins, setSpentCoins] = useState(0)
-  const [ownedThemeIds, setOwnedThemeIds] = useState<string[]>([])
   const [storeMessage, setStoreMessage] = useState('')
+  const [purchasingThemeId, setPurchasingThemeId] = useState<string | null>(null)
   const [equippedAvatarFrame, setEquippedAvatarFrame] = useState<AvatarFrameId>('none')
   const [framePreviewUser, setFramePreviewUser] = useState<{
     uri: string | null
@@ -115,7 +120,8 @@ export function DailyRewards({ navigation, route }: any) {
   const claimedCount = rewardStatus?.claimedCount || 0
   const currentStreak = rewardStatus?.currentStreakDays || claimedCount
   const walletBalance = rewardStatus?.walletBalance || 0
-  const availableCoins = Math.max(0, walletBalance - spentCoins)
+  const ownedThemeIds = rewardStatus?.ownedStoreItemIds ?? []
+  const availableCoins = walletBalance
   const rewardCardWidth = useMemo(() => Math.floor((screenWidth - 32 - 20 - 10) / 2), [screenWidth])
 
   useEffect(() => {
@@ -251,15 +257,33 @@ export function DailyRewards({ navigation, route }: any) {
     }
   }
 
-  function handleBuyTheme(themeId: string, cost: number) {
-    if (ownedThemeIds.includes(themeId)) return
-    if (availableCoins < cost) {
+  async function handleBuyTheme(themeId: string) {
+    if (!sessionToken || ownedThemeIds.includes(themeId) || purchasingThemeId) return
+    const theme = storeThemes.find((t) => t.id === themeId)
+    if (!theme) return
+    if (availableCoins < theme.cost) {
       setStoreMessage('Not enough coins for this theme yet.')
       return
     }
-    setSpentCoins((prev) => prev + cost)
-    setOwnedThemeIds((prev) => [...prev, themeId])
-    setStoreMessage('Theme purchased.')
+    try {
+      setPurchasingThemeId(themeId)
+      setRewardsError('')
+      setStoreMessage('')
+      const next = await purchaseWonderStoreItem(sessionToken, themeId)
+      setRewardStatus(next)
+      setStoreMessage('Theme purchased.')
+    } catch (error: any) {
+      try {
+        const refreshed = await getDailyRewardStatus(sessionToken)
+        setRewardStatus(refreshed)
+      } catch {
+        /* ignore */
+      }
+      setStoreMessage('')
+      setRewardsError(error?.message || 'Could not complete purchase.')
+    } finally {
+      setPurchasingThemeId(null)
+    }
   }
 
   return (
@@ -379,16 +403,20 @@ export function DailyRewards({ navigation, route }: any) {
                   <RewardStaticCoin size={14} />
                   <Text style={styles.storeThemeCostValue}>{storeTheme.cost}</Text>
                 </View>
-                <Pressable
-                  style={[
-                    styles.storeBuyButton,
-                    isOwned ? styles.storeBuyButtonOwned : null,
-                    !isOwned && !canBuy ? styles.storeBuyButtonDisabled : null,
-                  ]}
-                  onPress={() => handleBuyTheme(storeTheme.id, storeTheme.cost)}
-                >
-                  <Text style={styles.storeBuyButtonText}>{isOwned ? 'Owned' : 'Buy'}</Text>
-                </Pressable>
+                  <Pressable
+                    style={[
+                      styles.storeBuyButton,
+                      isOwned ? styles.storeBuyButtonOwned : null,
+                      !isOwned && !canBuy ? styles.storeBuyButtonDisabled : null,
+                      purchasingThemeId === storeTheme.id ? styles.storeBuyButtonDisabled : null,
+                    ]}
+                    disabled={Boolean(isOwned || purchasingThemeId)}
+                    onPress={() => handleBuyTheme(storeTheme.id)}
+                  >
+                    <Text style={styles.storeBuyButtonText}>
+                      {isOwned ? 'Owned' : purchasingThemeId === storeTheme.id ? 'Buying…' : 'Buy'}
+                    </Text>
+                  </Pressable>
               </View>
             )
           })}
