@@ -252,7 +252,6 @@ function ProfileStackScreen({
       </ProfileStack.Screen>
       <ProfileStack.Screen
         name="RedeemCode"
-        component={RedeemCode}
         options={{
           headerShown: true,
           headerTitle: 'Redeem code',
@@ -262,7 +261,9 @@ function ProfileStackScreen({
           headerTintColor: theme.textColor,
           headerShadowVisible: false,
         }}
-      />
+      >
+        {() => <RedeemCode sessionToken={sessionToken} />}
+      </ProfileStack.Screen>
       <ProfileStack.Screen name="ProfileDailyRewards" component={DailyRewards} />
       <ProfileStack.Screen
         name="AdminOrdersLogin"

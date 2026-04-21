@@ -11,10 +11,15 @@ import {
   View,
 } from 'react-native'
 import { ThemeContext } from '../context'
+import { getDailyRewardStatus, redeemWonderCode } from '../utils'
 
 const ACCENT = '#CBFF00'
 
-export function RedeemCode() {
+type Props = {
+  sessionToken: string
+}
+
+export function RedeemCode({ sessionToken }: Props) {
   const { theme } = useContext(ThemeContext)
   const styles = getStyles(theme)
   const [code, setCode] = useState('')
@@ -29,13 +34,21 @@ export function RedeemCode() {
       setSuccess('')
       return
     }
+    if (!sessionToken) {
+      setError('Please sign in again to redeem a code.')
+      return
+    }
     setError('')
     setSuccess('')
     setSubmitting(true)
     try {
-      // Hook for future POST /auth/redeem-code — keep UX ready without blocking ship.
-      await new Promise((r) => setTimeout(r, 400))
-      setSuccess('Redeem is coming soon. Your code was not applied yet.')
+      const result = await redeemWonderCode(sessionToken, trimmed)
+      try {
+        await getDailyRewardStatus(sessionToken)
+      } catch {
+        /* wallet cache best-effort */
+      }
+      setSuccess(result.message)
       setCode('')
     } catch (e: any) {
       setError(e?.message || 'Could not redeem code.')

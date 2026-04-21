@@ -446,6 +446,37 @@ export async function purchaseWonderStoreItem(
   return status
 }
 
+export async function redeemWonderCode(
+  sessionToken: string,
+  code: string
+): Promise<{ wonderCoins: number; message: string }> {
+  const response = await fetch(`${DOMAIN}/auth/redeem-code`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify({ code }),
+  })
+
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { raw }
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to redeem code')
+  }
+
+  return {
+    wonderCoins: Number(data?.wonderCoins) || 0,
+    message: String(data?.message || 'Code redeemed.'),
+  }
+}
+
 export async function syncEquippedAvatarFrame(
   sessionToken: string,
   avatarFrameId: string
