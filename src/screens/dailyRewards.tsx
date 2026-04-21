@@ -5,6 +5,7 @@ import { SvgUri } from 'react-native-svg'
 import { useFocusEffect } from '@react-navigation/native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { DailyRewardItem, DailyRewardStatus, User } from '../../types'
+import { DOMAIN } from '../../constants'
 import { claimDailyReward, getDailyRewardStatus, readDailyRewardsCache, syncEquippedAvatarFrame } from '../utils'
 import {
   AVATAR_FRAME_SHOP,
@@ -18,6 +19,8 @@ import { ThemeContext } from '../context'
 
 const weekDays = ['1', '2', '3', '4', '5', '6', '7']
 const weekRewards = [1, 2, 3, 4, 5, 6, 7]
+const DAILY_ACCENT = '#CBFF00'
+const DAILY_FILL = '#000000'
 const storeThemes = [
   { id: 'midnight', name: 'Midnight', cost: 6, image: require('../../public/homepageimgs/dailyrewards/theme1.png') },
   { id: 'sunset', name: 'Sunset', cost: 7, image: require('../../public/homepageimgs/dailyrewards/theme2.png') },
@@ -63,20 +66,27 @@ const coinRotationFrameUris = [
   '/homepageimgs/Coinrotation/Coin31.svg',
   '/homepageimgs/Coinrotation/Coin32.svg',
 ]
+/** Keep SVG support ready for later; disabled for now per request. */
+const USE_COIN_SVG = false
+
+function resolvePublicAssetUri(path: string): string {
+  if (Platform.OS === 'web' || !DOMAIN) return path
+  return `${DOMAIN}${path}`
+}
 
 /** Isolated so Wonder Store doesn’t re-render on every spin frame. */
 function RewardCarouselSpinningCoin({ color }: { color: string }): ReactElement {
-  const [frameIndex, setFrameIndex] = useState(0)
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setFrameIndex((prev) => (prev + 1) % coinRotationFrameUris.length)
-    }, 80)
-    return () => clearInterval(timer)
-  }, [])
-  if (Platform.OS === 'web') {
-    return <SvgUri uri={coinRotationFrameUris[frameIndex]} width={72} height={72} />
+  if (USE_COIN_SVG) {
+    return <SvgUri uri={resolvePublicAssetUri(coinRotationFrameUris[0])} width={72} height={72} />
   }
   return <FeatherIcon name="dollar-sign" size={50} color={color} />
+}
+
+function RewardStaticCoin({ size = 20 }: { size?: number }): ReactElement {
+  if (USE_COIN_SVG) {
+    return <SvgUri uri={resolvePublicAssetUri(WONDER_STORE_COIN_SVG)} width={size} height={size} />
+  }
+  return <FeatherIcon name="dollar-sign" size={size} color={DAILY_ACCENT} />
 }
 
 export function DailyRewards({ navigation, route }: any) {
@@ -265,14 +275,13 @@ export function DailyRewards({ navigation, route }: any) {
             }
           }}
         >
-          <FeatherIcon name="chevron-left" size={20} color={theme.textColor} />
+          <FeatherIcon name="chevron-left" size={20} color={DAILY_ACCENT} />
         </Pressable>
         <Text style={styles.headerTitle}>Daily Rewards</Text>
         <View style={styles.headerSpacer} />
       </View>
 
-      <View style={styles.groupCard}>
-        <View style={styles.bannerCard}>
+      <View style={styles.bannerCard}>
           <View style={styles.bannerTopRow}>
             <Text style={styles.bannerTitle}>Keep your streak alive</Text>
           </View>
@@ -289,7 +298,7 @@ export function DailyRewards({ navigation, route }: any) {
                       Platform.OS === 'web' ? (
                         <SvgUri uri="/homepageimgs/dailyrewards/lighting.svg" width={30} height={30} />
                       ) : (
-                        <FeatherIcon name="zap" size={30} color={theme.textColor} />
+                        <FeatherIcon name="zap" size={30} color="#050505" />
                       )
                     ) : null}
                   </View>
@@ -303,16 +312,19 @@ export function DailyRewards({ navigation, route }: any) {
               {Platform.OS === 'web' ? (
                 <SvgUri uri="/homepageimgs/dailyrewards/fireicon.svg" width={30} height={30} />
               ) : (
-                <FeatherIcon name="zap" size={28} color={theme.textColor} />
+                <FeatherIcon name="zap" size={28} color={DAILY_ACCENT} />
               )}
               <Text style={styles.streakText}>{currentStreak} days</Text>
             </View>
           </View>
-        </View>
       </View>
 
-      <View style={styles.groupCard}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rewardCarousel}>
+      <ScrollView
+        horizontal
+        style={styles.rewardCarouselWrap}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.rewardCarousel}
+      >
           {rewards.map((reward, index) => {
             const isClaimed = reward.status === 'claimed'
             const isUnlocked = reward.status === 'unlocked'
@@ -320,7 +332,7 @@ export function DailyRewards({ navigation, route }: any) {
               <View key={`${reward.day}-${index}`} style={[styles.rewardCard, { width: rewardCardWidth }]}>
                 <Text style={styles.rewardCardDay}>Day {reward.day}</Text>
                 <View style={styles.rewardCardCoinWrap}>
-                  <RewardCarouselSpinningCoin color={theme.textColor} />
+                  <RewardCarouselSpinningCoin color={DAILY_ACCENT} />
                 </View>
                 <View style={styles.rewardCardFooter}>
                   <Text style={styles.rewardCardCoins}>+{reward.amount} coins</Text>
@@ -344,57 +356,42 @@ export function DailyRewards({ navigation, route }: any) {
               </View>
             )
           })}
-        </ScrollView>
-      </View>
+      </ScrollView>
       {loadingRewards ? <Text style={styles.infoText}>Loading rewards...</Text> : null}
       {rewardsError ? <Text style={styles.errorText}>{rewardsError}</Text> : null}
 
       <View style={styles.storeSection}>
         <Text style={styles.storeMainTitle}>Wonder Store</Text>
-        <View style={styles.groupCard}>
-          <View style={styles.storeBalanceBadge}>
-            {Platform.OS === 'web' ? (
-              <SvgUri uri={WONDER_STORE_COIN_SVG} width={22} height={22} />
-            ) : (
-              <FeatherIcon name="dollar-sign" size={20} color={theme.textColor} />
-            )}
-            <Text style={styles.storeBalanceBadgeValue}>{availableCoins}</Text>
-          </View>
+        <View style={styles.storeBalanceBadge}>
+          <RewardStaticCoin size={22} />
+          <Text style={styles.storeBalanceBadgeValue}>{availableCoins}</Text>
+        </View>
 
-          <View style={styles.storeGrid}>
-            {storeThemes.map((storeTheme) => {
-              const isOwned = ownedThemeIds.includes(storeTheme.id)
-              const canBuy = availableCoins >= storeTheme.cost
-              return (
-                <View key={storeTheme.id} style={styles.storeCard}>
-                  <Image source={storeTheme.image} style={styles.storeThemeSwatch} resizeMode="cover" />
-                  <Text style={styles.storeThemeName}>{storeTheme.name}</Text>
-                  <View style={styles.storeThemeCostBadge}>
-                    {Platform.OS === 'web' ? (
-                      <SvgUri uri={WONDER_STORE_COIN_SVG} width={14} height={14} />
-                    ) : (
-                      <FeatherIcon
-                        name="dollar-sign"
-                        size={12}
-                        color={theme.priceBadgeTextColor || '#000'}
-                      />
-                    )}
-                    <Text style={styles.storeThemeCostValue}>{storeTheme.cost}</Text>
-                  </View>
-                  <Pressable
-                    style={[
-                      styles.storeBuyButton,
-                      isOwned ? styles.storeBuyButtonOwned : null,
-                      !isOwned && !canBuy ? styles.storeBuyButtonDisabled : null,
-                    ]}
-                    onPress={() => handleBuyTheme(storeTheme.id, storeTheme.cost)}
-                  >
-                    <Text style={styles.storeBuyButtonText}>{isOwned ? 'Owned' : 'Buy'}</Text>
-                  </Pressable>
+        <View style={styles.storeGrid}>
+          {storeThemes.map((storeTheme) => {
+            const isOwned = ownedThemeIds.includes(storeTheme.id)
+            const canBuy = availableCoins >= storeTheme.cost
+            return (
+              <View key={storeTheme.id} style={styles.storeCard}>
+                <Image source={storeTheme.image} style={styles.storeThemeSwatch} resizeMode="cover" />
+                <Text style={styles.storeThemeName}>{storeTheme.name}</Text>
+                <View style={styles.storeThemeCostBadge}>
+                  <RewardStaticCoin size={14} />
+                  <Text style={styles.storeThemeCostValue}>{storeTheme.cost}</Text>
                 </View>
-              )
-            })}
-          </View>
+                <Pressable
+                  style={[
+                    styles.storeBuyButton,
+                    isOwned ? styles.storeBuyButtonOwned : null,
+                    !isOwned && !canBuy ? styles.storeBuyButtonDisabled : null,
+                  ]}
+                  onPress={() => handleBuyTheme(storeTheme.id, storeTheme.cost)}
+                >
+                  <Text style={styles.storeBuyButtonText}>{isOwned ? 'Owned' : 'Buy'}</Text>
+                </Pressable>
+              </View>
+            )
+          })}
         </View>
         {storeMessage ? <Text style={styles.infoText}>{storeMessage}</Text> : null}
       </View>
@@ -404,36 +401,34 @@ export function DailyRewards({ navigation, route }: any) {
         <Text style={styles.framesSub}>
           preview uses your profile photo. FREE FOR TESTING PURPOSES
         </Text>
-        <View style={styles.groupCard}>
-          <View style={styles.framesGrid}>
-            {AVATAR_FRAME_SHOP.map((frame) => (
-              <AvatarFramePreviewTile
-                key={frame.id}
-                frameId={frame.id}
-                size={AVATAR_FRAME_SIZE_PREVIEW_TILE}
-                equipped={equippedAvatarFrame === frame.id}
-                onEquip={() => handleEquipAvatarFrame(frame.id)}
-                previewUri={framePreviewUser.uri}
-                previewInitial={framePreviewUser.initial}
-              />
-            ))}
-          </View>
-          <Pressable
-            style={styles.plainFrameRow}
-            onPress={() => handleEquipAvatarFrame('none')}
-          >
-            <Text
-              style={[
-                styles.plainFrameText,
-                equippedAvatarFrame === 'none' ? styles.plainFrameTextActive : null,
-              ]}
-            >
-              {equippedAvatarFrame === 'none'
-                ? 'Plain avatar (active)'
-                : 'Use plain avatar'}
-            </Text>
-          </Pressable>
+        <View style={styles.framesGrid}>
+          {AVATAR_FRAME_SHOP.map((frame) => (
+            <AvatarFramePreviewTile
+              key={frame.id}
+              frameId={frame.id}
+              size={AVATAR_FRAME_SIZE_PREVIEW_TILE}
+              equipped={equippedAvatarFrame === frame.id}
+              onEquip={() => handleEquipAvatarFrame(frame.id)}
+              previewUri={framePreviewUser.uri}
+              previewInitial={framePreviewUser.initial}
+            />
+          ))}
         </View>
+        <Pressable
+          style={styles.plainFrameRow}
+          onPress={() => handleEquipAvatarFrame('none')}
+        >
+          <Text
+            style={[
+              styles.plainFrameText,
+              equippedAvatarFrame === 'none' ? styles.plainFrameTextActive : null,
+            ]}
+          >
+            {equippedAvatarFrame === 'none'
+              ? 'Plain avatar (active)'
+              : 'Use plain avatar'}
+          </Text>
+        </Pressable>
       </View>
     </ScrollView>
   )
@@ -442,7 +437,7 @@ export function DailyRewards({ navigation, route }: any) {
 const getStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.appBackgroundColor || '#eef1f6',
+    backgroundColor: DAILY_FILL,
   },
   content: {
     paddingHorizontal: 16,
@@ -459,35 +454,28 @@ const getStyles = (theme: any) => StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: theme.tileBackgroundColor || '#ffffff',
+    backgroundColor: DAILY_FILL,
     borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#e5eaf3',
+    borderColor: 'rgba(203,255,0,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    color: theme.textColor,
-    fontFamily: 'Geist-Bold',
-    fontSize: 22,
+    color: '#ffffff',
+    fontFamily: 'Montserrat_800ExtraBold',
+    fontSize: 24,
   },
   headerSpacer: {
     width: 36,
     height: 36,
   },
-  groupCard: {
-    width: '100%',
-    alignSelf: 'stretch',
-    backgroundColor: theme.sheetBackgroundColor || theme.tileActiveBackgroundColor || '#111111',
-    borderRadius: 18,
-    marginBottom: 14,
-    padding: 10,
-  },
   bannerCard: {
-    backgroundColor: theme.sheetRowBackgroundColor || theme.tileBackgroundColor || '#ffffff',
+    backgroundColor: DAILY_FILL,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: theme.contentAccentBorderColor || theme.tileBorderColor || '#d8dee9',
+    borderColor: 'rgba(203,255,0,0.3)',
     padding: 14,
+    marginBottom: 14,
   },
   bannerTopRow: {
     flexDirection: 'row',
@@ -496,12 +484,12 @@ const getStyles = (theme: any) => StyleSheet.create({
     marginBottom: 4,
   },
   bannerTitle: {
-    color: theme.textColor,
+    color: '#ffffff',
     fontFamily: 'Geist-SemiBold',
     fontSize: 18,
   },
   bannerSubtitle: {
-    color: theme.mutedForegroundColor,
+    color: 'rgba(255,255,255,0.72)',
     fontFamily: 'Geist-Regular',
     fontSize: 12,
     marginBottom: 12,
@@ -515,7 +503,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
   },
   dayLabel: {
-    color: theme.textColor,
+    color: 'rgba(255,255,255,0.9)',
     fontFamily: 'Geist-Medium',
     fontSize: 12,
     marginBottom: 6,
@@ -525,14 +513,14 @@ const getStyles = (theme: any) => StyleSheet.create({
     height: 42,
     borderRadius: 21,
     borderWidth: 2,
-    borderColor: theme.tileBorderColor || '#aeb4c1',
-    backgroundColor: theme.appBackgroundColor || '#eef1f6',
+    borderColor: 'rgba(203,255,0,0.35)',
+    backgroundColor: DAILY_FILL,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dayCircleClaimed: {
-    borderColor: theme.tintColor || theme.tileBorderColor,
-    backgroundColor: theme.tileBackgroundColor || '#f2f6fd',
+    borderColor: DAILY_ACCENT,
+    backgroundColor: DAILY_ACCENT,
   },
   streakRow: {
     marginTop: 12,
@@ -546,7 +534,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     gap: 6,
   },
   streakText: {
-    color: theme.textColor,
+    color: DAILY_ACCENT,
     fontFamily: 'Geist-SemiBold',
     fontSize: 32,
   },
@@ -554,16 +542,19 @@ const getStyles = (theme: any) => StyleSheet.create({
     gap: 10,
     paddingRight: 16,
   },
+  rewardCarouselWrap: {
+    marginBottom: 14,
+  },
   rewardCard: {
     minHeight: 320,
-    backgroundColor: theme.sheetRowBackgroundColor || theme.tileBackgroundColor || '#ffffff',
+    backgroundColor: DAILY_FILL,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: theme.contentAccentBorderColor || theme.tileBorderColor || '#d8dee9',
+    borderColor: 'rgba(203,255,0,0.3)',
     padding: 14,
   },
   rewardCardDay: {
-    color: theme.textColor,
+    color: '#ffffff',
     fontFamily: 'Geist-SemiBold',
     fontSize: 16,
   },
@@ -576,7 +567,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     paddingTop: 10,
   },
   rewardCardCoins: {
-    color: theme.textColor,
+    color: DAILY_ACCENT,
     fontFamily: 'Geist-Bold',
     fontSize: 22,
     marginBottom: 10,
@@ -586,13 +577,13 @@ const getStyles = (theme: any) => StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.tileActiveBackgroundColor || '#111111',
+    backgroundColor: DAILY_ACCENT,
   },
   rewardClaimButtonDisabled: {
     backgroundColor: '#9fb4d8',
   },
   rewardClaimButtonText: {
-    color: theme.tileActiveTextColor || '#ffffff',
+    color: '#050505',
     fontFamily: 'Geist-SemiBold',
     fontSize: 14,
   },
@@ -600,26 +591,26 @@ const getStyles = (theme: any) => StyleSheet.create({
     minHeight: 40,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#d8deea',
-    backgroundColor: theme.appBackgroundColor || '#f2f4f8',
+    borderColor: 'rgba(203,255,0,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   rewardStatusClaimed: {
-    borderColor: theme.tintColor || theme.tileBorderColor,
-    backgroundColor: theme.sheetRowBackgroundColor || theme.appBackgroundColor || '#f2f4f8',
+    borderColor: DAILY_ACCENT,
+    backgroundColor: 'rgba(203,255,0,0.14)',
   },
   rewardStatusText: {
-    color: theme.mutedForegroundColor,
+    color: 'rgba(255,255,255,0.72)',
     fontFamily: 'Geist-SemiBold',
     fontSize: 13,
   },
   rewardStatusTextClaimed: {
-    color: theme.textColor,
+    color: DAILY_ACCENT,
   },
   infoText: {
     marginTop: 10,
-    color: theme.mutedForegroundColor,
+    color: 'rgba(255,255,255,0.74)',
     fontFamily: 'Geist-Medium',
     fontSize: 12,
   },
@@ -633,8 +624,8 @@ const getStyles = (theme: any) => StyleSheet.create({
     marginTop: 18,
   },
   storeMainTitle: {
-    color: theme.textColor,
-    fontFamily: 'Geist-Bold',
+    color: '#ffffff',
+    fontFamily: 'Montserrat_800ExtraBold',
     fontSize: 28,
     lineHeight: 32,
     letterSpacing: -0.4,
@@ -644,13 +635,13 @@ const getStyles = (theme: any) => StyleSheet.create({
     marginTop: 22,
   },
   framesHeading: {
-    color: theme.textColor,
-    fontFamily: 'Geist-SemiBold',
+    color: '#ffffff',
+    fontFamily: 'Montserrat_800ExtraBold',
     fontSize: 20,
     marginBottom: 6,
   },
   framesSub: {
-    color: theme.mutedForegroundColor,
+    color: 'rgba(255,255,255,0.74)',
     fontFamily: 'Geist-Regular',
     fontSize: 12,
     lineHeight: 17,
@@ -667,12 +658,12 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
   },
   plainFrameText: {
-    color: theme.mutedForegroundColor,
+    color: 'rgba(255,255,255,0.74)',
     fontFamily: 'Geist-Medium',
     fontSize: 13,
   },
   plainFrameTextActive: {
-    color: theme.textColor,
+    color: DAILY_ACCENT,
     fontFamily: 'Geist-SemiBold',
   },
   storeBalanceBadge: {
@@ -683,12 +674,14 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderRadius: 999,
-    backgroundColor: theme.tileBackgroundColor || '#e5e8ee',
+    backgroundColor: DAILY_FILL,
+    borderWidth: 1,
+    borderColor: 'rgba(203,255,0,0.35)',
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
   storeBalanceBadgeValue: {
-    color: theme.textColor,
+    color: DAILY_ACCENT,
     fontFamily: 'Geist-SemiBold',
     fontSize: 16,
   },
@@ -700,10 +693,10 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   storeCard: {
     width: '31.5%',
-    backgroundColor: theme.sheetRowBackgroundColor || theme.tileBackgroundColor || '#ffffff',
+    backgroundColor: DAILY_FILL,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: theme.contentAccentBorderColor || theme.tileBorderColor || '#d8dee9',
+    borderColor: 'rgba(203,255,0,0.28)',
     padding: 10,
     alignItems: 'center',
   },
@@ -714,7 +707,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     marginBottom: 8,
   },
   storeThemeName: {
-    color: theme.textColor,
+    color: '#ffffff',
     fontFamily: 'Geist-SemiBold',
     fontSize: 12,
     textAlign: 'center',
@@ -727,12 +720,12 @@ const getStyles = (theme: any) => StyleSheet.create({
     justifyContent: 'center',
     gap: 4,
     borderRadius: 999,
-    backgroundColor: theme.priceBadgeBackgroundColor || theme.tileActiveBackgroundColor || '#111',
+    backgroundColor: DAILY_ACCENT,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
   storeThemeCostValue: {
-    color: theme.priceBadgeTextColor || '#000',
+    color: '#050505',
     fontFamily: 'Geist-SemiBold',
     fontSize: 11,
   },
@@ -740,19 +733,19 @@ const getStyles = (theme: any) => StyleSheet.create({
     width: '100%',
     minHeight: 30,
     borderRadius: 8,
-    backgroundColor: theme.tileActiveBackgroundColor || '#111111',
+    backgroundColor: DAILY_ACCENT,
     alignItems: 'center',
     justifyContent: 'center',
   },
   storeBuyButtonDisabled: {
-    backgroundColor: theme.tileActiveBackgroundColor || '#111111',
+    backgroundColor: DAILY_ACCENT,
     opacity: 0.65,
   },
   storeBuyButtonOwned: {
-    backgroundColor: theme.tileActiveBackgroundColor || '#111111',
+    backgroundColor: DAILY_ACCENT,
   },
   storeBuyButtonText: {
-    color: theme.tileActiveTextColor || '#ffffff',
+    color: '#050505',
     fontFamily: 'Geist-SemiBold',
     fontSize: 11,
   },

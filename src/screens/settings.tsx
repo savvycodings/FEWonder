@@ -1,218 +1,111 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableHighlight,
-  ScrollView,
-  Dimensions,
-  Image
-} from 'react-native'
+import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
 import { useContext } from 'react'
 import { useNavigation } from '@react-navigation/native'
-import { AppContext, ThemeContext } from '../context'
-import {
-  AnthropicIcon,
-  GeminiIcon,
-  OpenAIIcon
- } from '../components/index'
-import FontAwesome from '@expo/vector-icons/FontAwesome5'
-import { IIconProps } from '../../types'
-import { MODELS, IMAGE_MODELS } from '../../constants'
-import * as themes from '../theme'
+import FeatherIcon from '@expo/vector-icons/Feather'
+import { ThemeContext } from '../context'
+import { User } from '../../types'
 
-const { width } = Dimensions.get('window')
-const models = Object.values(MODELS)
-const imageModels = Object.values(IMAGE_MODELS)
-const _themes = Object.values(themes).map(v => ({
-  name: v.name,
-  label: v.label
-}))
+/** Keep code paths available for future use, but hidden in UI for now. */
+const SHOW_THEME_SECTION = false
+const SHOW_CHAT_MODEL_SECTION = false
+const SHOW_IMAGE_MODEL_SECTION = false
+const ACCENT = '#CBFF00'
 
-export function Settings() {
+type SettingsProps = {
+  user: User
+  sessionToken: string
+  onUserUpdated: (user: User) => Promise<void>
+}
+
+export function Settings({ user, sessionToken, onUserUpdated }: SettingsProps) {
   const navigation = useNavigation<any>()
-  const { theme, setTheme, themeName } = useContext(ThemeContext)
-  const {
-    chatType,
-    setChatType,
-    setImageModel,
-    imageModel,
-  } = useContext(AppContext)
+  const { theme } = useContext(ThemeContext)
 
   const styles = getStyles(theme)
-
-  function renderIcon({
-    type, props
-  }: IIconProps) {
-    if (type.includes('claude')) {
-      return <AnthropicIcon {...props} />
-    }
-    if (type.includes('gpt')) {
-      return <OpenAIIcon {...props} />
-    }
-    if (type.includes('gemini')) {
-      return <GeminiIcon{...props} />
-    }
-    if (type.includes('nanoBanana')) {
-      return <GeminiIcon{...props} />
-    }
-    return <GeminiIcon{...props} />
-  }
 
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
     >
-      <View
-        style={styles.titleContainer}
-      >
-        <Text
-            style={styles.mainText}
-        >Theme</Text>
-      </View>
-      {
-        _themes.map((value, index) => (
-          <TouchableHighlight
-            key={index}
-            underlayColor='transparent'
-            onPress={() => {
-              setTheme(value.label)
-            }}
-          >
-            <View
-              style={{
-                ...styles.chatChoiceButton,
-                ...getDynamicViewStyle(themeName, value.label, theme)
-              }}
-            >
-            <Text
-              style={{
-                ...styles.chatTypeText,
-                ...getDynamicTextStyle(themeName, value.label, theme)
-              }}
-            >
-              {value.name}
-            </Text>
+      <Text style={styles.pageTitle}>Settings</Text>
+      <Text style={styles.pageSubtitle}>Manage your account information and billing preferences.</Text>
+      <View style={styles.accentRule} />
+
+      <View style={styles.sectionCard}>
+        <Pressable
+          style={[styles.bannerRow, styles.rowGap]}
+          onPress={() => navigation.navigate('ProfileAccountSettings')}
+        >
+          <View style={styles.leftWrap}>
+            <View style={styles.iconBubble}>
+              <FeatherIcon name="user" size={17} color={theme.tintColor} />
+            </View>
+            <View style={styles.textWrap}>
+              <Text style={styles.rowTitle}>Profile</Text>
+              <Text style={styles.rowSub}>{user.fullName || user.email}</Text>
+            </View>
           </View>
-        </TouchableHighlight>
-        ))
-      }
+          <FeatherIcon name="chevron-right" size={18} color={theme.tintColor} />
+        </Pressable>
+
+        <Pressable
+          style={[styles.bannerRow, styles.rowGap]}
+          onPress={() => navigation.navigate('Shipping')}
+        >
+          <View style={styles.leftWrap}>
+            <View style={styles.iconBubble}>
+              <FeatherIcon name="map-pin" size={17} color={theme.tintColor} />
+            </View>
+            <View style={styles.textWrap}>
+              <Text style={styles.rowTitle}>Shipping address</Text>
+              <Text style={styles.rowSub}>
+                {user.shippingAddress?.trim() || 'Add where we should deliver your orders'}
+              </Text>
+            </View>
+          </View>
+          <FeatherIcon name="chevron-right" size={18} color={theme.tintColor} />
+        </Pressable>
+
+        <Pressable
+          style={styles.bannerRow}
+          onPress={() => navigation.navigate('Payment')}
+        >
+          <View style={styles.leftWrap}>
+            <View style={styles.iconBubble}>
+              <FeatherIcon name="credit-card" size={17} color={theme.tintColor} />
+            </View>
+            <View style={styles.textWrap}>
+              <Text style={styles.rowTitle}>Payments & billing</Text>
+              <Text style={styles.rowSub}>
+                {user.eftBankName?.trim() || user.phone?.trim() || 'Manage EFT and billing details'}
+              </Text>
+            </View>
+          </View>
+          <FeatherIcon name="chevron-right" size={18} color={theme.tintColor} />
+        </Pressable>
+      </View>
+
+      {SHOW_THEME_SECTION ? (
+        <View />
+      ) : null}
       <View style={styles.titleContainer}>
         <Text style={styles.mainText}>Admin</Text>
       </View>
-      <TouchableHighlight
-        underlayColor="transparent"
+      <Pressable
+        style={styles.chatChoiceButton}
         onPress={() => navigation.navigate('AdminOrdersLogin')}
       >
-        <View style={styles.chatChoiceButton}>
-          <Text style={styles.chatTypeText}>View orders (Peach / EFT)</Text>
-        </View>
-      </TouchableHighlight>
-      <View
-        style={styles.titleContainer}
-      >
-      <Text
-          style={styles.mainText}
-        >Chat Model</Text>
-      </View>
-      <View style={styles.buttonContainer}>
-        {
-          models.map((model, index) => {
-            return (
-              <TouchableHighlight
-                key={index}
-                underlayColor='transparent'
-                onPress={() => {
-                  setChatType(model)
-                }}
-              >
-                <View
-                  style={{...styles.chatChoiceButton, ...getDynamicViewStyle(chatType.label, model.label, theme)}}
-                >
-                {
-                  renderIcon({
-                    type: model.label,
-                    props: {
-                      theme,
-                      size: 18,
-                      style: {marginRight: 8},
-                      selected: chatType.label === model.label
-                    }
-                  })
-                }
-                <Text
-                  style={{...styles.chatTypeText, ...getDynamicTextStyle(chatType.label, model.label, theme)}}
-                >
-                  { model.name }
-                </Text>
-              </View>
-            </TouchableHighlight>
-            )
-          })
-        }
-      </View>
-      <View
-        style={styles.titleContainer}
-      >
-      <Text
-          style={styles.mainText}
-        >Image Model</Text>
-      </View>
-      <View style={styles.buttonContainer}>
-        {
-          imageModels.map((model, index) => {
-            return (
-              <TouchableHighlight
-                key={index}
-                underlayColor='transparent'
-                onPress={() => {
-                  setImageModel(model.label)
-                }}
-              >
-                <View
-                  style={{...styles.chatChoiceButton, ...getDynamicViewStyle(imageModel, model.label, theme)}}
-                >
-                {
-                  renderIcon({
-                    type: model.label,
-                    props: {
-                      theme,
-                      size: 18,
-                      style: {marginRight: 8},
-                      color: imageModel === model.label ? theme.tintTextColor : theme.textColor
-                    }
-                  })
-                }
-                <Text
-                  style={{...styles.chatTypeText, ...getDynamicTextStyle(imageModel, model.label, theme)}}
-                >
-                  { model.name }
-                </Text>
-              </View>
-            </TouchableHighlight>
-            )
-          })
-        }
-      </View>
+        <Text style={styles.chatTypeText}>View orders (Peach / EFT)</Text>
+      </Pressable>
+      {SHOW_CHAT_MODEL_SECTION ? (
+        <View />
+      ) : null}
+      {SHOW_IMAGE_MODEL_SECTION ? (
+        <View />
+      ) : null}
     </ScrollView>
   )
-}
-
-function getDynamicTextStyle(baseType:string, type:string, theme:any) {
-  if (type === baseType) {
-    return {
-      color: theme.tintTextColor,
-    }
-  } else return {}
-}
-
-
-function getDynamicViewStyle(baseType:string, type:string, theme:any) {
-  if (type === baseType) {
-    return {
-      backgroundColor: theme.tintColor
-    }
-  } else return {}
 }
 
 const getStyles = (theme:any) => StyleSheet.create({
@@ -220,12 +113,33 @@ const getStyles = (theme:any) => StyleSheet.create({
     marginBottom: 20
   },
   container: {
-    padding: 14,
     flex: 1,
-    backgroundColor: theme.backgroundColor,
-    paddingTop: 10,
+    backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
+  },
+  pageTitle: {
+    marginTop: 12,
+    marginBottom: 4,
+    color: theme.headingColor || theme.textColor,
+    fontFamily: 'Montserrat_700Bold',
+    fontSize: 30,
+  },
+  pageSubtitle: {
+    marginBottom: 8,
+    color: theme.mutedForegroundColor,
+    fontFamily: theme.regularFont,
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  accentRule: {
+    width: 62,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: ACCENT,
+    marginBottom: 14,
   },
   contentContainer: {
+    paddingHorizontal: 14,
+    paddingTop: 8,
     paddingBottom: 40
   },
   titleContainer: {
@@ -234,9 +148,13 @@ const getStyles = (theme:any) => StyleSheet.create({
     marginTop: 10
   },
   chatChoiceButton: {
-    padding: 15,
-    borderRadius: 8,
-    flexDirection: 'row'
+    padding: 14,
+    borderRadius: 12,
+    flexDirection: 'row',
+    backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+    borderWidth: 1,
+    borderColor: 'rgba(203,255,0,0.28)',
+    marginBottom: 18,
   },
   chatTypeText: {
     fontFamily: theme.semiBoldFont,
@@ -246,5 +164,60 @@ const getStyles = (theme:any) => StyleSheet.create({
     fontFamily: theme.boldFont,
     fontSize: 18,
     color: theme.textColor
+  },
+  sectionCard: {
+    borderRadius: 14,
+    backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+    borderWidth: 2,
+    borderColor: 'rgba(203,255,0,0.32)',
+    padding: 12,
+    marginBottom: 10,
+  },
+  bannerRow: {
+    minHeight: 64,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(203,255,0,0.24)',
+    backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rowGap: {
+    marginBottom: 10,
+  },
+  leftWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+    gap: 10,
+  },
+  iconBubble: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#000000',
+    borderWidth: 1,
+    borderColor: '#000000',
+  },
+  textWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  rowTitle: {
+    color: theme.textColor,
+    fontFamily: theme.semiBoldFont,
+    fontSize: 14,
+  },
+  rowSub: {
+    color: theme.mutedForegroundColor,
+    fontFamily: theme.regularFont,
+    fontSize: 12,
+    marginTop: 1,
   },
 })

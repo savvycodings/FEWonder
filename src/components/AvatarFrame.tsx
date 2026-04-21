@@ -465,6 +465,7 @@ export function AvatarFramePreviewTile({
   previewInitial = '?',
 }: AvatarFramePreviewTileProps) {
   const { theme } = useContext(ThemeContext)
+  const ACCENT = '#CBFF00'
   const meta = AVATAR_FRAME_SHOP.find((f) => f.id === frameId)
   const uri = previewUri?.trim() ? previewUri : null
 
@@ -497,8 +498,8 @@ export function AvatarFramePreviewTile({
       style={[
         styles.tile,
         {
-          backgroundColor: theme.tileBackgroundColor || '#f6f7fa',
-          borderColor: theme.tileBorderColor || '#e2e6ef',
+          backgroundColor: '#000000',
+          borderColor: 'rgba(203,255,0,0.28)',
         },
       ]}
     >
@@ -507,21 +508,21 @@ export function AvatarFramePreviewTile({
           {previewChild}
         </AvatarFrameWrapper>
       </View>
-      <Text style={[styles.tileName, { color: theme.textColor }]}>{meta?.name}</Text>
-      <Text style={[styles.tileTagline, { color: theme.mutedForegroundColor }]} numberOfLines={2}>
+      <Text style={[styles.tileName, { color: '#ffffff' }]}>{meta?.name}</Text>
+      <Text style={[styles.tileTagline, { color: 'rgba(255,255,255,0.72)' }]} numberOfLines={2}>
         {meta?.tagline}
       </Text>
-      <Text style={styles.tilePrice}>Free</Text>
+      <Text style={[styles.tilePrice, { color: ACCENT }]}>Free</Text>
       <Pressable
         style={[
           styles.tileButton,
           {
-            backgroundColor: theme.tileActiveBackgroundColor || '#111111',
+            backgroundColor: ACCENT,
           },
           equipped
             ? {
-                backgroundColor: theme.tileBackgroundColor || '#e8ebf2',
-                borderColor: theme.tileActiveBackgroundColor || '#111111',
+                backgroundColor: 'transparent',
+                borderColor: ACCENT,
               }
             : null,
         ]}
@@ -530,8 +531,8 @@ export function AvatarFramePreviewTile({
         <Text
           style={[
             styles.tileButtonText,
-            { color: theme.tileActiveTextColor || '#ffffff' },
-            equipped ? { color: theme.textColor } : null,
+            { color: '#050505' },
+            equipped ? { color: ACCENT } : null,
           ]}
         >
           {equipped ? 'Equipped' : 'Equip'}

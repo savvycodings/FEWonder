@@ -15,6 +15,7 @@ import {
   Product,
   Chat,
   Settings,
+  ProfileAccountSettings,
   Login,
   DailyRewards,
   AdminOrdersLogin,
@@ -165,7 +166,6 @@ function ProfileStackScreen({
       />
       <ProfileStack.Screen
         name="ProfileSettings"
-        component={Settings}
         options={{
           headerShown: true,
           headerTitle: 'Settings',
@@ -180,9 +180,75 @@ function ProfileStackScreen({
           headerTintColor: theme.textColor,
           headerShadowVisible: false,
         }}
-      />
-      <ProfileStack.Screen name="Shipping" component={Shipping} />
-      <ProfileStack.Screen name="Payment" component={Payment} />
+      >
+        {() => (
+          <Settings
+            user={user}
+            sessionToken={sessionToken}
+            onUserUpdated={onUserUpdated}
+          />
+        )}
+      </ProfileStack.Screen>
+      <ProfileStack.Screen
+        name="ProfileAccountSettings"
+        options={{
+          headerShown: true,
+          headerTitle: 'Profile',
+          headerBackTitle: '',
+          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
+          headerTintColor: theme.textColor,
+          headerShadowVisible: false,
+        }}
+      >
+        {() => (
+          <ProfileAccountSettings
+            user={user}
+            sessionToken={sessionToken}
+            onUserUpdated={onUserUpdated}
+          />
+        )}
+      </ProfileStack.Screen>
+      <ProfileStack.Screen
+        name="Shipping"
+        options={{
+          headerShown: true,
+          headerTitle: 'Shipping address',
+          headerBackTitle: '',
+          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
+          headerTintColor: theme.textColor,
+          headerShadowVisible: false,
+        }}
+      >
+        {() => (
+          <Shipping
+            user={user}
+            sessionToken={sessionToken}
+            onUserUpdated={onUserUpdated}
+          />
+        )}
+      </ProfileStack.Screen>
+      <ProfileStack.Screen
+        name="Payment"
+        options={{
+          headerShown: true,
+          headerTitle: 'Payments & billing',
+          headerBackTitle: '',
+          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
+          headerTintColor: theme.textColor,
+          headerShadowVisible: false,
+        }}
+      >
+        {() => (
+          <Payment
+            user={user}
+            sessionToken={sessionToken}
+            onUserUpdated={onUserUpdated}
+          />
+        )}
+      </ProfileStack.Screen>
       <ProfileStack.Screen name="ProfileDailyRewards" component={DailyRewards} />
       <ProfileStack.Screen
         name="AdminOrdersLogin"

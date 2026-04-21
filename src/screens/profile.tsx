@@ -8,7 +8,6 @@ import {
   Image,
   ActivityIndicator,
   Modal,
-  TextInput,
   Platform,
 } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
@@ -18,12 +17,13 @@ import {
   AccountRowChevron,
   AVATAR_FRAME_SIZE_PROFILE,
   AvatarFrameWrapper,
+  WonderportAccentCard,
   useEquippedAvatarFrame,
 } from '../components'
 import { AppContext, ThemeContext } from '../context'
 import { User } from '../../types'
 import * as ImagePicker from 'expo-image-picker'
-import { getDailyRewardStatus, updateProfileDetails, uploadProfilePicture } from '../utils'
+import { getDailyRewardStatus, uploadProfilePicture } from '../utils'
 import { fetchMyOrders } from '../ordersApi'
 
 const coinFrameUris = [
@@ -61,6 +61,9 @@ const coinFrameUris = [
   '/homepageimgs/Coinrotation/Coin32.svg',
 ]
 
+const PROFILE_ACCENT = '#CBFF00'
+const PROFILE_FILL = '#000000'
+
 export function Profile({
   navigation,
   user,
@@ -81,10 +84,6 @@ export function Profile({
   const [isUploading, setIsUploading] = useState(false)
   const [localPreviewUri, setLocalPreviewUri] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState('')
-  const [showDetailsModal, setShowDetailsModal] = useState(false)
-  const [shippingInput, setShippingInput] = useState(user.shippingAddress?.trim() || '')
-  const [savingDetails, setSavingDetails] = useState(false)
-  const [detailsError, setDetailsError] = useState('')
   const [showWalletModal, setShowWalletModal] = useState(false)
   const [coinFrameIndex, setCoinFrameIndex] = useState(0)
   const [walletBalance, setWalletBalance] = useState(0)
@@ -182,15 +181,8 @@ export function Profile({
     { label: 'Saved Items', key: 'saved', icon: 'heart' as const },
     { label: 'My orders', key: 'my_orders', icon: 'inbox' as const },
   ]
-  const shippingPreview = user.shippingAddress?.trim() || 'No saved address'
   const accountDetails = [
-    { label: 'Settings', key: 'settings', icon: 'sliders' as const, value: 'Theme & preferences' },
-    {
-      label: 'Shipping address',
-      key: 'shipping_payment',
-      value: shippingPreview,
-      icon: 'package' as const,
-    },
+    { label: 'Settings', key: 'settings', icon: 'sliders' as const, value: 'Profile, shipping & billing' },
   ]
 
   function onAccountRowPress(key: string) {
@@ -202,38 +194,6 @@ export function Profile({
       navigation.navigate('Saved')
     } else if (key === 'my_orders') {
       navigation.navigate('ProfileMyOrders')
-    } else if (key === 'shipping_payment') {
-      openShippingPaymentModal()
-    }
-  }
-
-  function openShippingPaymentModal() {
-    setShippingInput(user.shippingAddress?.trim() || '')
-    setDetailsError('')
-    setShowDetailsModal(true)
-  }
-
-  function closeShippingPaymentModal() {
-    setShowDetailsModal(false)
-    setShippingInput(user.shippingAddress?.trim() || '')
-    setDetailsError('')
-  }
-
-  async function saveDetails() {
-    if (savingDetails) return
-    try {
-      setSavingDetails(true)
-      setDetailsError('')
-      const updatedUser = await updateProfileDetails({
-        sessionToken,
-        shippingAddress: shippingInput.trim(),
-      })
-      await onUserUpdated(updatedUser)
-      setShowDetailsModal(false)
-    } catch (error: any) {
-      setDetailsError(error?.message || 'Could not update details')
-    } finally {
-      setSavingDetails(false)
     }
   }
 
@@ -243,7 +203,13 @@ export function Profile({
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.headerCard}>
+      <WonderportAccentCard
+        borderWidth={2}
+        borderRadius={24}
+        innerBackgroundColor={PROFILE_FILL}
+        style={styles.headerAccentCard}
+        contentStyle={styles.headerCard}
+      >
         <Pressable style={styles.avatarPressable} onPress={handleChangePhoto}>
           <AvatarFrameWrapper
             frameId={avatarFrameId}
@@ -270,13 +236,13 @@ export function Profile({
             {Platform.OS === 'web' ? (
               <SvgUri uri={coinFrameUris[coinFrameIndex]} width={18} height={18} />
             ) : (
-              <FeatherIcon name="dollar-sign" size={16} color={theme.tintColor} />
+              <FeatherIcon name="dollar-sign" size={16} color={PROFILE_ACCENT} />
             )}
             <Text style={styles.headerWalletValue}>{walletBalance}</Text>
           </Pressable>
-          {isUploading ? <ActivityIndicator size="small" color={theme.tintColor} /> : null}
+          {isUploading ? <ActivityIndicator size="small" color={PROFILE_ACCENT} /> : null}
         </View>
-      </View>
+      </WonderportAccentCard>
       {uploadError ? <Text style={styles.errorText}>{uploadError}</Text> : null}
 
       <View style={styles.statsGroupCard}>
@@ -298,7 +264,6 @@ export function Profile({
 
       <Text style={styles.accountHeading}>Account</Text>
       <View style={styles.groupCard}>
-        <Text style={styles.accountSectionLabel}>Shopping</Text>
         {accountShopping.map((item, index) => (
           <Pressable
             key={item.key}
@@ -307,7 +272,7 @@ export function Profile({
           >
             <View style={styles.actionLeft}>
               <View style={styles.iconBubble}>
-                <FeatherIcon name={item.icon} size={16} color={theme.tintColor} />
+                <FeatherIcon name={item.icon} size={22} color={PROFILE_ACCENT} />
               </View>
               <View>
                 <Text style={styles.actionLabel}>{item.label}</Text>
@@ -322,32 +287,29 @@ export function Profile({
                 </Text>
               </View>
             </View>
-            <AccountRowChevron accentColor={theme.tintColor} />
+            <AccountRowChevron accentColor={PROFILE_ACCENT} />
           </Pressable>
         ))}
-        <View style={styles.accountSectionDivider} />
-        <Text style={[styles.accountSectionLabel, styles.accountSectionLabelSpaced]}>Profile & billing</Text>
         {accountDetails.map((item, index) => (
           <Pressable
             key={item.key}
-            style={[styles.actionRow, index < accountDetails.length - 1 ? styles.rowGap : null]}
+            style={[
+              styles.actionRow,
+              index === 0 ? styles.accountDetailsFirstRow : null,
+              index < accountDetails.length - 1 ? styles.rowGap : null,
+            ]}
             onPress={() => onAccountRowPress(item.key)}
           >
             <View style={styles.actionLeft}>
               <View style={styles.iconBubble}>
-                <FeatherIcon name={item.icon} size={16} color={theme.tintColor} />
+                <FeatherIcon name={item.icon} size={22} color={PROFILE_ACCENT} />
               </View>
               <View>
                 <Text style={styles.actionLabel}>{item.label}</Text>
-                <Text
-                  style={styles.actionValue}
-                  {...(item.key === 'shipping_payment' ? { numberOfLines: 2 } : {})}
-                >
-                  {item.value}
-                </Text>
+                <Text style={styles.actionValue}>{item.value}</Text>
               </View>
             </View>
-            <AccountRowChevron accentColor={theme.tintColor} />
+            <AccountRowChevron accentColor={PROFILE_ACCENT} />
           </Pressable>
         ))}
       </View>
@@ -369,7 +331,7 @@ export function Profile({
               onPress={() => navigation.navigate('ProfileMyOrderDetail', { orderId: order.id })}
             >
               <View style={styles.orderThumb}>
-                <FeatherIcon name="package" size={20} color={theme.tintColor} />
+                <FeatherIcon name="package" size={20} color={PROFILE_ACCENT} />
               </View>
               <View style={styles.orderTextWrap}>
                 <Text style={styles.orderName}>{order.referenceCode}</Text>
@@ -389,7 +351,7 @@ export function Profile({
       </View>
 
       <Pressable style={styles.logoutButton} onPress={onLogout}>
-        <FeatherIcon name="log-out" size={16} color={theme.tintColor} />
+        <FeatherIcon name="log-out" size={16} color={PROFILE_ACCENT} />
         <Text style={styles.logoutText}>Log out</Text>
       </Pressable>
 
@@ -432,48 +394,6 @@ export function Profile({
         </View>
       </Modal>
 
-      <Modal visible={showDetailsModal} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, styles.shippingPaymentModalCard]}>
-            <Text style={styles.modalTitle}>Shipping address</Text>
-            <Text style={styles.modalSubtitle}>
-              Saved to your profile for faster checkout. You can also enter a different address when you buy.
-            </Text>
-
-            <ScrollView
-              style={styles.shippingPaymentModalScroll}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              <Text style={styles.modalFieldLabel}>Shipping address</Text>
-              <TextInput
-                value={shippingInput}
-                onChangeText={setShippingInput}
-                placeholder="Street, city, postal code…"
-                style={[styles.modalInput, styles.modalInputMultiline]}
-                placeholderTextColor={theme.placeholderTextColor}
-                multiline
-                textAlignVertical="top"
-              />
-            </ScrollView>
-
-            {detailsError ? <Text style={styles.modalError}>{detailsError}</Text> : null}
-
-            <View style={styles.modalButtons}>
-              <Pressable style={styles.modalSecondaryButton} onPress={closeShippingPaymentModal}>
-                <Text style={styles.modalSecondaryButtonText}>Cancel</Text>
-              </Pressable>
-              <Pressable style={styles.modalPrimaryButton} onPress={saveDetails}>
-                {savingDetails ? (
-                  <ActivityIndicator color={theme.tintTextColor || '#fff'} />
-                ) : (
-                  <Text style={styles.modalPrimaryButtonText}>Save</Text>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   )
 }
@@ -481,29 +401,22 @@ export function Profile({
 const getStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.appBackgroundColor || '#f7f8fb',
+    backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
   },
   content: {
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 110,
   },
-  headerCard: {
+  headerAccentCard: {
     width: '100%',
     alignSelf: 'stretch',
-    backgroundColor: theme.sheetBackgroundColor || theme.tileBackgroundColor || '#ffffff',
-    borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#e7ebf3',
-    borderRadius: 24,
+    marginBottom: 16,
+  },
+  headerCard: {
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: '#1b244b',
-    shadowOpacity: 0.24,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8,
   },
   avatarPressable: {
     alignItems: 'center',
@@ -526,25 +439,25 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     borderRadius: 999,
-    backgroundColor: theme.sheetRowBackgroundColor || theme.appBackgroundColor || '#f4f6fb',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#e7ebf3',
+    borderColor: 'rgba(203,255,0,0.35)',
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
   headerWalletValue: {
-    color: theme.textColor,
+    color: PROFILE_ACCENT,
     fontFamily: 'Geist-SemiBold',
     fontSize: 15,
   },
   name: {
-    color: theme.textColor,
+    color: '#ffffff',
     fontFamily: 'Geist-Bold',
     fontSize: 22,
     marginBottom: 2,
   },
   email: {
-    color: theme.mutedForegroundColor,
+    color: 'rgba(255,255,255,0.72)',
     fontFamily: 'Geist-Regular',
     fontSize: 12,
   },
@@ -555,30 +468,30 @@ const getStyles = (theme: any) => StyleSheet.create({
   statsGroupCard: {
     width: '100%',
     alignSelf: 'stretch',
-    backgroundColor: theme.sheetBackgroundColor || theme.tileBackgroundColor || '#ffffff',
+    backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
     borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#e7ebf3',
+    borderColor: theme.tileBorderColor || theme.borderColor,
     borderRadius: 18,
     marginBottom: 20,
     padding: 10,
   },
   statCard: {
     flex: 1,
-    backgroundColor: theme.sheetRowBackgroundColor || theme.appBackgroundColor || '#f4f6fb',
+    backgroundColor: PROFILE_FILL,
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#e7ebf3',
+    borderColor: 'rgba(203,255,0,0.28)',
     paddingVertical: 12,
     alignItems: 'center',
   },
   statValue: {
-    color: theme.textColor,
+    color: PROFILE_ACCENT,
     fontFamily: 'Geist-Bold',
     fontSize: 22,
     marginBottom: 2,
   },
   statLabel: {
-    color: theme.mutedForegroundColor,
+    color: 'rgba(255,255,255,0.72)',
     fontFamily: 'Geist-Medium',
     fontSize: 12,
   },
@@ -588,20 +501,20 @@ const getStyles = (theme: any) => StyleSheet.create({
     justifyContent: 'space-between',
   },
   accountHeading: {
-    color: theme.textColor,
-    fontFamily: 'Geist-SemiBold',
+    color: theme.headingColor || theme.textColor,
+    fontFamily: 'Montserrat_800ExtraBold',
     fontSize: 26,
     lineHeight: 30,
     marginBottom: 12,
   },
   sectionTitle: {
     color: theme.textColor,
-    fontFamily: 'Geist-SemiBold',
+    fontFamily: 'Montserrat_800ExtraBold',
     fontSize: 20,
     marginBottom: 4,
   },
   link: {
-    color: theme.textColor,
+    color: PROFILE_ACCENT,
     fontFamily: 'Geist-SemiBold',
     fontSize: 12,
   },
@@ -623,40 +536,21 @@ const getStyles = (theme: any) => StyleSheet.create({
   groupCard: {
     width: '100%',
     alignSelf: 'stretch',
-    backgroundColor: theme.sheetBackgroundColor || theme.tileBackgroundColor || '#ffffff',
+    backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
     borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#e7ebf3',
+    borderColor: theme.tileBorderColor || theme.borderColor,
     borderRadius: 18,
     marginBottom: 20,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  accountSectionLabel: {
-    color: theme.mutedForegroundColor,
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 11,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-    marginTop: 2,
-    paddingHorizontal: 4,
-  },
-  accountSectionLabelSpaced: {
-    marginTop: 0,
-  },
-  accountSectionDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: theme.tileBorderColor || '#e7ebf3',
-    marginVertical: 8,
-    marginHorizontal: 4,
-  },
   actionRow: {
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: theme.sheetRowBackgroundColor || theme.appBackgroundColor || '#f4f6fb',
+    backgroundColor: PROFILE_FILL,
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#e7ebf3',
+    borderColor: 'rgba(203,255,0,0.24)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -670,25 +564,28 @@ const getStyles = (theme: any) => StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: theme.tileBackgroundColor || '#ffffff',
+    backgroundColor: '#000000',
     borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#e7ebf3',
+    borderColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionLabel: {
-    color: theme.textColor,
+    color: '#ffffff',
     fontFamily: 'Geist-SemiBold',
     fontSize: 14,
     marginBottom: 1,
   },
   actionValue: {
-    color: theme.mutedForegroundColor,
+    color: 'rgba(255,255,255,0.7)',
     fontFamily: 'Geist-Regular',
     fontSize: 12,
   },
   rowGap: {
     marginBottom: 6,
+  },
+  accountDetailsFirstRow: {
+    marginTop: 6,
   },
   orderEmpty: {
     paddingVertical: 14,
@@ -701,10 +598,10 @@ const getStyles = (theme: any) => StyleSheet.create({
   orderRow: {
     paddingHorizontal: 10,
     paddingVertical: 10,
-    backgroundColor: theme.sheetRowBackgroundColor || theme.appBackgroundColor || '#f4f6fb',
+    backgroundColor: PROFILE_FILL,
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#e7ebf3',
+    borderColor: 'rgba(203,255,0,0.24)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -713,7 +610,9 @@ const getStyles = (theme: any) => StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 10,
-    backgroundColor: theme.appBackgroundColor || '#f2f4f8',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(203,255,0,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -728,13 +627,13 @@ const getStyles = (theme: any) => StyleSheet.create({
     marginRight: 10,
   },
   orderName: {
-    color: theme.textColor,
+    color: '#ffffff',
     fontFamily: 'Geist-SemiBold',
     fontSize: 15,
     marginBottom: 2,
   },
   orderMeta: {
-    color: theme.mutedForegroundColor,
+    color: 'rgba(255,255,255,0.7)',
     fontFamily: 'Geist-Regular',
     fontSize: 12,
   },
@@ -744,20 +643,20 @@ const getStyles = (theme: any) => StyleSheet.create({
     gap: 8,
   },
   statusPill: {
-    backgroundColor: theme.appBackgroundColor || '#f2f4f8',
+    backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#e7ebf3',
+    borderColor: 'rgba(203,255,0,0.35)',
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
   statusText: {
-    color: theme.textColor,
+    color: PROFILE_ACCENT,
     fontFamily: 'Geist-SemiBold',
     fontSize: 10,
   },
   orderTotal: {
-    color: theme.textColor,
+    color: PROFILE_ACCENT,
     fontFamily: 'Geist-Bold',
     fontSize: 15,
   },
@@ -768,16 +667,16 @@ const getStyles = (theme: any) => StyleSheet.create({
     marginBottom: 8,
     borderRadius: 14,
     minHeight: 48,
-    backgroundColor: theme.tileBackgroundColor || '#ffffff',
-    borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#e7ebf3',
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: PROFILE_ACCENT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   logoutText: {
-    color: theme.textColor,
+    color: PROFILE_ACCENT,
     fontFamily: 'Geist-SemiBold',
     fontSize: 15,
   },

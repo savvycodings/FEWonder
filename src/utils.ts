@@ -293,6 +293,8 @@ export async function logoutUser(sessionToken: string): Promise<void> {
 
 export async function updateProfileDetails(payload: {
   sessionToken: string
+  fullName?: string
+  email?: string
   shippingAddress?: string
   shippingAddressLine2?: string
   phone?: string
@@ -306,6 +308,8 @@ export async function updateProfileDetails(payload: {
   paymentMethod?: string
 }): Promise<User> {
   const body: Record<string, string> = {}
+  if (payload.fullName !== undefined) body.fullName = payload.fullName
+  if (payload.email !== undefined) body.email = payload.email
   if (payload.shippingAddress !== undefined) body.shippingAddress = payload.shippingAddress
   if (payload.shippingAddressLine2 !== undefined) body.shippingAddressLine2 = payload.shippingAddressLine2
   if (payload.phone !== undefined) body.phone = payload.phone

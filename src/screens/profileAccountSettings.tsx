@@ -22,23 +22,25 @@ type Props = {
   onUserUpdated: (user: User) => Promise<void>
 }
 
-export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
+export function ProfileAccountSettings({ user, sessionToken, onUserUpdated }: Props) {
   const { theme } = useContext(ThemeContext)
   const styles = getStyles(theme)
-  const [line1, setLine1] = useState(user.shippingAddress || '')
-  const [line2, setLine2] = useState(user.shippingAddressLine2 || '')
+  const [fullName, setFullName] = useState(user.fullName || '')
+  const [email, setEmail] = useState(user.email || '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
   useEffect(() => {
-    setLine1(user.shippingAddress || '')
-    setLine2(user.shippingAddressLine2 || '')
+    setFullName(user.fullName || '')
+    setEmail(user.email || '')
   }, [user])
 
   const canSave = useMemo(
-    () => line1.trim() !== (user.shippingAddress || '') || line2.trim() !== (user.shippingAddressLine2 || ''),
-    [line1, line2, user]
+    () =>
+      fullName.trim() !== (user.fullName || '') ||
+      email.trim().toLowerCase() !== (user.email || '').toLowerCase(),
+    [fullName, email, user]
   )
 
   async function onSave() {
@@ -49,13 +51,13 @@ export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
     try {
       const nextUser = await updateProfileDetails({
         sessionToken,
-        shippingAddress: line1.trim(),
-        shippingAddressLine2: line2.trim(),
+        fullName: fullName.trim(),
+        email: email.trim().toLowerCase(),
       })
       await onUserUpdated(nextUser)
-      setSuccess('Shipping address updated.')
+      setSuccess('Profile updated.')
     } catch (e: any) {
-      setError(e?.message || 'Could not update shipping address.')
+      setError(e?.message || 'Could not update profile.')
     } finally {
       setSaving(false)
     }
@@ -64,26 +66,27 @@ export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
   return (
     <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <Text style={styles.title}>Shipping address</Text>
-        <Text style={styles.subtitle}>Save your main shipping address used during checkout.</Text>
+        <Text style={styles.title}>Profile</Text>
+        <Text style={styles.subtitle}>Update your account name and email.</Text>
         <View style={styles.accentRule} />
         <View style={styles.card}>
-          <Text style={styles.label}>Address line 1</Text>
+          <Text style={styles.label}>Full name</Text>
           <TextInput
-            value={line1}
-            onChangeText={setLine1}
-            placeholder="Street, suburb, city"
-            placeholderTextColor={theme.mutedForegroundColor}
-            style={[styles.input, styles.inputMulti]}
-            multiline
-          />
-          <Text style={styles.label}>Address line 2</Text>
-          <TextInput
-            value={line2}
-            onChangeText={setLine2}
-            placeholder="Postal code, extra details"
+            value={fullName}
+            onChangeText={setFullName}
+            placeholder="Full name"
             placeholderTextColor={theme.mutedForegroundColor}
             style={styles.input}
+          />
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            placeholderTextColor={theme.mutedForegroundColor}
+            style={styles.input}
+            autoCapitalize="none"
+            keyboardType="email-address"
           />
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
           {success ? <Text style={styles.successText}>{success}</Text> : null}
@@ -155,10 +158,6 @@ const getStyles = (theme: any) =>
       marginBottom: 10,
       backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
     },
-    inputMulti: {
-      minHeight: 76,
-      textAlignVertical: 'top',
-    },
     saveButton: {
       minHeight: 42,
       borderRadius: 10,
@@ -184,3 +183,4 @@ const getStyles = (theme: any) =>
       marginBottom: 8,
     },
   })
+
