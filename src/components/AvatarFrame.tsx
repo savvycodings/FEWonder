@@ -46,6 +46,12 @@ function isAvatarFrameId(value: string): value is AvatarFrameId {
   return value === 'none' || isBorderFrameId(value)
 }
 
+export function coerceAvatarFrameId(raw: string | null | undefined): AvatarFrameId {
+  if (raw == null || raw === '' || raw === 'none') return 'none'
+  if (isAvatarFrameId(raw)) return raw
+  return 'none'
+}
+
 export async function loadEquippedAvatarFrame(): Promise<AvatarFrameId> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY)

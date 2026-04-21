@@ -387,6 +387,33 @@ export async function claimDailyReward(sessionToken: string): Promise<DailyRewar
   return status
 }
 
+export async function syncEquippedAvatarFrame(
+  sessionToken: string,
+  avatarFrameId: string
+): Promise<void> {
+  if (!DOMAIN) {
+    throw new Error('API domain is not configured. Set EXPO_PUBLIC_DEV_API_URL.')
+  }
+  const response = await fetch(`${DOMAIN}/auth/avatar-frame`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify({ avatarFrameId }),
+  })
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { raw }
+  }
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to sync avatar frame')
+  }
+}
+
 export async function getCommunityMessages(sessionToken: string): Promise<CommunityMessage[]> {
   const response = await fetch(`${DOMAIN}/community/messages`, {
     headers: {

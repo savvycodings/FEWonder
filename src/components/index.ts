@@ -21,6 +21,7 @@ export {
   AvatarFrameWrapper,
   avatarPhotoDiscDiameterPoints,
   avatarPhotoDiscDiameterPx,
+  coerceAvatarFrameId,
   loadEquippedAvatarFrame,
   saveEquippedAvatarFrame,
   useEquippedAvatarFrame,

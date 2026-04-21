@@ -42,7 +42,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import * as ImagePicker from 'expo-image-picker'
-import { AvatarFrameWrapper, useEquippedAvatarFrame } from '../components'
+import { AvatarFrameWrapper, coerceAvatarFrameId, useEquippedAvatarFrame } from '../components'
 
 const REF_ITEM_PREFIX = '__REF_ITEM__:'
 
@@ -84,6 +84,24 @@ const CHAT_LIFT_TIMING = {
 /** Delay before the hero banner swipes up off-screen after opening Chat; dismiss animation duration. */
 const HERO_DISMISS_DELAY_MS = 3000
 const HERO_DISMISS_DURATION_MS = 580
+
+/** Periodic fetch when Chat is focused — light catch-up if SSE misses an event (e.g. background). */
+const COMMUNITY_POLL_MS = 10_000
+
+function communityMessagesEqual(a: CommunityMessage[], b: CommunityMessage[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i]
+    const y = b[i]
+    if (x.id !== y.id || x.body !== y.body || x.imageUrl !== y.imageUrl) return false
+    if (x.user.fullName !== y.user.fullName || x.user.profilePicture !== y.user.profilePicture)
+      return false
+    const fx = x.user.avatarFrameId ?? null
+    const fy = y.user.avatarFrameId ?? null
+    if (fx !== fy) return false
+  }
+  return true
+}
 
 /**
  * Composer `bottom` in screen space: idle above tab bar, or `keyboardHeight + gap` when typing.
@@ -183,7 +201,26 @@ export function Chat({
   useFocusEffect(
     useCallback(() => {
       refreshAvatarFrame()
-    }, [refreshAvatarFrame])
+      if (!sessionToken) {
+        return undefined
+      }
+      let cancelled = false
+      const poll = async () => {
+        if (cancelled) return
+        try {
+          const next = await getCommunityMessages(sessionToken)
+          if (cancelled) return
+          setMessages((prev) => (communityMessagesEqual(prev, next) ? prev : next))
+        } catch (error) {
+          console.log('Community messages poll failed', error)
+        }
+      }
+      const interval = setInterval(poll, COMMUNITY_POLL_MS)
+      return () => {
+        cancelled = true
+        clearInterval(interval)
+      }
+    }, [refreshAvatarFrame, sessionToken])
   )
 
   useEffect(() => {
@@ -549,12 +586,13 @@ export function Chat({
             const showOwnActions = isMe && activeOwnMessageId === item.id
             const avatarUri = getAvatarUri(item, isMe)
             const initial = (item.user.fullName || 'U').slice(0, 1).toUpperCase()
+            const bubbleFrameId = isMe ? avatarFrameId : coerceAvatarFrameId(item.user.avatarFrameId)
             return (
               <View style={[styles.messageShell, isMe ? styles.meShell : styles.otherShell]}>
                 {!isMe ? (
                   <View style={styles.avatarBubble}>
                     <AvatarFrameWrapper
-                      frameId={avatarFrameId}
+                      frameId={bubbleFrameId}
                       size={34}
                       fit="chat"
                       innerBackgroundColor={
@@ -672,7 +710,7 @@ export function Chat({
                 {isMe ? (
                   <View style={styles.avatarBubble}>
                     <AvatarFrameWrapper
-                      frameId={avatarFrameId}
+                      frameId={bubbleFrameId}
                       size={34}
                       fit="chat"
                       innerBackgroundColor={

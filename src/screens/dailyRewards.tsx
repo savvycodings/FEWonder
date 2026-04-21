@@ -5,7 +5,7 @@ import { SvgUri } from 'react-native-svg'
 import { useFocusEffect } from '@react-navigation/native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { DailyRewardItem, DailyRewardStatus, User } from '../../types'
-import { claimDailyReward, getDailyRewardStatus, readDailyRewardsCache } from '../utils'
+import { claimDailyReward, getDailyRewardStatus, readDailyRewardsCache, syncEquippedAvatarFrame } from '../utils'
 import {
   AVATAR_FRAME_SHOP,
   AVATAR_FRAME_SIZE_PREVIEW_TILE,
@@ -232,6 +232,13 @@ export function DailyRewards({ navigation, route }: any) {
     await saveEquippedAvatarFrame(id)
     setEquippedAvatarFrame(id)
     setStoreMessage(id === 'none' ? 'Plain avatar on.' : 'Frame saved. See your profile.')
+    if (sessionToken) {
+      try {
+        await syncEquippedAvatarFrame(sessionToken, id)
+      } catch (error) {
+        console.log('[dailyRewards] avatar frame server sync failed', error)
+      }
+    }
   }
 
   function handleBuyTheme(themeId: string, cost: number) {

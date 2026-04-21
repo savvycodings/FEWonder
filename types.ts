@@ -23,6 +23,7 @@ export interface User {
   email: string
   createdAt: string
   profilePicture?: string | null
+  avatarFrameId?: string | null
   shippingAddress?: string | null
   shippingAddressLine2?: string | null
   phone?: string | null
@@ -49,6 +50,7 @@ export interface CommunityMessage {
     id: string
     fullName: string
     profilePicture?: string | null
+    avatarFrameId?: string | null
   }
 }
 
