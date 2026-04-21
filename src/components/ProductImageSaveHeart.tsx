@@ -1,6 +1,14 @@
-import { useContext, useRef } from 'react'
-import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native'
+import { useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { Pressable, StyleSheet } from 'react-native'
 import Ionicons from '@expo/vector-icons/Ionicons'
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated'
 import { AppContext } from '../context'
 
 export type ProductSavePayload = {
@@ -21,6 +29,8 @@ type ProductImageSaveHeartProps = {
 
 const IG_RED = '#ff3040'
 
+const EASE_SETTLE = Easing.bezier(0.22, 0.72, 0.28, 1)
+
 export function ProductImageSaveHeart({
   product,
   iconSize = 22,
@@ -30,57 +40,73 @@ export function ProductImageSaveHeart({
 }: ProductImageSaveHeartProps) {
   const { savedItems, toggleSavedItem } = useContext(AppContext)
   const saved = savedItems.some((i) => i.title === product.title)
-  const scale = useRef(new Animated.Value(1)).current
-  const pad = Math.max(6, Math.round(iconSize * 0.28))
-  /** Total control size — matches touch target; anchored flush to `top` / `right` on the image. */
-  const circle = iconSize + pad * 2
+  const [optimisticSaved, setOptimisticSaved] = useState<boolean | null>(null)
+  const displaySaved = optimisticSaved !== null ? optimisticSaved : saved
 
-  function handlePress() {
-    const willSave = !savedItems.some((i) => i.title === product.title)
-    toggleSavedItem(product)
-    scale.stopAnimation()
+  const scale = useSharedValue(1)
+  /** Touch-down already played the burst; touch-up only commits (avoids waiting for release to animate). */
+  const burstPlayedRef = useRef(false)
 
-    if (willSave) {
-      // Instagram-ish: pop up, then elastic settle (“beat” overshoot on the way to rest).
-      Animated.sequence([
-        Animated.timing(scale, {
-          toValue: 1.4,
-          duration: 82,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scale, {
-          toValue: 1,
-          duration: 245,
-          easing: Easing.out(Easing.back(1.32)),
-          useNativeDriver: true,
-        }),
-      ]).start()
-    } else {
-      Animated.sequence([
-        Animated.timing(scale, {
-          toValue: 0.87,
-          duration: 72,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(scale, {
-          toValue: 1,
-          duration: 195,
-          easing: Easing.out(Easing.back(1.12)),
-          useNativeDriver: true,
-        }),
-      ]).start()
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }))
+
+  useEffect(() => {
+    if (optimisticSaved !== null && optimisticSaved === saved) {
+      setOptimisticSaved(null)
     }
-  }
+  }, [saved, optimisticSaved])
+
+  const playBurst = useCallback(
+    (willSave: boolean) => {
+      cancelAnimation(scale)
+      scale.value = 1
+      if (willSave) {
+        // Noticeable pop, then rest at 1 = normal-sized filled red heart (optimistic fill on press).
+        scale.value = withSequence(
+          withTiming(1.38, { duration: 95, easing: Easing.out(Easing.cubic) }),
+          withTiming(1, { duration: 340, easing: EASE_SETTLE })
+        )
+      } else {
+        scale.value = withSequence(
+          withTiming(0.94, { duration: 70, easing: Easing.in(Easing.quad) }),
+          withTiming(1, { duration: 260, easing: EASE_SETTLE })
+        )
+      }
+    },
+    [scale]
+  )
+
+  const handlePressIn = useCallback(() => {
+    const willSave = !savedItems.some((i) => i.title === product.title)
+    burstPlayedRef.current = true
+    playBurst(willSave)
+  }, [playBurst, product.title, savedItems])
+
+  const handlePress = useCallback(() => {
+    const willSave = !savedItems.some((i) => i.title === product.title)
+    if (!burstPlayedRef.current) {
+      playBurst(willSave)
+    }
+    burstPlayedRef.current = false
+
+    setOptimisticSaved(willSave)
+    queueMicrotask(() => {
+      toggleSavedItem(product)
+    })
+  }, [playBurst, product, savedItems, toggleSavedItem])
+
+  const pad = Math.max(6, Math.round(iconSize * 0.28))
+  const circle = iconSize + pad * 2
 
   return (
     <Pressable
+      onPressIn={handlePressIn}
       onPress={handlePress}
       /** Keep touches inside the image — symmetric hitSlop draws outside the photo bounds. */
       hitSlop={{ top: 4, left: 4, bottom: 6, right: 0 }}
       accessibilityRole="button"
-      accessibilityLabel={saved ? 'Remove from saved items' : 'Save to profile'}
+      accessibilityLabel={displaySaved ? 'Remove from saved items' : 'Save to profile'}
       style={[
         styles.heartAnchor,
         inline ? styles.heartInline : styles.heartFloating,
@@ -92,11 +118,11 @@ export function ProductImageSaveHeart({
         },
       ]}
     >
-      <Animated.View style={[styles.iconWrap, { transform: [{ scale }] }]}>
+      <Animated.View style={[styles.iconWrap, animatedStyle]}>
         <Ionicons
-          name={saved ? 'heart' : 'heart-outline'}
+          name={displaySaved ? 'heart' : 'heart-outline'}
           size={iconSize}
-          color={saved ? IG_RED : '#ffffff'}
+          color={displaySaved ? IG_RED : '#ffffff'}
         />
       </Animated.View>
     </Pressable>

@@ -1,13 +1,12 @@
 import { useContext } from 'react'
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { AppContext, ThemeContext } from '../context'
+import { AppContext } from '../context'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { formatMoney } from '../money'
 
 export function Saved({ navigation }: any) {
-  const { theme } = useContext(ThemeContext)
-  const styles = getStyles(theme)
+  const styles = getStyles()
   const { savedItems, removeSavedItem } = useContext(AppContext)
   const insets = useSafeAreaInsets()
 
@@ -24,11 +23,11 @@ export function Saved({ navigation }: any) {
       <View style={styles.emptyWrap}>
         <View style={[styles.emptyHeader, { top: insets.top + 8 }]}>
           <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
-            <FeatherIcon name="arrow-left" size={18} color={theme.textColor} />
+            <FeatherIcon name="arrow-left" size={18} color="#ffffff" />
           </Pressable>
         </View>
         <View style={styles.emptyIconWrap}>
-          <FeatherIcon name="heart" size={28} color={theme.tintColor} />
+          <FeatherIcon name="heart" size={28} color="#E53935" />
         </View>
         <Text style={styles.emptyTitle}>No saved items yet</Text>
         <Text style={styles.emptySub}>Tap the heart on a product page to save it here.</Text>
@@ -44,7 +43,7 @@ export function Saved({ navigation }: any) {
     >
       <View style={styles.topRow}>
         <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
-          <FeatherIcon name="arrow-left" size={18} color={theme.textColor} />
+          <FeatherIcon name="arrow-left" size={18} color="#ffffff" />
         </Pressable>
       </View>
       <View style={styles.header}>
@@ -77,7 +76,7 @@ export function Saved({ navigation }: any) {
               </Text>
             </View>
             <Pressable style={styles.removeButton} onPress={() => removeSavedItem(item.title)}>
-              <FeatherIcon name="x" size={14} color={theme.mutedForegroundColor} />
+              <FeatherIcon name="x" size={14} color="#a8a8a8" />
             </Pressable>
           </Pressable>
         )
@@ -86,11 +85,11 @@ export function Saved({ navigation }: any) {
   )
 }
 
-const getStyles = (theme: any) =>
+const getStyles = () =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.appBackgroundColor || '#f7f8fb',
+      backgroundColor: '#000000',
     },
     content: {
       padding: 16,
@@ -103,7 +102,7 @@ const getStyles = (theme: any) =>
       width: 34,
       height: 34,
       borderRadius: 17,
-      backgroundColor: theme.tileBackgroundColor || '#ffffff',
+      backgroundColor: '#2a2a2a',
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -114,17 +113,17 @@ const getStyles = (theme: any) =>
       marginBottom: 12,
     },
     title: {
-      color: theme.textColor,
+      color: '#ffffff',
       fontFamily: 'Geist-Bold',
       fontSize: 28,
     },
     count: {
-      color: theme.mutedForegroundColor,
+      color: '#a8a8a8',
       fontFamily: 'Geist-Medium',
       fontSize: 12,
     },
     itemCard: {
-      backgroundColor: theme.tileBackgroundColor || '#ffffff',
+      backgroundColor: '#1a1a1a',
       borderRadius: 16,
       padding: 10,
       flexDirection: 'row',
@@ -136,7 +135,7 @@ const getStyles = (theme: any) =>
       width: 74,
       height: 74,
       borderRadius: 12,
-      backgroundColor: theme.appBackgroundColor || '#eff3fa',
+      backgroundColor: '#2a2a2a',
       alignItems: 'center',
       justifyContent: 'center',
       overflow: 'hidden',
@@ -149,10 +148,10 @@ const getStyles = (theme: any) =>
       ...StyleSheet.absoluteFillObject,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.appBackgroundColor || '#e4eaf5',
+      backgroundColor: '#2a2a2a',
     },
     imagePlaceholderText: {
-      color: theme.mutedForegroundColor,
+      color: '#a8a8a8',
       fontFamily: 'Geist-Bold',
       fontSize: 22,
     },
@@ -161,19 +160,19 @@ const getStyles = (theme: any) =>
       marginLeft: 10,
     },
     itemTitle: {
-      color: theme.textColor,
+      color: '#ffffff',
       fontFamily: 'Geist-SemiBold',
       fontSize: 15,
       marginBottom: 3,
     },
     itemCategory: {
-      color: theme.mutedForegroundColor,
+      color: '#a8a8a8',
       fontFamily: 'Geist-Regular',
       fontSize: 12,
       marginBottom: 5,
     },
     itemPrice: {
-      color: theme.textColor,
+      color: '#ffffff',
       fontFamily: 'Geist-Bold',
       fontSize: 14,
     },
@@ -181,13 +180,13 @@ const getStyles = (theme: any) =>
       width: 24,
       height: 24,
       borderRadius: 12,
-      backgroundColor: theme.appBackgroundColor || '#f2f5fb',
+      backgroundColor: '#2a2a2a',
       alignItems: 'center',
       justifyContent: 'center',
     },
     emptyWrap: {
       flex: 1,
-      backgroundColor: theme.appBackgroundColor || '#f7f8fb',
+      backgroundColor: '#000000',
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: 30,
@@ -201,21 +200,21 @@ const getStyles = (theme: any) =>
       width: 78,
       height: 78,
       borderRadius: 39,
-      backgroundColor: theme.tileBackgroundColor || '#edf1f8',
+      backgroundColor: '#1a1a1a',
       borderWidth: 2,
-      borderColor: theme.tintColor || theme.tileBorderColor,
+      borderColor: 'rgba(229, 57, 53, 0.45)',
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: 12,
     },
     emptyTitle: {
-      color: theme.textColor,
+      color: '#ffffff',
       fontFamily: 'Geist-Bold',
       fontSize: 22,
       marginBottom: 6,
     },
     emptySub: {
-      color: theme.mutedForegroundColor,
+      color: '#a8a8a8',
       fontFamily: 'Geist-Regular',
       fontSize: 13,
       textAlign: 'center',

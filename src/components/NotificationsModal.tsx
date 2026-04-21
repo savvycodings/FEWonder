@@ -1,5 +1,5 @@
 import { memo, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, { clamp, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
@@ -13,7 +13,19 @@ export type NotificationItem = {
   type: 'special' | 'reminder' | 'message'
   route: string
   params?: any
+  /** When false, row cannot be swiped away (stub / framework rows). */
+  dismissable?: boolean
 }
+
+/** Same lime as home/search price pills — left “rail” on notification tiles. */
+const NOTIFICATION_RAIL_ACCENT = '#CBFF00'
+
+/** Feather icons are stroke-based; white reads as a light “outline” on dark rows. */
+const NOTIFICATION_ICON_COLOR = '#ffffff'
+const NOTIFICATION_ICON_SIZE = 23
+
+/** Registered in `App.tsx` via `@expo-google-fonts/montserrat` (matches home hero). */
+const NOTIFICATIONS_TITLE_FONT = 'Montserrat_700Bold' as const
 
 /** Demo deep-link product; shape matches Product screen + cart/saved keys. */
 const vaultPopProduct = {
@@ -30,20 +42,23 @@ function SwipeNotificationRow({
   item,
   theme,
   rowStyles,
+  swipeClampPx,
   onOpenById,
   onDismissById,
 }: {
   item: NotificationItem
   theme: any
   rowStyles: ReturnType<typeof getNotificationStyles>
+  /** Max horizontal drag from center; derived from layout math (no per-frame onLayout). */
+  swipeClampPx: number
   onOpenById: (id: string) => void
   onDismissById: (id: string) => void
 }) {
   const translateX = useSharedValue(0)
   const rowOpacity = useSharedValue(1)
-  const rowWidth = useSharedValue(280)
   const startX = useSharedValue(0)
   const notificationId = item.id
+  const dismissable = item.dismissable !== false
 
   const fireDismiss = useCallback(() => {
     onDismissById(notificationId)
@@ -53,14 +68,24 @@ function SwipeNotificationRow({
     onOpenById(notificationId)
   }, [onOpenById, notificationId])
 
-  const pan = useMemo(
-    () =>
+  const gesture = useMemo(() => {
+    if (!dismissable) {
+      return Gesture.Tap().onEnd((_e, success) => {
+        if (success) {
+          runOnJS(openJs)()
+        }
+      })
+    }
+    return (
       Gesture.Pan()
+        // Prefer horizontal intent early so parent Pressables / slow drags stay on the UI thread.
+        .activeOffsetX([-12, 12])
+        .failOffsetY([-20, 20])
         .onBegin(() => {
           startX.value = translateX.value
         })
         .onUpdate((e) => {
-          const max = Math.max(120, rowWidth.value)
+          const max = Math.max(120, swipeClampPx)
           translateX.value = clamp(startX.value + e.translationX, -max, max)
         })
         .onEnd((e) => {
@@ -70,7 +95,7 @@ function SwipeNotificationRow({
           const dismiss = Math.abs(tx) > threshold || (v > 520 && Math.abs(tx) > 28)
           if (dismiss) {
             const dir = tx >= 0 ? 1 : -1
-            const travel = Math.max(240, rowWidth.value + 28)
+            const travel = Math.max(240, swipeClampPx + 28)
             translateX.value = withTiming(dir * travel, { duration: 160 })
             rowOpacity.value = withTiming(0, { duration: 160 }, (finished) => {
               if (finished) runOnJS(fireDismiss)()
@@ -87,53 +112,43 @@ function SwipeNotificationRow({
               runOnJS(openJs)()
             }
           }
-        }),
-    [fireDismiss, notificationId, openJs]
-  )
+        })
+    )
+  }, [dismissable, fireDismiss, openJs, swipeClampPx])
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
     opacity: rowOpacity.value,
   }))
 
-  const notificationTypeStyle =
-    item.type === 'special'
-      ? rowStyles.notificationItemTypeSpecial
-      : item.type === 'message'
-        ? rowStyles.notificationItemTypeMessage
-        : rowStyles.notificationItemTypeReminder
-  const notificationRowStyle =
-    item.type === 'special'
-      ? rowStyles.notificationItemSpecial
-      : item.type === 'message'
-        ? rowStyles.notificationItemMessage
-        : rowStyles.notificationItemReminder
-
   return (
-    <GestureDetector gesture={pan}>
-      <Animated.View
-        onLayout={(ev) => {
-          rowWidth.value = ev.nativeEvent.layout.width
-        }}
-        style={animStyle}
-      >
-        <View style={[rowStyles.notificationItem, notificationRowStyle]}>
-          <View style={rowStyles.notificationItemHeader}>
-            <View style={rowStyles.notificationItemMeta}>
-              <View style={[rowStyles.notificationItemType, notificationTypeStyle]}>
-                {item.type === 'special' ? (
-                  <Text style={rowStyles.notificationEmojiFire}>🔥</Text>
-                ) : item.type === 'message' ? (
-                  <FeatherIcon name="message-circle" size={16} color={theme.secondaryTextColor} />
-                ) : (
-                  <FeatherIcon name="bell" size={16} color={theme.secondaryTextColor} />
-                )}
-              </View>
-              <Text style={rowStyles.notificationItemTitle}>{item.title}</Text>
+    <GestureDetector gesture={gesture}>
+      <Animated.View style={animStyle}>
+        <View style={rowStyles.notificationItem}>
+          <View style={rowStyles.notificationItemRow}>
+            <View style={rowStyles.notificationItemType}>
+              {item.type === 'special' ? (
+                <Text style={rowStyles.notificationEmojiFire}>🔥</Text>
+              ) : item.type === 'message' ? (
+                <FeatherIcon
+                  name="message-circle"
+                  size={NOTIFICATION_ICON_SIZE}
+                  color={NOTIFICATION_ICON_COLOR}
+                />
+              ) : (
+                <FeatherIcon name="bell" size={NOTIFICATION_ICON_SIZE} color={NOTIFICATION_ICON_COLOR} />
+              )}
             </View>
-            <Text style={rowStyles.notificationItemTime}>{item.time}</Text>
+            <View style={rowStyles.notificationItemBody}>
+              <View style={rowStyles.notificationItemTitleRow}>
+                <Text style={rowStyles.notificationItemTitle} numberOfLines={2}>
+                  {item.title}
+                </Text>
+                <Text style={rowStyles.notificationItemTime}>{item.time}</Text>
+              </View>
+              <Text style={rowStyles.notificationItemText}>{item.text}</Text>
+            </View>
           </View>
-          <Text style={rowStyles.notificationItemText}>{item.text}</Text>
         </View>
       </Animated.View>
     </GestureDetector>
@@ -147,6 +162,8 @@ const MemoSwipeNotificationRow = memo(SwipeNotificationRow, (a, b) => {
     a.item.text === b.item.text &&
     a.item.time === b.item.time &&
     a.item.type === b.item.type &&
+    a.item.dismissable === b.item.dismissable &&
+    a.swipeClampPx === b.swipeClampPx &&
     a.onDismissById === b.onDismissById &&
     a.onOpenById === b.onOpenById &&
     a.theme === b.theme &&
@@ -168,10 +185,26 @@ export function NotificationsModal({
   sessionToken,
 }: NotificationsModalProps) {
   const { theme } = useContext(ThemeContext)
+  const { width: windowWidth } = useWindowDimensions()
   const rowStyles = useMemo(() => getNotificationStyles(theme), [theme])
+
+  /** Card max 420 + horizontal padding; avoids onLayout on every row during swipe. */
+  const swipeClampPx = useMemo(() => {
+    const cardOuter = Math.min(420, windowWidth - 44)
+    return Math.max(120, cardOuter - 28)
+  }, [windowWidth])
 
   const baseNotifications = useMemo<NotificationItem[]>(
     () => [
+      {
+        id: 'n-chats-community',
+        title: 'New chats',
+        text: 'You have new messages in Wonderport Community.',
+        time: 'Now',
+        type: 'message',
+        route: 'Chat',
+        params: undefined,
+      },
       {
         id: 'n1',
         title: 'Weekend Special',
@@ -254,8 +287,9 @@ export function NotificationsModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <GestureHandlerRootView style={rowStyles.modalGestureRoot}>
-        <Pressable style={rowStyles.notificationsBackdrop} onPress={onClose}>
-          <Pressable style={rowStyles.notificationsCard} onPress={() => {}}>
+        <View style={rowStyles.notificationsBackdrop}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} accessibilityRole="button" />
+          <View style={rowStyles.notificationsCard}>
             <View style={rowStyles.notificationsHeader}>
               <Text style={rowStyles.notificationsTitle}>Notifications</Text>
               <Pressable
@@ -281,21 +315,21 @@ export function NotificationsModal({
                     item={item}
                     theme={theme}
                     rowStyles={rowStyles}
+                    swipeClampPx={swipeClampPx}
                     onOpenById={openById}
                     onDismissById={dismissNotificationById}
                   />
                 ))}
               </View>
             )}
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </GestureHandlerRootView>
     </Modal>
   )
 }
 
 function getNotificationStyles(theme: any) {
-  const railDefault = theme.contentAccentBorderColor || theme.tintColor || theme.tileBorderColor
   return StyleSheet.create({
     modalGestureRoot: {
       flex: 1,
@@ -308,6 +342,8 @@ function getNotificationStyles(theme: any) {
       paddingHorizontal: 22,
     },
     notificationsCard: {
+      zIndex: 1,
+      elevation: 6,
       width: '100%',
       maxWidth: 420,
       minHeight: 360,
@@ -331,8 +367,10 @@ function getNotificationStyles(theme: any) {
     },
     notificationsTitle: {
       color: theme.textColor,
-      fontFamily: theme.boldFont,
+      fontFamily: NOTIFICATIONS_TITLE_FONT,
       fontSize: 18,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
     },
     notificationsClose: {
       width: 30,
@@ -360,63 +398,49 @@ function getNotificationStyles(theme: any) {
       borderWidth: 1,
       borderColor: theme.tileBorderColor || 'rgba(0,0,0,0.18)',
       borderLeftWidth: 4,
-      borderLeftColor: railDefault,
+      borderLeftColor: NOTIFICATION_RAIL_ACCENT,
       backgroundColor: theme.sheetRowBackgroundColor || theme.tileBackgroundColor || '#ffffff',
       paddingHorizontal: 10,
       paddingVertical: 9,
     },
-    notificationItemSpecial: {
-      borderLeftColor: theme.tileActiveBackgroundColor || theme.tintColor || railDefault,
-    },
-    notificationItemMessage: {
-      borderLeftColor: theme.contentAccentBorderColor || theme.tintColor || railDefault,
-    },
-    notificationItemReminder: {
-      borderLeftColor: theme.contentAccentBorderColor || theme.tintColor || railDefault,
-    },
-    notificationItemHeader: {
+    notificationItemRow: {
       flexDirection: 'row',
       alignItems: 'center',
+    },
+    notificationItemBody: {
+      flex: 1,
+      minWidth: 0,
+    },
+    notificationItemTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
       justifyContent: 'space-between',
+      gap: 8,
       marginBottom: 4,
     },
-    notificationItemMeta: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 7,
-      flexShrink: 1,
-    },
     notificationItemType: {
-      width: 20,
-      height: 20,
-      borderRadius: 10,
       alignItems: 'center',
       justifyContent: 'center',
-      marginRight: 1,
-    },
-    notificationItemTypeSpecial: {
-      backgroundColor: theme.tileActiveBackgroundColor || '#ff00ff',
-    },
-    notificationItemTypeMessage: {
-      backgroundColor: theme.tintColor || theme.tileBackgroundColor,
-    },
-    notificationItemTypeReminder: {
-      backgroundColor: theme.tintColor || theme.tileBackgroundColor,
+      marginRight: 10,
+      minWidth: 30,
     },
     notificationEmojiFire: {
-      fontSize: 18,
-      lineHeight: 18,
+      fontSize: 22,
+      lineHeight: 24,
     },
     notificationItemTitle: {
+      flex: 1,
       color: theme.textColor,
-      fontFamily: theme.boldFont,
+      fontFamily: NOTIFICATIONS_TITLE_FONT,
       fontSize: 13,
+      textTransform: 'uppercase',
+      letterSpacing: 0.4,
     },
     notificationItemTime: {
       color: theme.mutedForegroundColor,
       fontFamily: theme.mediumFont,
       fontSize: 11,
-      marginLeft: 8,
+      flexShrink: 0,
     },
     notificationItemText: {
       color: theme.textColor,

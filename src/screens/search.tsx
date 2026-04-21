@@ -21,6 +21,10 @@ import { formatMoney } from '../money'
 
 const GRID_GAP = 12
 
+/** Match home.tsx price pills: lime fill + black label */
+const HOME_ACCENT_BG = '#CBFF00'
+const HOME_ACCENT_TEXT = '#000000'
+
 function getImageSource(item: ShopifyProduct): ImageSourcePropType | undefined {
   if (item?.featuredImageUrl) return { uri: item.featuredImageUrl }
   return (item as { image?: ImageSourcePropType }).image
@@ -225,9 +229,6 @@ export function Search({
                 )}
               </AvatarFrameWrapper>
             </TouchableOpacity>
-            <View style={styles.notifyButton}>
-              <FeatherIcon name="bell" size={14} color="#f4d26f" />
-            </View>
           </View>
 
           <Text style={styles.greeting}>Hello, {user?.fullName || 'there'}!</Text>
@@ -392,14 +393,14 @@ function getProductGridStyles(theme: any) {
       lineHeight: 18,
     },
     pricePill: {
-      backgroundColor: theme.priceBadgeBackgroundColor || theme.tileActiveBackgroundColor || '#111',
+      backgroundColor: HOME_ACCENT_BG,
       borderRadius: 999,
       paddingVertical: 7,
       paddingHorizontal: 12,
       flexShrink: 0,
     },
     pricePillText: {
-      color: theme.priceBadgeTextColor || theme.tileActiveTextColor || '#fff',
+      color: HOME_ACCENT_TEXT,
       fontFamily: theme.boldFont,
       fontSize: 13,
       lineHeight: 16,
@@ -429,7 +430,7 @@ const styles = StyleSheet.create({
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginBottom: 14,
   },
   headerIconButton: {
@@ -459,14 +460,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontFamily: 'Geist-Bold',
     fontSize: 12,
-  },
-  notifyButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   greeting: {
     color: '#ffffff',

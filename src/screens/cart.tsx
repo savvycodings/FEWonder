@@ -39,13 +39,13 @@ export function Cart({ navigation }: any) {
               accessibilityLabel="Go back"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <FeatherIcon name="arrow-left" size={20} color="#5f6780" />
+              <FeatherIcon name="arrow-left" size={20} color="#ffffff" />
             </Pressable>
           </View>
         </SafeAreaView>
         <View style={styles.emptyBody}>
           <View style={styles.emptyIconWrap}>
-            <FeatherIcon name="shopping-cart" size={30} color="#7f89a5" />
+            <FeatherIcon name="shopping-cart" size={30} color="#ffffff" />
           </View>
           <Text style={styles.emptyTitle}>Your cart is empty</Text>
           <Text style={styles.emptySub}>Add products from Home, Search, or Product page.</Text>
@@ -67,7 +67,7 @@ export function Cart({ navigation }: any) {
                 accessibilityLabel="Go back"
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <FeatherIcon name="arrow-left" size={20} color="#5f6780" />
+                <FeatherIcon name="arrow-left" size={20} color="#ffffff" />
               </Pressable>
               <Text style={styles.title}>Shopping Cart</Text>
             </View>
@@ -87,7 +87,7 @@ export function Cart({ navigation }: any) {
         return (
         <View key={item.title} style={styles.itemCard}>
           <Pressable style={styles.removeButton} onPress={() => removeFromCart(item.title)}>
-            <FeatherIcon name="x" size={14} color="#8f97ad" />
+            <FeatherIcon name="x" size={14} color="#a8a8a8" />
           </Pressable>
           <View style={styles.imageWrap}>
             {thumb ? (
@@ -108,14 +108,14 @@ export function Cart({ navigation }: any) {
                 style={styles.qtyButton}
                 onPress={() => updateCartItemQuantity(item.title, Math.max(1, item.quantity - 1))}
               >
-                <FeatherIcon name="minus" size={14} color="#2a335f" />
+                <FeatherIcon name="minus" size={14} color="#ffffff" />
               </Pressable>
               <Text style={styles.qtyValue}>{item.quantity}</Text>
               <Pressable
                 style={styles.qtyButton}
                 onPress={() => updateCartItemQuantity(item.title, item.quantity + 1)}
               >
-                <FeatherIcon name="plus" size={14} color="#2a335f" />
+                <FeatherIcon name="plus" size={14} color="#ffffff" />
               </Pressable>
             </View>
           </View>
@@ -149,10 +149,10 @@ export function Cart({ navigation }: any) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f7f8fb',
+    backgroundColor: '#000000',
   },
   safeTop: {
-    backgroundColor: '#f7f8fb',
+    backgroundColor: '#000000',
   },
   topNavRow: {
     paddingHorizontal: 16,
@@ -160,6 +160,7 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flex: 1,
+    backgroundColor: '#000000',
   },
   content: {
     padding: 16,
@@ -181,12 +182,12 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#eef2f9',
+    backgroundColor: '#2a2a2a',
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
-    color: '#243056',
+    color: '#ffffff',
     fontFamily: 'Geist-Bold',
     fontSize: 22,
   },
@@ -196,7 +197,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   itemCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#1a1a1a',
     borderRadius: 16,
     padding: 12,
     marginBottom: 10,
@@ -211,7 +212,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#f2f5fb',
+    backgroundColor: '#2a2a2a',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
@@ -220,7 +221,7 @@ const styles = StyleSheet.create({
     width: 78,
     height: 78,
     borderRadius: 12,
-    backgroundColor: '#eff3fa',
+    backgroundColor: '#2a2a2a',
     overflow: 'hidden',
     position: 'relative',
   },
@@ -228,10 +229,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#e4eaf5',
+    backgroundColor: '#2a2a2a',
   },
   imagePlaceholderText: {
-    color: '#8f97ad',
+    color: '#a8a8a8',
     fontFamily: 'Geist-Bold',
     fontSize: 22,
   },
@@ -241,7 +242,7 @@ const styles = StyleSheet.create({
     paddingRight: 28,
   },
   itemTitle: {
-    color: '#2a3359',
+    color: '#ffffff',
     fontFamily: 'Geist-SemiBold',
     fontSize: 15,
     marginBottom: 4,
@@ -261,19 +262,19 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#edf1f9',
+    backgroundColor: '#2a2a2a',
     alignItems: 'center',
     justifyContent: 'center',
   },
   qtyValue: {
     minWidth: 24,
     textAlign: 'center',
-    color: '#2a3359',
+    color: '#ffffff',
     fontFamily: 'Geist-Bold',
     fontSize: 14,
   },
   summaryCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#1a1a1a',
     borderRadius: 16,
     padding: 14,
     marginTop: 8,
@@ -285,45 +286,45 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   summaryLabel: {
-    color: '#8b94aa',
+    color: '#a8a8a8',
     fontFamily: 'Geist-Regular',
     fontSize: 13,
   },
   summaryValue: {
-    color: '#2a3359',
+    color: '#ffffff',
     fontFamily: 'Geist-SemiBold',
     fontSize: 13,
   },
   summaryDivider: {
     height: 1,
-    backgroundColor: '#edf1f8',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     marginVertical: 6,
   },
   totalLabel: {
-    color: '#243056',
+    color: '#ffffff',
     fontFamily: 'Geist-Bold',
     fontSize: 16,
   },
   totalValue: {
-    color: '#243056',
+    color: '#ffffff',
     fontFamily: 'Geist-Bold',
     fontSize: 18,
   },
   checkoutButton: {
     marginTop: 10,
-    backgroundColor: '#2a335f',
+    backgroundColor: '#ffffff',
     borderRadius: 999,
     paddingVertical: 12,
     alignItems: 'center',
   },
   checkoutText: {
-    color: '#ffffff',
+    color: '#000000',
     fontFamily: 'Geist-SemiBold',
     fontSize: 14,
   },
   emptyWrap: {
     flex: 1,
-    backgroundColor: '#f7f8fb',
+    backgroundColor: '#000000',
   },
   emptyBody: {
     flex: 1,
@@ -335,19 +336,19 @@ const styles = StyleSheet.create({
     width: 78,
     height: 78,
     borderRadius: 39,
-    backgroundColor: '#edf1f8',
+    backgroundColor: '#1a1a1a',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
   },
   emptyTitle: {
-    color: '#2a3359',
+    color: '#ffffff',
     fontFamily: 'Geist-Bold',
     fontSize: 22,
     marginBottom: 6,
   },
   emptySub: {
-    color: '#8b94aa',
+    color: '#a8a8a8',
     fontFamily: 'Geist-Regular',
     fontSize: 13,
     textAlign: 'center',

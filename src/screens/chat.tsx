@@ -16,7 +16,7 @@ import {
 } from 'react-native'
 import EventSource from 'react-native-sse'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { useFocusEffect, useNavigation } from '@react-navigation/native'
+import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native'
 import { ThemeContext } from '../context'
 import { CommunityMessage, User } from '../../types'
 import { DOMAIN } from '../../constants'
@@ -84,6 +84,16 @@ const CHAT_LIFT_TIMING = {
 /** Delay before the hero banner swipes up off-screen after opening Chat; dismiss animation duration. */
 const HERO_DISMISS_DELAY_MS = 3000
 const HERO_DISMISS_DURATION_MS = 580
+
+/**
+ * Composer link menu — same family as the attach chip (`#3a3a3a`). Dark surfaces use light
+ * foreground text (contrast + common UI pattern); off-white reads softer than pure #fff.
+ */
+const COMPOSER_MENU_BG = '#3a3a3a'
+const COMPOSER_MENU_OUTLINE = 'rgba(255,255,255,0.14)'
+const COMPOSER_MENU_SEPARATOR = 'rgba(255,255,255,0.12)'
+const COMPOSER_MENU_TEXT = 'rgba(255,255,255,0.94)'
+const COMPOSER_MENU_WIDTH = 178
 
 /** Periodic fetch when Chat is focused — light catch-up if SSE misses an event (e.g. background). */
 const COMMUNITY_POLL_MS = 10_000
@@ -168,6 +178,7 @@ export function Chat({
 }) {
   const { theme } = useContext(ThemeContext)
   const navigation = useNavigation<any>()
+  const isFocused = useIsFocused()
   const insets = useSafeAreaInsets()
   const { width: windowWidth } = useWindowDimensions()
   const styles = useMemo(() => getStyles(theme, insets), [theme, insets])
@@ -521,30 +532,52 @@ export function Chat({
     [heroLayoutHeight]
   )
 
+  const heroDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useFocusEffect(
     useCallback(() => {
       cancelAnimation(heroTranslateY)
       heroTranslateY.value = 0
 
-      const timer = setTimeout(() => {
-        runOnUI(() => {
-          'worklet'
-          const H = heroLayoutHeight.value
-          if (H <= 1) return
-          heroTranslateY.value = withTiming(-H, {
-            duration: HERO_DISMISS_DURATION_MS,
-            easing: Easing.out(Easing.cubic),
-          })
-        })()
-      }, HERO_DISMISS_DELAY_MS)
-
       return () => {
-        clearTimeout(timer)
+        if (heroDismissTimerRef.current) {
+          clearTimeout(heroDismissTimerRef.current)
+          heroDismissTimerRef.current = null
+        }
         cancelAnimation(heroTranslateY)
         heroTranslateY.value = 0
       }
     }, [])
   )
+
+  /** Start the 3s dismiss countdown only after initial messages have finished loading (smoother first paint). */
+  useEffect(() => {
+    if (!isFocused || loading) {
+      if (heroDismissTimerRef.current) {
+        clearTimeout(heroDismissTimerRef.current)
+        heroDismissTimerRef.current = null
+      }
+      return
+    }
+    heroDismissTimerRef.current = setTimeout(() => {
+      heroDismissTimerRef.current = null
+      runOnUI(() => {
+        'worklet'
+        const H = heroLayoutHeight.value
+        if (H <= 1) return
+        heroTranslateY.value = withTiming(-H, {
+          duration: HERO_DISMISS_DURATION_MS,
+          easing: Easing.out(Easing.cubic),
+        })
+      })()
+    }, HERO_DISMISS_DELAY_MS)
+    return () => {
+      if (heroDismissTimerRef.current) {
+        clearTimeout(heroDismissTimerRef.current)
+        heroDismissTimerRef.current = null
+      }
+    }
+  }, [isFocused, loading])
 
   const heroOverlayAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: heroTranslateY.value }],
@@ -801,13 +834,25 @@ export function Chat({
           <Pressable style={styles.menuDismissOverlay} onPress={() => setShowComposerMenu(false)} />
           <View style={[styles.menuAnchorWrap, { bottom: menuAnchorBottom }]}>
             <View style={styles.menuCard}>
-              <Pressable style={styles.menuRow} onPress={() => handleComposerOption('image')}>
+              <Pressable
+                android_ripple={{ color: 'rgba(255,255,255,0.12)' }}
+                style={styles.menuRow}
+                onPress={() => handleComposerOption('image')}
+              >
                 <Text style={styles.menuText}>Add image</Text>
               </Pressable>
-              <Pressable style={styles.menuRow} onPress={() => handleComposerOption('reference')}>
+              <Pressable
+                android_ripple={{ color: 'rgba(255,255,255,0.12)' }}
+                style={styles.menuRow}
+                onPress={() => handleComposerOption('reference')}
+              >
                 <Text style={styles.menuText}>Reference product</Text>
               </Pressable>
-              <Pressable style={[styles.menuRow, styles.menuRowLast]} onPress={() => handleComposerOption('report')}>
+              <Pressable
+                android_ripple={{ color: 'rgba(255,255,255,0.12)' }}
+                style={[styles.menuRow, styles.menuRowLast]}
+                onPress={() => handleComposerOption('report')}
+              >
                 <Text style={styles.menuText}>Report message</Text>
               </Pressable>
             </View>
@@ -1184,7 +1229,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     menuAnchorWrap: {
       position: 'absolute',
       left: 12,
-      width: 210,
+      width: COMPOSER_MENU_WIDTH,
       zIndex: 4,
     },
     menuDismissOverlay: {
@@ -1192,10 +1237,10 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       zIndex: 3,
     },
     menuCard: {
-      backgroundColor: '#ffffff',
+      backgroundColor: COMPOSER_MENU_BG,
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: '#e1e7f2',
+      borderColor: COMPOSER_MENU_OUTLINE,
       overflow: 'hidden',
     },
     menuRow: {
@@ -1203,16 +1248,18 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       paddingHorizontal: 14,
       alignItems: 'flex-start',
       justifyContent: 'center',
+      backgroundColor: COMPOSER_MENU_BG,
       borderBottomWidth: 1,
-      borderBottomColor: '#edf1f8',
+      borderBottomColor: COMPOSER_MENU_SEPARATOR,
     },
     menuRowLast: {
       borderBottomWidth: 0,
     },
     menuText: {
-      color: '#243056',
+      color: COMPOSER_MENU_TEXT,
       fontFamily: theme.semiBoldFont,
-      fontSize: 14,
+      fontSize: 15,
+      lineHeight: 19,
     },
     input: {
       flex: 1,
