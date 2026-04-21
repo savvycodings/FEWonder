@@ -253,3 +253,32 @@ export async function fetchAdminOrderDetail(orderId: string) {
     paymentEvents: unknown[]
   }>
 }
+
+export async function acceptAdminEftPayment(orderId: string) {
+  return adminFetch(`/admin/orders/${encodeURIComponent(orderId)}/accept-eft`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }) as Promise<{
+    ok: boolean
+    alreadyPaid?: boolean
+    status?: string
+    message?: string
+  }>
+}
+
+/** Paid order only: ask ShipLogic to create shipment / waybill (Pudo or door). */
+export async function adminBookCourier(orderId: string) {
+  return adminFetch(`/admin/orders/${encodeURIComponent(orderId)}/book-courier`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }) as Promise<{
+    ok: boolean
+    alreadyBooked?: boolean
+    message?: string
+    tcgShipmentId?: string | null
+    tcgShortTrackingReference?: string | null
+    tcgCustomTrackingReference?: string | null
+    tcgShipmentStatus?: string | null
+    tcgLastError?: string | null
+  }>
+}
