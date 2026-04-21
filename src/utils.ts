@@ -90,8 +90,15 @@ export async function registerUser(payload: {
   fullName: string
   email: string
   password: string
+  phone: string
   shippingAddress?: string
-  paymentMethod?: string
+  shippingAddressLine2?: string
+  pudoLockerName?: string
+  pudoLockerAddress?: string
+  eftBankAccountName?: string
+  eftBankName?: string
+  eftBankAccountNumber?: string
+  eftBankBranch?: string
 }): Promise<AuthPayload> {
   const registerUrl = `${DOMAIN}/auth/register`
   console.log('[auth/register] starting request', {
@@ -149,6 +156,21 @@ export async function registerUser(payload: {
     user: data.user as User,
     sessionToken: String(data.sessionToken || ''),
   }
+}
+
+/** Refreshes the current user from the server (includes phone, delivery fields, etc.). */
+export async function fetchSessionUser(sessionToken: string): Promise<User> {
+  if (!DOMAIN) {
+    throw new Error('API domain is not configured. Set EXPO_PUBLIC_DEV_API_URL.')
+  }
+  const response = await fetch(`${DOMAIN}/auth/me`, {
+    headers: { Authorization: `Bearer ${sessionToken}` },
+  })
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to load profile')
+  }
+  return data.user as User
 }
 
 export async function loginUser(payload: {
@@ -271,19 +293,36 @@ export async function logoutUser(sessionToken: string): Promise<void> {
 
 export async function updateProfileDetails(payload: {
   sessionToken: string
-  shippingAddress: string
-  paymentMethod: string
+  shippingAddress?: string
+  shippingAddressLine2?: string
+  phone?: string
+  pudoLockerName?: string
+  pudoLockerAddress?: string
+  eftBankAccountName?: string
+  eftBankName?: string
+  eftBankAccountNumber?: string
+  eftBankBranch?: string
+  /** Legacy UI field; server ignores if not mapped. */
+  paymentMethod?: string
 }): Promise<User> {
+  const body: Record<string, string> = {}
+  if (payload.shippingAddress !== undefined) body.shippingAddress = payload.shippingAddress
+  if (payload.shippingAddressLine2 !== undefined) body.shippingAddressLine2 = payload.shippingAddressLine2
+  if (payload.phone !== undefined) body.phone = payload.phone
+  if (payload.pudoLockerName !== undefined) body.pudoLockerName = payload.pudoLockerName
+  if (payload.pudoLockerAddress !== undefined) body.pudoLockerAddress = payload.pudoLockerAddress
+  if (payload.eftBankAccountName !== undefined) body.eftBankAccountName = payload.eftBankAccountName
+  if (payload.eftBankName !== undefined) body.eftBankName = payload.eftBankName
+  if (payload.eftBankAccountNumber !== undefined) body.eftBankAccountNumber = payload.eftBankAccountNumber
+  if (payload.eftBankBranch !== undefined) body.eftBankBranch = payload.eftBankBranch
+
   const response = await fetch(`${DOMAIN}/auth/profile-details`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${payload.sessionToken}`,
     },
-    body: JSON.stringify({
-      shippingAddress: payload.shippingAddress,
-      paymentMethod: payload.paymentMethod,
-    }),
+    body: JSON.stringify(body),
   })
 
   const data = await response.json()

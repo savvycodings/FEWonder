@@ -59,8 +59,21 @@ export function MyOrderDetail({ route }: any) {
               <Text style={styles.total}>
                 {(o.totalCents / 100).toFixed(2)} {o.currencyCode}
               </Text>
+              {typeof o.subtotalCents === 'number' ? (
+                <Text style={styles.subMeta}>
+                  Incl. shipping {(o.shippingCents / 100).toFixed(2)} {o.currencyCode} (
+                  {o.deliveryMethod === 'pudo' ? 'Pudo' : 'Courier'})
+                </Text>
+              ) : null}
             </View>
           </WonderportAccentCard>
+          {o.contactEmail || o.contactPhone ? (
+            <>
+              <Text style={styles.section}>Contact on this order</Text>
+              {o.contactEmail ? <Text style={styles.body}>{o.contactEmail}</Text> : null}
+              {o.contactPhone ? <Text style={styles.body}>{o.contactPhone}</Text> : null}
+            </>
+          ) : null}
           <Text style={styles.section}>Shipping</Text>
           <Text style={styles.body}>{o.shippingSnapshot?.name}</Text>
           <Text style={styles.body}>{o.shippingSnapshot?.line1}</Text>
@@ -105,6 +118,12 @@ const getStyles = (theme: any) =>
     ref: { fontFamily: theme.boldFont, fontSize: 20, color: ACCENT, marginBottom: 6 },
     meta: { fontFamily: theme.mediumFont, fontSize: 13, color: 'rgba(203,255,0,0.8)', marginBottom: 8 },
     total: { fontFamily: theme.boldFont, fontSize: 18, color: ACCENT },
+    subMeta: {
+      marginTop: 8,
+      fontFamily: theme.mediumFont,
+      fontSize: 12,
+      color: 'rgba(203,255,0,0.75)',
+    },
     section: {
       fontFamily: theme.boldFont,
       fontSize: 14,

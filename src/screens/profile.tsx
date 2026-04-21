@@ -83,7 +83,6 @@ export function Profile({
   const [uploadError, setUploadError] = useState('')
   const [showDetailsModal, setShowDetailsModal] = useState(false)
   const [shippingInput, setShippingInput] = useState(user.shippingAddress?.trim() || '')
-  const [paymentInput, setPaymentInput] = useState(user.paymentMethod?.trim() || '')
   const [savingDetails, setSavingDetails] = useState(false)
   const [detailsError, setDetailsError] = useState('')
   const [showWalletModal, setShowWalletModal] = useState(false)
@@ -183,13 +182,13 @@ export function Profile({
     { label: 'Saved Items', key: 'saved', icon: 'heart' as const },
     { label: 'My orders', key: 'my_orders', icon: 'inbox' as const },
   ]
-  const shippingPaymentPreview = `${user.shippingAddress?.trim() || 'No address'}\n${user.paymentMethod?.trim() || 'No payment method'}`
+  const shippingPreview = user.shippingAddress?.trim() || 'No saved address'
   const accountDetails = [
     { label: 'Settings', key: 'settings', icon: 'sliders' as const, value: 'Theme & preferences' },
     {
-      label: 'Shipping & payment',
+      label: 'Shipping address',
       key: 'shipping_payment',
-      value: shippingPaymentPreview,
+      value: shippingPreview,
       icon: 'package' as const,
     },
   ]
@@ -210,7 +209,6 @@ export function Profile({
 
   function openShippingPaymentModal() {
     setShippingInput(user.shippingAddress?.trim() || '')
-    setPaymentInput(user.paymentMethod?.trim() || '')
     setDetailsError('')
     setShowDetailsModal(true)
   }
@@ -218,7 +216,6 @@ export function Profile({
   function closeShippingPaymentModal() {
     setShowDetailsModal(false)
     setShippingInput(user.shippingAddress?.trim() || '')
-    setPaymentInput(user.paymentMethod?.trim() || '')
     setDetailsError('')
   }
 
@@ -230,7 +227,6 @@ export function Profile({
       const updatedUser = await updateProfileDetails({
         sessionToken,
         shippingAddress: shippingInput.trim(),
-        paymentMethod: paymentInput.trim(),
       })
       await onUserUpdated(updatedUser)
       setShowDetailsModal(false)
@@ -439,9 +435,9 @@ export function Profile({
       <Modal visible={showDetailsModal} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, styles.shippingPaymentModalCard]}>
-            <Text style={styles.modalTitle}>Shipping & payment</Text>
+            <Text style={styles.modalTitle}>Shipping address</Text>
             <Text style={styles.modalSubtitle}>
-              Update where we ship orders and how you prefer to pay.
+              Saved to your profile for faster checkout. You can also enter a different address when you buy.
             </Text>
 
             <ScrollView
@@ -458,14 +454,6 @@ export function Profile({
                 placeholderTextColor={theme.placeholderTextColor}
                 multiline
                 textAlignVertical="top"
-              />
-              <Text style={[styles.modalFieldLabel, styles.modalFieldLabelSpaced]}>Payment method</Text>
-              <TextInput
-                value={paymentInput}
-                onChangeText={setPaymentInput}
-                placeholder="Card, bank transfer, wallet…"
-                style={styles.modalInput}
-                placeholderTextColor={theme.placeholderTextColor}
               />
             </ScrollView>
 

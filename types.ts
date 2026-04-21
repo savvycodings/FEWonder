@@ -24,6 +24,14 @@ export interface User {
   createdAt: string
   profilePicture?: string | null
   shippingAddress?: string | null
+  shippingAddressLine2?: string | null
+  phone?: string | null
+  pudoLockerName?: string | null
+  pudoLockerAddress?: string | null
+  eftBankAccountName?: string | null
+  eftBankName?: string | null
+  eftBankAccountNumber?: string | null
+  eftBankBranch?: string | null
   paymentMethod?: string | null
 }
 

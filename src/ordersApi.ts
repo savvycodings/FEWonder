@@ -93,10 +93,22 @@ export async function fetchEftInstructions() {
   }
 }
 
-export async function createOrder(body: {
+export type CreateOrderPayload = {
   paymentMethod: 'peach' | 'eft'
   items: { productId: string; quantity: number }[]
-}) {
+  deliveryMethod: 'pudo' | 'standard'
+  contactPhone: string
+  contactEmail?: string
+  shippingAddressFull?: string
+  shippingAddressLine2?: string
+  pudoLockerName?: string
+  pudoLockerAddress?: string
+  customerEftAccountName?: string
+  customerEftBankName?: string
+  customerEftAccountNumber?: string
+}
+
+export async function createOrder(body: CreateOrderPayload) {
   return userFetch('/orders', {
     method: 'POST',
     body: JSON.stringify(body),

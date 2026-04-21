@@ -21,6 +21,7 @@ import {
 import { StyleSheet, LogBox } from 'react-native'
 import { Platform } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
+import { KeyboardProvider } from 'react-native-keyboard-controller'
 
 LogBox.ignoreLogs([
   'Key "cancelled" in the image picker result is deprecated and will be removed in SDK 48, use "canceled" instead',
@@ -159,55 +160,57 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-      <AppContext.Provider
-        value={{
-          chatType,
-          setChatType: _setChatType,
-          handlePresentModalPress,
-          imageModel,
-          setImageModel: _setImageModel,
-          closeModal,
-          cartItems,
-          addToCart,
-          updateCartItemQuantity,
-          removeFromCart,
-          clearCart,
-          savedItems,
-          toggleSavedItem,
-          removeSavedItem,
-        }}
-      >
-        <ThemeContext.Provider value={{
-          theme: getTheme(theme),
-          themeName: theme,
-          setTheme: _setTheme
-          }}>
-          <ActionSheetProvider>
-            <NavigationContainer>
-              <Main />
-            </NavigationContainer>
-          </ActionSheetProvider>
-          <BottomSheetModalProvider>
-            <BottomSheetModal
-                handleIndicatorStyle={bottomSheetStyles.handleIndicator}
-                handleStyle={bottomSheetStyles.handle}
-                backgroundStyle={bottomSheetStyles.background}
-                ref={bottomSheetModalRef}
-                enableDynamicSizing={true}
-                backdropComponent={(props) => <BottomSheetBackdrop {...props}  disappearsOnIndex={-1}/>}
-                enableDismissOnClose
-                enablePanDownToClose
-                onDismiss={() => setModalVisible(false)}
-              >
-                <BottomSheetView>
-                  <ChatModelModal
-                    handlePresentModalPress={handlePresentModalPress}
-                  />
-                </BottomSheetView>
-              </BottomSheetModal>
-            </BottomSheetModalProvider>
-        </ThemeContext.Provider>
-      </AppContext.Provider>
+        <KeyboardProvider>
+          <AppContext.Provider
+            value={{
+              chatType,
+              setChatType: _setChatType,
+              handlePresentModalPress,
+              imageModel,
+              setImageModel: _setImageModel,
+              closeModal,
+              cartItems,
+              addToCart,
+              updateCartItemQuantity,
+              removeFromCart,
+              clearCart,
+              savedItems,
+              toggleSavedItem,
+              removeSavedItem,
+            }}
+          >
+            <ThemeContext.Provider
+              value={{
+                theme: getTheme(theme),
+                themeName: theme,
+                setTheme: _setTheme,
+              }}
+            >
+              <ActionSheetProvider>
+                <NavigationContainer>
+                  <Main />
+                </NavigationContainer>
+              </ActionSheetProvider>
+              <BottomSheetModalProvider>
+                <BottomSheetModal
+                  handleIndicatorStyle={bottomSheetStyles.handleIndicator}
+                  handleStyle={bottomSheetStyles.handle}
+                  backgroundStyle={bottomSheetStyles.background}
+                  ref={bottomSheetModalRef}
+                  enableDynamicSizing={true}
+                  backdropComponent={props => <BottomSheetBackdrop {...props} disappearsOnIndex={-1} />}
+                  enableDismissOnClose
+                  enablePanDownToClose
+                  onDismiss={() => setModalVisible(false)}
+                >
+                  <BottomSheetView>
+                    <ChatModelModal handlePresentModalPress={handlePresentModalPress} />
+                  </BottomSheetView>
+                </BottomSheetModal>
+              </BottomSheetModalProvider>
+            </ThemeContext.Provider>
+          </AppContext.Provider>
+        </KeyboardProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   )

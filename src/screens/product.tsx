@@ -1,4 +1,4 @@
-import { useContext, useMemo, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
   useWindowDimensions,
@@ -27,6 +28,7 @@ import {
   initPeachCheckout,
   uploadEftProof,
 } from '../ordersApi'
+import { fetchSessionUser } from '../utils'
 
 const CHECKOUT_ACCENT = '#CBFF00'
 const CHECKOUT_FILL = '#000000'
@@ -121,7 +123,65 @@ export function Product({ route, navigation }: any) {
   const [peachWidgetUrl, setPeachWidgetUrl] = useState<string | null>(null)
   const [eftUploadBusy, setEftUploadBusy] = useState(false)
 
-  async function startCheckout(method: 'eft' | 'peach') {
+  const [deliveryModalOpen, setDeliveryModalOpen] = useState(false)
+  const [deliveryMethod, setDeliveryMethod] = useState<'standard' | 'pudo'>('standard')
+  const [contactPhone, setContactPhone] = useState('')
+  const [contactEmail, setContactEmail] = useState('')
+  const [shippingFull, setShippingFull] = useState('')
+  const [shippingLine2, setShippingLine2] = useState('')
+  const [pudoName, setPudoName] = useState('')
+  const [pudoAddr, setPudoAddr] = useState('')
+  const [customerEftName, setCustomerEftName] = useState('')
+  const [customerEftBank, setCustomerEftBank] = useState('')
+  const [customerEftAcct, setCustomerEftAcct] = useState('')
+  const [checkoutFormError, setCheckoutFormError] = useState('')
+
+  useEffect(() => {
+    if (!deliveryModalOpen) return
+    let cancelled = false
+    ;(async () => {
+      const token = await getUserSessionToken()
+      if (!token || cancelled) return
+      try {
+        const u = await fetchSessionUser(token)
+        if (cancelled) return
+        setContactEmail(e => e || u.email || '')
+        setContactPhone(p => p || u.phone || '')
+        setShippingFull(s => s || u.shippingAddress || '')
+        setShippingLine2(s => s || u.shippingAddressLine2 || '')
+        setPudoName(n => n || u.pudoLockerName || '')
+        setPudoAddr(a => a || u.pudoLockerAddress || '')
+        setCustomerEftName(n => n || u.eftBankAccountName || '')
+        setCustomerEftBank(b => b || u.eftBankName || '')
+        setCustomerEftAcct(a => a || u.eftBankAccountNumber || '')
+      } catch {
+        /* ignore prefill errors */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [deliveryModalOpen])
+
+  function validateDeliveryCheckout(): string | null {
+    const phone = contactPhone.trim()
+    if (!phone || phone.replace(/\D/g, '').length < 9) {
+      return 'Enter a valid cellphone number for this order.'
+    }
+    const em = contactEmail.trim().toLowerCase()
+    if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      return 'Enter a valid email address for order updates.'
+    }
+    if (deliveryMethod === 'standard' && !shippingFull.trim()) {
+      return 'Enter your full shipping address for courier delivery (R150).'
+    }
+    if (deliveryMethod === 'pudo' && (!pudoName.trim() || !pudoAddr.trim())) {
+      return 'Enter Pudo locker name and address (R70).'
+    }
+    return null
+  }
+
+  async function runCheckout(method: 'eft' | 'peach') {
     if (!product?.id) {
       Alert.alert('Product', 'This listing cannot be ordered (missing id).')
       return
@@ -136,6 +196,16 @@ export function Product({ route, navigation }: any) {
       const created = await createOrder({
         paymentMethod: method,
         items: [{ productId: String(product.id), quantity }],
+        deliveryMethod,
+        contactPhone: contactPhone.trim(),
+        contactEmail: contactEmail.trim().toLowerCase(),
+        shippingAddressFull: deliveryMethod === 'standard' ? shippingFull.trim() : undefined,
+        shippingAddressLine2: deliveryMethod === 'standard' ? shippingLine2.trim() : undefined,
+        pudoLockerName: deliveryMethod === 'pudo' ? pudoName.trim() : undefined,
+        pudoLockerAddress: deliveryMethod === 'pudo' ? pudoAddr.trim() : undefined,
+        customerEftAccountName: customerEftName.trim() || undefined,
+        customerEftBankName: customerEftBank.trim() || undefined,
+        customerEftAccountNumber: customerEftAcct.trim() || undefined,
       })
       if (method === 'eft') {
         const bank = await fetchEftInstructions()
@@ -156,16 +226,40 @@ export function Product({ route, navigation }: any) {
     }
   }
 
+  function continueDeliveryThenPay() {
+    setCheckoutFormError('')
+    const err = validateDeliveryCheckout()
+    if (err) {
+      setCheckoutFormError(err)
+      return
+    }
+    setDeliveryModalOpen(false)
+    const shipNote =
+      deliveryMethod === 'pudo'
+        ? 'Pudo locker delivery includes R70.00 shipping in your total.'
+        : 'Standard shipping includes R150.00 in your total.'
+    Alert.alert('Payment method', `${shipNote}\nHow would you like to pay?`, [
+      { text: 'EFT (bank transfer)', onPress: () => runCheckout('eft') },
+      { text: 'Peach (card)', onPress: () => runCheckout('peach') },
+      { text: 'Cancel', style: 'cancel' },
+    ])
+  }
+
   function onBuyNowPress() {
     if (priceText === 'Price on request') {
       Alert.alert('Price', 'This item has no fixed price online. Contact support.')
       return
     }
-    Alert.alert('Payment method', 'How would you like to pay?', [
-      { text: 'EFT (bank transfer)', onPress: () => startCheckout('eft') },
-      { text: 'Peach (card)', onPress: () => startCheckout('peach') },
-      { text: 'Cancel', style: 'cancel' },
-    ])
+    const cur = String(product?.price?.currencyCode || '').trim().toUpperCase()
+    if (cur !== 'ZAR') {
+      Alert.alert(
+        'Checkout',
+        'South African shipping (Pudo R70 or standard R150) applies to ZAR-priced items only. This product is priced in another currency.',
+      )
+      return
+    }
+    setCheckoutFormError('')
+    setDeliveryModalOpen(true)
   }
 
   async function onPickEftProof() {
@@ -355,6 +449,150 @@ export function Product({ route, navigation }: any) {
           </TouchableOpacity>
         </View>
       </View>
+
+      <Modal visible={deliveryModalOpen} animationType="fade" transparent>
+        <View style={styles.deliveryBackdrop}>
+          <View style={styles.deliveryCard}>
+            <Text style={styles.deliveryTitle}>Delivery & contact</Text>
+            <Text style={styles.deliverySub}>
+              Choose delivery. Pudo R70 or standard courier R150 — included in your total (ZAR only).
+            </Text>
+            <View style={styles.deliveryChipsRow}>
+              <TouchableOpacity
+                style={[styles.deliveryChip, deliveryMethod === 'standard' ? styles.deliveryChipActive : null]}
+                onPress={() => setDeliveryMethod('standard')}
+                activeOpacity={0.9}
+              >
+                <Text
+                  style={[
+                    styles.deliveryChipText,
+                    deliveryMethod === 'standard' ? styles.deliveryChipTextActive : null,
+                  ]}
+                >
+                  Courier (R150)
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deliveryChip, deliveryMethod === 'pudo' ? styles.deliveryChipActive : null]}
+                onPress={() => setDeliveryMethod('pudo')}
+                activeOpacity={0.9}
+              >
+                <Text
+                  style={[styles.deliveryChipText, deliveryMethod === 'pudo' ? styles.deliveryChipTextActive : null]}
+                >
+                  Pudo (R70)
+                </Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              style={styles.deliveryScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.deliveryFieldLabel}>Email</Text>
+              <TextInput
+                value={contactEmail}
+                onChangeText={setContactEmail}
+                placeholder="you@example.com"
+                placeholderTextColor={theme.mutedForegroundColor}
+                style={styles.deliveryInput}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+              <Text style={styles.deliveryFieldLabel}>Cellphone</Text>
+              <TextInput
+                value={contactPhone}
+                onChangeText={setContactPhone}
+                placeholder="082 000 0000"
+                placeholderTextColor={theme.mutedForegroundColor}
+                style={styles.deliveryInput}
+                keyboardType="phone-pad"
+              />
+              {deliveryMethod === 'standard' ? (
+                <>
+                  <Text style={styles.deliveryFieldLabel}>Full shipping address</Text>
+                  <TextInput
+                    value={shippingFull}
+                    onChangeText={setShippingFull}
+                    placeholder="Street, building, unit"
+                    placeholderTextColor={theme.mutedForegroundColor}
+                    style={[styles.deliveryInput, styles.deliveryInputMultiline]}
+                    multiline
+                  />
+                  <Text style={styles.deliveryFieldLabel}>Suburb, city, postal (optional)</Text>
+                  <TextInput
+                    value={shippingLine2}
+                    onChangeText={setShippingLine2}
+                    placeholder="Line 2"
+                    placeholderTextColor={theme.mutedForegroundColor}
+                    style={styles.deliveryInput}
+                  />
+                </>
+              ) : (
+                <>
+                  <Text style={styles.deliveryFieldLabel}>Pudo locker name / code</Text>
+                  <TextInput
+                    value={pudoName}
+                    onChangeText={setPudoName}
+                    placeholder="Locker name"
+                    placeholderTextColor={theme.mutedForegroundColor}
+                    style={styles.deliveryInput}
+                  />
+                  <Text style={styles.deliveryFieldLabel}>Pudo locker address</Text>
+                  <TextInput
+                    value={pudoAddr}
+                    onChangeText={setPudoAddr}
+                    placeholder="Mall / location"
+                    placeholderTextColor={theme.mutedForegroundColor}
+                    style={[styles.deliveryInput, styles.deliveryInputMultiline]}
+                    multiline
+                  />
+                </>
+              )}
+              <Text style={styles.deliveryFieldLabel}>Your bank (optional, helps match EFT)</Text>
+              <TextInput
+                value={customerEftName}
+                onChangeText={setCustomerEftName}
+                placeholder="Account holder"
+                placeholderTextColor={theme.mutedForegroundColor}
+                style={styles.deliveryInput}
+              />
+              <TextInput
+                value={customerEftBank}
+                onChangeText={setCustomerEftBank}
+                placeholder="Bank name"
+                placeholderTextColor={theme.mutedForegroundColor}
+                style={styles.deliveryInput}
+              />
+              <TextInput
+                value={customerEftAcct}
+                onChangeText={setCustomerEftAcct}
+                placeholder="Account number"
+                placeholderTextColor={theme.mutedForegroundColor}
+                style={styles.deliveryInput}
+                keyboardType="number-pad"
+              />
+            </ScrollView>
+            {checkoutFormError ? <Text style={styles.deliveryError}>{checkoutFormError}</Text> : null}
+            <View style={styles.deliveryFooterRow}>
+              <TouchableOpacity
+                style={styles.deliveryCancelBtn}
+                onPress={() => setDeliveryModalOpen(false)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.deliveryCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deliveryContinueBtn}
+                onPress={continueDeliveryThenPay}
+                activeOpacity={0.9}
+              >
+                <Text style={styles.deliveryContinueText}>Continue to payment</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={eftModalOpen} animationType="slide" transparent>
         <View style={styles.checkoutBackdrop}>
@@ -729,6 +967,122 @@ const getStyles = (theme: any) => StyleSheet.create({
     color: HOME_ACCENT_TEXT,
     fontFamily: theme.semiBoldFont,
     fontSize: 13,
+  },
+  deliveryBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 24,
+  },
+  deliveryCard: {
+    borderRadius: 18,
+    padding: 16,
+    maxHeight: '92%',
+    backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || theme.borderColor,
+  },
+  deliveryTitle: {
+    fontFamily: theme.boldFont,
+    fontSize: 20,
+    color: theme.headingColor || theme.textColor,
+    marginBottom: 6,
+  },
+  deliverySub: {
+    fontFamily: theme.regularFont,
+    fontSize: 13,
+    color: theme.mutedForegroundColor,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  deliveryChipsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 10,
+  },
+  deliveryChip: {
+    flex: 1,
+    borderRadius: 999,
+    paddingVertical: 11,
+    alignItems: 'center',
+    backgroundColor: HOME_CHIP_FILL,
+    borderWidth: 1,
+    borderColor: 'rgba(203,255,0,0.3)',
+  },
+  deliveryChipActive: {
+    borderWidth: 2,
+    borderColor: HOME_ACCENT_BG,
+  },
+  deliveryChipText: {
+    fontFamily: theme.semiBoldFont,
+    fontSize: 12,
+    color: HOME_ACCENT_BG,
+    textAlign: 'center',
+  },
+  deliveryChipTextActive: {
+    fontFamily: theme.boldFont,
+  },
+  deliveryScroll: {
+    maxHeight: 360,
+    marginBottom: 8,
+  },
+  deliveryFieldLabel: {
+    fontFamily: theme.mediumFont,
+    fontSize: 12,
+    color: theme.mutedForegroundColor,
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  deliveryInput: {
+    borderWidth: 1,
+    borderColor: theme.borderColor,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontFamily: theme.mediumFont,
+    fontSize: 15,
+    color: theme.textColor,
+  },
+  deliveryInputMultiline: {
+    minHeight: 72,
+    textAlignVertical: 'top',
+  },
+  deliveryError: {
+    color: '#f87171',
+    fontFamily: theme.mediumFont,
+    fontSize: 13,
+    marginBottom: 8,
+  },
+  deliveryFooterRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  deliveryCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: theme.borderColor,
+  },
+  deliveryCancelText: {
+    fontFamily: theme.semiBoldFont,
+    fontSize: 14,
+    color: theme.textColor,
+  },
+  deliveryContinueBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: HOME_ACCENT_BG,
+  },
+  deliveryContinueText: {
+    fontFamily: theme.boldFont,
+    fontSize: 14,
+    color: HOME_ACCENT_TEXT,
   },
   checkoutBackdrop: {
     flex: 1,
