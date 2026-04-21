@@ -16,6 +16,7 @@ import {
   Chat,
   Settings,
   ProfileAccountSettings,
+  ProfileHeroEdit,
   RedeemCode,
   Login,
   DailyRewards,
@@ -25,6 +26,7 @@ import {
   AdminUserOrders,
   MyOrders,
   MyOrderDetail,
+  CommunityUserProfile,
 } from './screens'
 import { WonderJump } from './screens/wonderJump'
 import FeatherIcon from '@expo/vector-icons/Feather'
@@ -135,6 +137,22 @@ function ProfileStackScreen({
             onUserUpdated={onUserUpdated}
             sessionToken={sessionToken}
           />
+        )}
+      </ProfileStack.Screen>
+      <ProfileStack.Screen
+        name="ProfileHeroEdit"
+        options={{
+          headerShown: true,
+          headerTitle: 'Edit profile',
+          headerBackTitle: '',
+          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
+          headerTintColor: theme.textColor,
+          headerShadowVisible: false,
+        }}
+      >
+        {({ navigation }) => (
+          <ProfileHeroEdit navigation={navigation} user={user} sessionToken={sessionToken} />
         )}
       </ProfileStack.Screen>
       <ProfileStack.Screen name="Saved" component={Saved} />
@@ -523,6 +541,15 @@ export function Main() {
         </Stack.Screen>
       )}
       <Stack.Screen name="Product" component={Product} />
+      <Stack.Screen
+        name="CommunityUserProfile"
+        component={CommunityUserProfile}
+        options={{
+          headerShown: true,
+          headerBackTitle: '',
+          headerTitle: 'Member',
+        }}
+      />
       <Stack.Screen name="WonderJump" component={WonderJump} />
     </Stack.Navigator>
   )

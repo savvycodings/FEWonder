@@ -5,7 +5,6 @@ import { SvgUri } from 'react-native-svg'
 import { useFocusEffect } from '@react-navigation/native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { DailyRewardItem, DailyRewardStatus, User } from '../../types'
-import { DOMAIN } from '../../constants'
 import {
   claimDailyReward,
   getDailyRewardStatus,
@@ -22,6 +21,7 @@ import {
 } from '../components/AvatarFrame'
 import type { AvatarFrameId } from '../components/AvatarFrame'
 import { ThemeContext } from '../context'
+import { WonderSpinningCoin, WonderStaticCoin } from '../components'
 
 const weekDays = ['1', '2', '3', '4', '5', '6', '7']
 const weekRewards = [1, 2, 3, 4, 5, 6, 7]
@@ -35,64 +35,13 @@ const storeThemes = [
   { id: 'peach', name: 'Peach', cost: 4, image: require('../../public/homepageimgs/dailyrewards/theme5.png') },
   { id: 'forest', name: 'Forest', cost: 6, image: require('../../public/homepageimgs/dailyrewards/theme6.png') },
 ]
-/** Static coin in Wonder Store only (smooth UI; full face). */
-const WONDER_STORE_COIN_SVG = '/homepageimgs/Coinrotation/CoinFRONT.svg'
-
-const coinRotationFrameUris = [
-  '/homepageimgs/Coinrotation/CoinFRONT.svg',
-  '/homepageimgs/Coinrotation/Coin2.svg',
-  '/homepageimgs/Coinrotation/Coin3.svg',
-  '/homepageimgs/Coinrotation/Coin4.svg',
-  '/homepageimgs/Coinrotation/Coin5.svg',
-  '/homepageimgs/Coinrotation/Coin6.svg',
-  '/homepageimgs/Coinrotation/Coin7.svg',
-  '/homepageimgs/Coinrotation/Coin8.svg',
-  '/homepageimgs/Coinrotation/Coin9.svg',
-  '/homepageimgs/Coinrotation/Coin10.svg',
-  '/homepageimgs/Coinrotation/Coin11.svg',
-  '/homepageimgs/Coinrotation/Coin12.svg',
-  '/homepageimgs/Coinrotation/Coin13.svg',
-  '/homepageimgs/Coinrotation/Coin14.svg',
-  '/homepageimgs/Coinrotation/Coin15.svg',
-  '/homepageimgs/Coinrotation/Coin16.svg',
-  '/homepageimgs/Coinrotation/Coin17.svg',
-  '/homepageimgs/Coinrotation/Coin18.svg',
-  '/homepageimgs/Coinrotation/Coin19.svg',
-  '/homepageimgs/Coinrotation/Coin20.svg',
-  '/homepageimgs/Coinrotation/Coin21.svg',
-  '/homepageimgs/Coinrotation/Coin22.svg',
-  '/homepageimgs/Coinrotation/Coin23.svg',
-  '/homepageimgs/Coinrotation/Coin24.svg',
-  '/homepageimgs/Coinrotation/Coin25.svg',
-  '/homepageimgs/Coinrotation/Coin26.svg',
-  '/homepageimgs/Coinrotation/Coin27.svg',
-  '/homepageimgs/Coinrotation/Coin28.svg',
-  '/homepageimgs/Coinrotation/Coin29.svg',
-  '/homepageimgs/Coinrotation/Coin30.svg',
-  '/homepageimgs/Coinrotation/Coin31.svg',
-  '/homepageimgs/Coinrotation/Coin32.svg',
-]
-/** Keep SVG support ready for later; disabled for now per request. */
-const USE_COIN_SVG = false
-
-function resolvePublicAssetUri(path: string): string {
-  if (Platform.OS === 'web' || !DOMAIN) return path
-  return `${DOMAIN}${path}`
-}
-
 /** Isolated so Wonder Store doesn’t re-render on every spin frame. */
 function RewardCarouselSpinningCoin({ color }: { color: string }): ReactElement {
-  if (USE_COIN_SVG) {
-    return <SvgUri uri={resolvePublicAssetUri(coinRotationFrameUris[0])} width={72} height={72} />
-  }
-  return <FeatherIcon name="dollar-sign" size={50} color={color} />
+  return <WonderSpinningCoin size={72} fallbackColor={color} />
 }
 
 function RewardStaticCoin({ size = 20 }: { size?: number }): ReactElement {
-  if (USE_COIN_SVG) {
-    return <SvgUri uri={resolvePublicAssetUri(WONDER_STORE_COIN_SVG)} width={size} height={size} />
-  }
-  return <FeatherIcon name="dollar-sign" size={size} color={DAILY_ACCENT} />
+  return <WonderStaticCoin size={size} fallbackColor={DAILY_ACCENT} />
 }
 
 export function DailyRewards({ navigation, route }: any) {

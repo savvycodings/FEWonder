@@ -8,16 +8,13 @@ import {
   Image,
   ActivityIndicator,
   Modal,
-  Platform,
 } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { SvgUri } from 'react-native-svg'
 import { useFocusEffect } from '@react-navigation/native'
 import {
   AccountRowChevron,
-  AVATAR_FRAME_SIZE_PROFILE,
   AvatarFrameWrapper,
-  WonderportAccentCard,
+  WonderSpinningCoin,
   useEquippedAvatarFrame,
 } from '../components'
 import { AppContext, ThemeContext } from '../context'
@@ -25,44 +22,24 @@ import { User } from '../../types'
 import * as ImagePicker from 'expo-image-picker'
 import { getDailyRewardStatus, uploadProfilePicture } from '../utils'
 import { fetchMyOrders } from '../ordersApi'
-
-const coinFrameUris = [
-  '/homepageimgs/Coinrotation/CoinFRONT.svg',
-  '/homepageimgs/Coinrotation/Coin2.svg',
-  '/homepageimgs/Coinrotation/Coin3.svg',
-  '/homepageimgs/Coinrotation/Coin4.svg',
-  '/homepageimgs/Coinrotation/Coin5.svg',
-  '/homepageimgs/Coinrotation/Coin6.svg',
-  '/homepageimgs/Coinrotation/Coin7.svg',
-  '/homepageimgs/Coinrotation/Coin8.svg',
-  '/homepageimgs/Coinrotation/Coin9.svg',
-  '/homepageimgs/Coinrotation/Coin10.svg',
-  '/homepageimgs/Coinrotation/Coin11.svg',
-  '/homepageimgs/Coinrotation/Coin12.svg',
-  '/homepageimgs/Coinrotation/Coin13.svg',
-  '/homepageimgs/Coinrotation/Coin14.svg',
-  '/homepageimgs/Coinrotation/Coin15.svg',
-  '/homepageimgs/Coinrotation/Coin16.svg',
-  '/homepageimgs/Coinrotation/Coin17.svg',
-  '/homepageimgs/Coinrotation/Coin18.svg',
-  '/homepageimgs/Coinrotation/Coin19.svg',
-  '/homepageimgs/Coinrotation/Coin20.svg',
-  '/homepageimgs/Coinrotation/Coin21.svg',
-  '/homepageimgs/Coinrotation/Coin22.svg',
-  '/homepageimgs/Coinrotation/Coin23.svg',
-  '/homepageimgs/Coinrotation/Coin24.svg',
-  '/homepageimgs/Coinrotation/Coin25.svg',
-  '/homepageimgs/Coinrotation/Coin26.svg',
-  '/homepageimgs/Coinrotation/Coin27.svg',
-  '/homepageimgs/Coinrotation/Coin28.svg',
-  '/homepageimgs/Coinrotation/Coin29.svg',
-  '/homepageimgs/Coinrotation/Coin30.svg',
-  '/homepageimgs/Coinrotation/Coin31.svg',
-  '/homepageimgs/Coinrotation/Coin32.svg',
-]
+import { ProfileHeroBadgeStrip } from '../profileHeroBadgeStrip'
+import {
+  PROFILE_HERO_AVATAR,
+  PROFILE_HERO_BANNER_H,
+  profileHeroBannerOverlapPx,
+} from '../profileHeroLayout'
+import {
+  loadProfileHeroPreferences,
+  PROFILE_HERO_BIO_PLACEHOLDER,
+  type ProfileHeroPreferences,
+} from '../profileHeroPreferences'
 
 const PROFILE_ACCENT = '#CBFF00'
 const PROFILE_FILL = '#000000'
+/** Hero tile body (below banner) — dark grey section on profile. */
+const PROFILE_HERO_TILE_BG = '#262626'
+/** Same Discord-style banner as community member profile. */
+const PROFILE_HERO_BANNER_PURPLE = '#5B45D6'
 
 export function Profile({
   navigation,
@@ -85,7 +62,6 @@ export function Profile({
   const [localPreviewUri, setLocalPreviewUri] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState('')
   const [showWalletModal, setShowWalletModal] = useState(false)
-  const [coinFrameIndex, setCoinFrameIndex] = useState(0)
   const [walletBalance, setWalletBalance] = useState(0)
   const [ordersPreview, setOrdersPreview] = useState<
     {
@@ -98,14 +74,8 @@ export function Profile({
     }[]
   >([])
   const [orderTotalCount, setOrderTotalCount] = useState(0)
+  const [heroPrefs, setHeroPrefs] = useState<ProfileHeroPreferences | null>(null)
   const { frameId: avatarFrameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCoinFrameIndex((prev) => (prev + 1) % coinFrameUris.length)
-    }, 80)
-    return () => clearInterval(timer)
-  }, [])
 
   const loadWalletBalance = useCallback(async () => {
     if (!sessionToken) return
@@ -135,6 +105,7 @@ export function Profile({
       loadWalletBalance()
       refreshAvatarFrame()
       loadOrdersPreview()
+      loadProfileHeroPreferences().then(setHeroPrefs)
     }, [loadWalletBalance, refreshAvatarFrame, loadOrdersPreview])
   )
 
@@ -203,46 +174,103 @@ export function Profile({
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <WonderportAccentCard
-        borderWidth={2}
-        borderRadius={24}
-        innerBackgroundColor={PROFILE_FILL}
-        style={styles.headerAccentCard}
-        contentStyle={styles.headerCard}
-      >
-        <Pressable style={styles.avatarPressable} onPress={handleChangePhoto}>
-          <AvatarFrameWrapper
-            frameId={avatarFrameId}
-            size={AVATAR_FRAME_SIZE_PROFILE}
-            innerBackgroundColor={(localPreviewUri || user.profilePicture) ? 'transparent' : theme.tileBackgroundColor}
-          >
-            {(localPreviewUri || user.profilePicture) ? (
-              <Image
-                source={{ uri: localPreviewUri || user.profilePicture || '' }}
-                style={styles.avatarImage}
-                resizeMode="cover"
+      <View style={styles.profileHeroCard}>
+        <View style={[styles.profileHeroBanner, { height: PROFILE_HERO_BANNER_H }]}>
+          {heroPrefs?.bannerUri ? (
+            <Image
+              source={{ uri: heroPrefs.bannerUri }}
+              style={StyleSheet.absoluteFillObject}
+              resizeMode="cover"
+            />
+          ) : null}
+        </View>
+
+        <View
+          style={[
+            styles.profileHeroOverlapBlock,
+            { marginTop: -profileHeroBannerOverlapPx() },
+          ]}
+        >
+          <View style={styles.profileHeroRow}>
+            <View style={styles.profileHeroAvatarColumn}>
+              <Pressable
+                style={[styles.profileHeroAvatarShell, { width: PROFILE_HERO_AVATAR, height: PROFILE_HERO_AVATAR }]}
+                onPress={handleChangePhoto}
+                accessibilityRole="button"
+                accessibilityLabel="Change profile photo"
+              >
+                <AvatarFrameWrapper
+                  frameId={avatarFrameId}
+                  size={PROFILE_HERO_AVATAR}
+                  fit="default"
+                  innerBackgroundColor={
+                    (localPreviewUri || user.profilePicture) ? 'transparent' : '#000000'
+                  }
+                >
+                  {(localPreviewUri || user.profilePicture) ? (
+                    <Image
+                      source={{ uri: localPreviewUri || user.profilePicture || '' }}
+                      style={styles.profileHeroAvatarImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.profileHeroAvatarPlaceholder}>
+                      <FeatherIcon
+                        name="user"
+                        size={Math.round(PROFILE_HERO_AVATAR * 0.45)}
+                        color="#A8A8A8"
+                      />
+                    </View>
+                  )}
+                </AvatarFrameWrapper>
+              </Pressable>
+            </View>
+            <View style={styles.profileHeroNameBadgeRow}>
+              <View style={styles.profileHeroNameBand}>
+                <Text style={styles.profileHeroName} numberOfLines={2}>
+                  {user.fullName}
+                </Text>
+              </View>
+              <ProfileHeroBadgeStrip
+                slots={heroPrefs?.badgeSlots ?? [null, null, null]}
+                mode="home"
+                variant="inline"
+                onOpenEdit={() => navigation.navigate('ProfileHeroEdit')}
               />
-            ) : (
-              <FeatherIcon name="user" size={22} color={theme.textColor} />
-            )}
-          </AvatarFrameWrapper>
-        </Pressable>
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.name}>{user.fullName}</Text>
-          <Text style={styles.email}>{user.email}</Text>
+            </View>
+            <Text
+              style={heroPrefs?.bio?.trim() ? styles.profileHeroBio : styles.profileHeroBioPlaceholder}
+              numberOfLines={8}
+            >
+              {heroPrefs?.bio?.trim() ? heroPrefs.bio.trim() : PROFILE_HERO_BIO_PLACEHOLDER}
+            </Text>
+          </View>
         </View>
-        <View style={styles.headerRight}>
-          <Pressable style={styles.headerWallet} onPress={() => setShowWalletModal(true)}>
-            {Platform.OS === 'web' ? (
-              <SvgUri uri={coinFrameUris[coinFrameIndex]} width={18} height={18} />
-            ) : (
-              <FeatherIcon name="dollar-sign" size={16} color={PROFILE_ACCENT} />
-            )}
-            <Text style={styles.headerWalletValue}>{walletBalance}</Text>
+
+        <View style={styles.profileHeroFloatingChrome} pointerEvents="box-none">
+          <View
+            style={[styles.profileHeroWalletCluster, { top: PROFILE_HERO_BANNER_H + 6 }]}
+            pointerEvents="box-none"
+          >
+            {isUploading ? (
+              <ActivityIndicator size="small" color={PROFILE_ACCENT} />
+            ) : null}
+            <Pressable style={styles.profileHeroWallet} onPress={() => setShowWalletModal(true)}>
+              <WonderSpinningCoin size={18} fallbackColor={PROFILE_ACCENT} />
+              <Text style={styles.profileHeroWalletValue}>{walletBalance}</Text>
+            </Pressable>
+          </View>
+          <Pressable
+            style={[styles.profileHeroEdit, styles.profileHeroEditFab]}
+            onPress={() => navigation.navigate('ProfileHeroEdit')}
+            accessibilityRole="button"
+            accessibilityLabel="Edit profile"
+          >
+            <FeatherIcon name="edit-2" size={15} color={PROFILE_ACCENT} />
+            <Text style={styles.profileHeroEditLabel}>Edit</Text>
           </Pressable>
-          {isUploading ? <ActivityIndicator size="small" color={PROFILE_ACCENT} /> : null}
         </View>
-      </WonderportAccentCard>
+      </View>
       {uploadError ? <Text style={styles.errorText}>{uploadError}</Text> : null}
 
       <View style={styles.statsGroupCard}>
@@ -365,11 +393,7 @@ export function Profile({
             <Text style={styles.walletModalSubtitle}>Your current Wonder Wallet balance.</Text>
 
             <View style={styles.walletModalBalanceRow}>
-              {Platform.OS === 'web' ? (
-                <SvgUri uri={coinFrameUris[coinFrameIndex]} width={20} height={20} />
-              ) : (
-                <FeatherIcon name="dollar-sign" size={18} color={theme.textColor} />
-              )}
+              <WonderSpinningCoin size={20} fallbackColor={theme.textColor} />
               <Text style={styles.walletModalBalanceValue}>{walletBalance}</Text>
             </View>
 
@@ -408,35 +432,115 @@ const getStyles = (theme: any) => StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 110,
   },
-  headerAccentCard: {
+  profileHeroCard: {
     width: '100%',
     alignSelf: 'stretch',
     marginBottom: 16,
+    borderRadius: 14,
+    overflow: 'visible',
+    backgroundColor: PROFILE_HERO_TILE_BG,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    position: 'relative',
   },
-  headerCard: {
-    padding: 16,
+  profileHeroBanner: {
+    width: '100%',
+    backgroundColor: PROFILE_HERO_BANNER_PURPLE,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    overflow: 'hidden',
+  },
+  profileHeroFloatingChrome: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 4,
+    borderRadius: 14,
+  },
+  profileHeroWalletCluster: {
+    position: 'absolute',
+    right: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
   },
-  avatarPressable: {
+  profileHeroOverlapBlock: {
+    width: '100%',
+    paddingHorizontal: 14,
+    paddingTop: 0,
+    paddingBottom: 32,
+  },
+  profileHeroRow: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    width: '100%',
+    minHeight: 208,
+  },
+  profileHeroAvatarColumn: {
+    width: PROFILE_HERO_AVATAR + 24,
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+  },
+  profileHeroNameBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    alignSelf: 'stretch',
+    gap: 14,
+    marginTop: 18,
+    flexWrap: 'wrap',
+  },
+  profileHeroNameBand: {
+    width: PROFILE_HERO_AVATAR + 24,
+    alignItems: 'center',
+  },
+  profileHeroAvatarShell: {
+    borderRadius: 999,
+    overflow: 'visible',
+  },
+  profileHeroAvatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 999,
+  },
+  profileHeroAvatarPlaceholder: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
+  profileHeroName: {
+    color: '#ffffff',
+    fontFamily: 'Geist-Bold',
+    fontSize: 19,
+    lineHeight: 24,
+    textAlign: 'center',
+    alignSelf: 'stretch',
   },
-  headerTextWrap: {
-    flex: 1,
-    marginLeft: 12,
+  profileHeroBio: {
+    marginTop: 8,
+    alignSelf: 'stretch',
+    color: 'rgba(255,255,255,0.78)',
+    fontFamily: 'Geist-Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'left',
   },
-  headerRight: {
-    alignItems: 'flex-end',
-    gap: 8,
+  profileHeroBioPlaceholder: {
+    marginTop: 8,
+    alignSelf: 'stretch',
+    color: 'rgba(255,255,255,0.45)',
+    fontFamily: 'Geist-Regular',
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'left',
+    fontStyle: 'italic',
   },
-  headerWallet: {
+  profileHeroWallet: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.08)',
@@ -445,20 +549,31 @@ const getStyles = (theme: any) => StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
-  headerWalletValue: {
+  profileHeroWalletValue: {
     color: PROFILE_ACCENT,
     fontFamily: 'Geist-SemiBold',
     fontSize: 15,
   },
-  name: {
-    color: '#ffffff',
-    fontFamily: 'Geist-Bold',
-    fontSize: 22,
-    marginBottom: 2,
+  profileHeroEdit: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(203,255,0,0.45)',
+    backgroundColor: 'rgba(203,255,0,0.1)',
   },
-  email: {
-    color: 'rgba(255,255,255,0.72)',
-    fontFamily: 'Geist-Regular',
+  profileHeroEditFab: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+  },
+  profileHeroEditLabel: {
+    color: PROFILE_ACCENT,
+    fontFamily: 'Geist-SemiBold',
     fontSize: 12,
   },
   statsRow: {

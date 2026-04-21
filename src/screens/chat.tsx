@@ -204,6 +204,19 @@ export function Chat({
   const listRef = useRef<FlatList<CommunityMessage> | null>(null)
   const { frameId: avatarFrameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
 
+  const openCommunityUserProfile = useCallback(
+    (peer: CommunityMessage['user']) => {
+      navigation.navigate('CommunityUserProfile', {
+        userId: peer.id,
+        fullName: peer.fullName,
+        profilePicture: peer.profilePicture ?? null,
+        avatarFrameId: peer.avatarFrameId ?? null,
+        sessionToken,
+      })
+    },
+    [navigation, sessionToken]
+  )
+
   const heroLayoutHeight = useSharedValue(108)
   const heroTranslateY = useSharedValue(0)
   /** Keeps messages below the banner — does not shrink when banner slides away (banner is an overlay). */
@@ -623,22 +636,29 @@ export function Chat({
             return (
               <View style={[styles.messageShell, isMe ? styles.meShell : styles.otherShell]}>
                 {!isMe ? (
-                  <View style={styles.avatarBubble}>
-                    <AvatarFrameWrapper
-                      frameId={bubbleFrameId}
-                      size={34}
-                      fit="chat"
-                      innerBackgroundColor={
-                        avatarUri ? 'transparent' : CHAT_TILE_GREY
-                      }
-                    >
-                      {avatarUri ? (
-                        <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
-                      ) : (
-                        <Text style={styles.avatarText}>{initial}</Text>
-                      )}
-                    </AvatarFrameWrapper>
-                  </View>
+                  <Pressable
+                    onPress={() => openCommunityUserProfile(item.user)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open profile for ${item.user.fullName}`}
+                    hitSlop={8}
+                  >
+                    <View style={styles.avatarBubble}>
+                      <AvatarFrameWrapper
+                        frameId={bubbleFrameId}
+                        size={34}
+                        fit="chat"
+                        innerBackgroundColor={
+                          avatarUri ? 'transparent' : CHAT_TILE_GREY
+                        }
+                      >
+                        {avatarUri ? (
+                          <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+                        ) : (
+                          <Text style={styles.avatarText}>{initial}</Text>
+                        )}
+                      </AvatarFrameWrapper>
+                    </View>
+                  </Pressable>
                 ) : null}
                 <Pressable
                   style={[styles.messageRow, isMe ? styles.meRow : styles.otherRow]}
@@ -659,9 +679,18 @@ export function Chat({
                     const refImage = referencedProduct ? productImageSource(referencedProduct) : null
                     return (
                       <>
-                  <Text style={[styles.authorLabel, isMe ? styles.authorLabelMe : styles.authorLabelOtherOnDark]}>
-                    {isMe ? 'You' : item.user.fullName}
-                  </Text>
+                  {isMe ? (
+                    <Text style={[styles.authorLabel, styles.authorLabelMe]}>You</Text>
+                  ) : (
+                    <Pressable
+                      onPress={() => openCommunityUserProfile(item.user)}
+                      hitSlop={{ top: 8, bottom: 6, left: 4, right: 12 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Open profile for ${item.user.fullName}`}
+                    >
+                      <Text style={[styles.authorLabel, styles.authorLabelOtherOnDark]}>{item.user.fullName}</Text>
+                    </Pressable>
+                  )}
                   {item.imageUrl ? (
                     <View style={styles.messageImageFrame}>
                       <Image
