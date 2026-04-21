@@ -9,7 +9,7 @@ dist/
 web-build/
 
 # Native
-ios/
+# Tracked: ios/ (bare iOS; EAS needs Podfile in repo; Pods/ is ignored in ios/.gitignore)
 android/
 *.orig.*
 *.jks
