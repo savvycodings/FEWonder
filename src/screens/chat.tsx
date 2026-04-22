@@ -4,19 +4,17 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  LayoutChangeEvent,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from 'react-native'
 import EventSource from 'react-native-sse'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { useFocusEffect, useIsFocused, useNavigation } from '@react-navigation/native'
+import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import { ThemeContext } from '../context'
 import { CommunityMessage, User } from '../../types'
 import { DOMAIN } from '../../constants'
@@ -31,10 +29,8 @@ import { formatMoney } from '../money'
 import { ShopifyProduct } from '../../types'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, {
-  cancelAnimation,
   Easing,
   KeyboardState,
-  runOnUI,
   useAnimatedKeyboard,
   useAnimatedReaction,
   useAnimatedStyle,
@@ -45,9 +41,6 @@ import * as ImagePicker from 'expo-image-picker'
 import { AvatarFrameWrapper, coerceAvatarFrameId, useEquippedAvatarFrame } from '../components'
 
 const REF_ITEM_PREFIX = '__REF_ITEM__:'
-
-/** Matches `TAB_SHELL_TOP_EXTRA` in `main.tsx` — cancels tab shell top padding so the hero sits flush. */
-const TAB_SHELL_TOP_EXTRA = 6
 
 /** Community chat palette: black canvas, lime-framed incoming bubbles, grey own bubbles + composer */
 const CHAT_LIME = '#CBFF00'
@@ -80,10 +73,6 @@ const CHAT_LIFT_TIMING = {
   duration: 280,
   easing: Easing.bezier(0.25, 0.1, 0.25, 1),
 }
-
-/** Delay before the hero banner swipes up off-screen after opening Chat; dismiss animation duration. */
-const HERO_DISMISS_DELAY_MS = 3000
-const HERO_DISMISS_DURATION_MS = 580
 
 /**
  * Composer link menu — same family as the attach chip (`#3a3a3a`). Dark surfaces use light
@@ -178,9 +167,7 @@ export function Chat({
 }) {
   const { theme } = useContext(ThemeContext)
   const navigation = useNavigation<any>()
-  const isFocused = useIsFocused()
   const insets = useSafeAreaInsets()
-  const { width: windowWidth } = useWindowDimensions()
   const styles = useMemo(() => getStyles(theme, insets), [theme, insets])
   const [loading, setLoading] = useState(true)
   const [messages, setMessages] = useState<CommunityMessage[]>([])
@@ -216,11 +203,6 @@ export function Chat({
     },
     [navigation, sessionToken]
   )
-
-  const heroLayoutHeight = useSharedValue(108)
-  const heroTranslateY = useSharedValue(0)
-  /** Keeps messages below the banner — does not shrink when banner slides away (banner is an overlay). */
-  const [messagesTopPad, setMessagesTopPad] = useState(108)
 
   useFocusEffect(
     useCallback(() => {
@@ -503,7 +485,6 @@ export function Chat({
   }
 
   const pageBg = { backgroundColor: CHAT_BLACK }
-  const heroBleedWidth = windowWidth + insets.left + insets.right
   const closedComposerBottom = useMemo(
     () => insets.bottom + CHAT_ABOVE_TAB_BAR,
     [insets.bottom]
@@ -535,67 +516,6 @@ export function Chat({
     transform: [{ translateY: chatLiftY.value }],
   }))
 
-  const onHeroLayout = useCallback(
-    (e: LayoutChangeEvent) => {
-      const h = e.nativeEvent.layout.height
-      if (h <= 0) return
-      heroLayoutHeight.value = h
-      setMessagesTopPad(h + 12)
-    },
-    [heroLayoutHeight]
-  )
-
-  const heroDismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useFocusEffect(
-    useCallback(() => {
-      cancelAnimation(heroTranslateY)
-      heroTranslateY.value = 0
-
-      return () => {
-        if (heroDismissTimerRef.current) {
-          clearTimeout(heroDismissTimerRef.current)
-          heroDismissTimerRef.current = null
-        }
-        cancelAnimation(heroTranslateY)
-        heroTranslateY.value = 0
-      }
-    }, [])
-  )
-
-  /** Start the 3s dismiss countdown only after initial messages have finished loading (smoother first paint). */
-  useEffect(() => {
-    if (!isFocused || loading) {
-      if (heroDismissTimerRef.current) {
-        clearTimeout(heroDismissTimerRef.current)
-        heroDismissTimerRef.current = null
-      }
-      return
-    }
-    heroDismissTimerRef.current = setTimeout(() => {
-      heroDismissTimerRef.current = null
-      runOnUI(() => {
-        'worklet'
-        const H = heroLayoutHeight.value
-        if (H <= 1) return
-        heroTranslateY.value = withTiming(-H, {
-          duration: HERO_DISMISS_DURATION_MS,
-          easing: Easing.out(Easing.cubic),
-        })
-      })()
-    }, HERO_DISMISS_DELAY_MS)
-    return () => {
-      if (heroDismissTimerRef.current) {
-        clearTimeout(heroDismissTimerRef.current)
-        heroDismissTimerRef.current = null
-      }
-    }
-  }, [isFocused, loading])
-
-  const heroOverlayAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: heroTranslateY.value }],
-  }))
-
   const menuAnchorBottom = closedComposerBottom + COMPOSER_BAR_HEIGHT + 6
 
   return (
@@ -619,11 +539,7 @@ export function Chat({
           style={styles.messagesList}
           data={messages}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={[
-            styles.listContent,
-            styles.listScrollPad,
-            { paddingTop: messagesTopPad },
-          ]}
+          contentContainerStyle={[styles.listContent, styles.listScrollPad, styles.listContentTop]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           removeClippedSubviews={false}
@@ -893,37 +809,6 @@ export function Chat({
 
       </View>
 
-      <Animated.View
-        pointerEvents="box-none"
-        style={[
-          styles.heroBleedOuter,
-          heroOverlayAnimatedStyle,
-          {
-            top: -(insets.top + TAB_SHELL_TOP_EXTRA),
-            marginLeft: -insets.left,
-            marginRight: -insets.right,
-            width: heroBleedWidth,
-          },
-        ]}
-      >
-        <View
-          onLayout={onHeroLayout}
-          style={[
-            styles.heroBleed,
-            {
-              paddingTop: insets.top + 12,
-              paddingHorizontal: 16,
-              paddingBottom: 14,
-            },
-          ]}
-        >
-          <Text style={styles.heroTitle}>Wonderport Community</Text>
-          <Text style={styles.heroSubtitle}>
-            One shared room for everyone. Keep it friendly and fun.
-          </Text>
-        </View>
-      </Animated.View>
-
       {showReferencePicker ? (
         <View style={styles.referencePickerOverlay}>
           <View style={styles.referencePickerHeader}>
@@ -1082,31 +967,12 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       justifyContent: 'center',
       minHeight: 120,
     },
-    heroBleedOuter: {
-      position: 'absolute',
-      zIndex: 25,
-      elevation: 12,
-    },
-    heroBleed: {
-      backgroundColor: CHAT_TILE_GREY,
-      borderBottomLeftRadius: 16,
-      borderBottomRightRadius: 16,
-      overflow: 'hidden',
-    },
-    heroTitle: {
-      color: CHAT_LIME,
-      fontFamily: theme.boldFont,
-      fontSize: 18,
-      marginBottom: 2,
-    },
-    heroSubtitle: {
-      color: 'rgba(255,255,255,.7)',
-      fontFamily: theme.regularFont,
-      fontSize: 12,
-    },
     listContent: {
       paddingHorizontal: 12,
       gap: 8,
+    },
+    listContentTop: {
+      paddingTop: 8,
     },
     listScrollPad: {
       paddingBottom: 12 + LIST_SCROLL_TAIL,

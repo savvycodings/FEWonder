@@ -15,15 +15,15 @@ import {
   type ProfileHeroPreferences,
 } from '../profileHeroPreferences'
 import {
-  PROFILE_HERO_AVATAR,
   PROFILE_HERO_BANNER_H,
-  profileHeroBannerOverlapPx,
+  PROFILE_HERO_PROFILE_AVATAR,
+  PROFILE_HERO_PROFILE_NAME_ROW_MARGIN_TOP,
+  profileHeroProfileOverlapMarginTop,
 } from '../profileHeroLayout'
 
 const PROFILE_ACCENT = '#CBFF00'
 const PROFILE_FILL = '#000000'
 const PROFILE_HERO_TILE_BG = '#262626'
-const PROFILE_HERO_BANNER_PURPLE = '#5B45D6'
 
 export function ProfileHeroEdit({
   navigation,
@@ -99,8 +99,6 @@ export function ProfileHeroEdit({
     await persistBadgeSlots(next)
   }
 
-  const overlap = profileHeroBannerOverlapPx()
-
   if (!prefs) {
     return (
       <View style={[styles.page, styles.centered]}>
@@ -133,42 +131,59 @@ export function ProfileHeroEdit({
 
         {prefs.bannerUri ? (
           <Pressable style={styles.resetBanner} onPress={clearBanner}>
-            <Text style={styles.resetBannerText}>Use default purple banner</Text>
+            <Text style={styles.resetBannerText}>Use default banner</Text>
           </Pressable>
         ) : null}
 
-        <View style={[styles.heroRow, { marginTop: -overlap, paddingBottom: 20 }]}>
-          <View style={styles.leftCol}>
-            <View style={[styles.avatarShell, { width: PROFILE_HERO_AVATAR, height: PROFILE_HERO_AVATAR }]}>
-              <AvatarFrameWrapper
-                frameId={avatarFrameId}
-                size={PROFILE_HERO_AVATAR}
-                fit="default"
-                innerBackgroundColor={user.profilePicture ? 'transparent' : '#000000'}
-              >
-                {user.profilePicture ? (
-                  <Image source={{ uri: user.profilePicture }} style={styles.avatarImage} resizeMode="cover" />
-                ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <FeatherIcon name="user" size={Math.round(PROFILE_HERO_AVATAR * 0.45)} color="#A8A8A8" />
-                  </View>
-                )}
-              </AvatarFrameWrapper>
+        <View
+          style={[
+            styles.heroOverlapBlock,
+            { marginTop: profileHeroProfileOverlapMarginTop() },
+          ]}
+        >
+          <View style={styles.heroInnerRow}>
+            <View style={styles.heroAvatarRow}>
+              <View style={styles.heroAvatarCol}>
+                <View
+                  style={[styles.avatarShell, { width: PROFILE_HERO_PROFILE_AVATAR, height: PROFILE_HERO_PROFILE_AVATAR }]}
+                >
+                  <AvatarFrameWrapper
+                    frameId={avatarFrameId}
+                    size={PROFILE_HERO_PROFILE_AVATAR}
+                    fit="default"
+                    innerBackgroundColor={user.profilePicture ? 'transparent' : '#000000'}
+                  >
+                    {user.profilePicture ? (
+                      <Image source={{ uri: user.profilePicture }} style={styles.avatarImage} resizeMode="cover" />
+                    ) : (
+                      <View style={styles.avatarPlaceholder}>
+                        <FeatherIcon
+                          name="user"
+                          size={Math.round(PROFILE_HERO_PROFILE_AVATAR * 0.45)}
+                          color="#A8A8A8"
+                        />
+                      </View>
+                    )}
+                  </AvatarFrameWrapper>
+                </View>
+              </View>
             </View>
-          </View>
-          <View style={styles.nameBadgeRow}>
-            <View style={styles.nameBand}>
-              <Text style={styles.displayName} numberOfLines={2}>
-                {user.fullName}
-              </Text>
+            <View style={styles.heroNameBadgesRow}>
+              <View style={styles.heroNameBand}>
+                <Text style={styles.displayName} numberOfLines={2}>
+                  {user.fullName}
+                </Text>
+              </View>
+              <View style={styles.heroBadgesWrap}>
+                <ProfileHeroBadgeStrip
+                  slots={prefs.badgeSlots}
+                  mode="edit"
+                  variant="inline"
+                  onEmptySlot={() => goWonderStore()}
+                  onFilledSlot={(i) => void removeBadgeAt(i)}
+                />
+              </View>
             </View>
-            <ProfileHeroBadgeStrip
-              slots={prefs.badgeSlots}
-              mode="edit"
-              variant="inline"
-              onEmptySlot={() => goWonderStore()}
-              onFilledSlot={(i) => void removeBadgeAt(i)}
-            />
           </View>
         </View>
       </View>
@@ -224,7 +239,7 @@ function getStyles(theme: any) {
     bannerPress: {},
     banner: {
       width: '100%',
-      backgroundColor: PROFILE_HERO_BANNER_PURPLE,
+      backgroundColor: PROFILE_ACCENT,
       borderTopLeftRadius: 14,
       borderTopRightRadius: 14,
       overflow: 'hidden',
@@ -257,18 +272,26 @@ function getStyles(theme: any) {
       fontFamily: theme.mediumFont,
       fontSize: 12,
     },
-    heroRow: {
-      flexDirection: 'column',
-      alignItems: 'flex-start',
+    heroOverlapBlock: {
       width: '100%',
-      paddingHorizontal: 14,
+      paddingHorizontal: 10,
       paddingTop: 0,
-      minHeight: 168,
+      paddingBottom: 10,
     },
-    leftCol: {
-      width: PROFILE_HERO_AVATAR + 24,
+    heroInnerRow: {
+      flexDirection: 'column',
+      alignItems: 'stretch',
+      width: '100%',
+    },
+    heroAvatarRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      alignSelf: 'stretch',
+    },
+    heroAvatarCol: {
+      width: PROFILE_HERO_PROFILE_AVATAR,
       alignItems: 'center',
-      alignSelf: 'flex-start',
+      marginLeft: 8,
     },
     avatarShell: {
       borderRadius: 999,
@@ -287,26 +310,35 @@ function getStyles(theme: any) {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    nameBadgeRow: {
+    heroNameBadgesRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'flex-start',
-      alignSelf: 'stretch',
-      gap: 14,
-      marginTop: 18,
+      alignSelf: 'flex-start',
       flexWrap: 'wrap',
+      maxWidth: '100%',
+      marginLeft: 8,
+      marginTop: PROFILE_HERO_PROFILE_NAME_ROW_MARGIN_TOP,
+      paddingRight: 8,
+      gap: 10,
     },
-    nameBand: {
-      width: PROFILE_HERO_AVATAR + 24,
+    heroNameBand: {
+      flexGrow: 0,
+      flexShrink: 1,
+      minWidth: 0,
+      justifyContent: 'center',
+    },
+    heroBadgesWrap: {
+      flexShrink: 0,
       alignItems: 'center',
+      justifyContent: 'center',
     },
     displayName: {
       color: '#ffffff',
       fontFamily: 'Montserrat_700Bold',
       fontSize: 22,
       lineHeight: 28,
-      textAlign: 'center',
-      alignSelf: 'stretch',
+      textAlign: 'left',
+      alignSelf: 'flex-start',
     },
     secondaryRow: {
       flexDirection: 'row',

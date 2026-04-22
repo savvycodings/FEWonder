@@ -24,9 +24,10 @@ import { getDailyRewardStatus, uploadProfilePicture } from '../utils'
 import { fetchMyOrders } from '../ordersApi'
 import { ProfileHeroBadgeStrip } from '../profileHeroBadgeStrip'
 import {
-  PROFILE_HERO_AVATAR,
   PROFILE_HERO_BANNER_H,
-  profileHeroBannerOverlapPx,
+  PROFILE_HERO_PROFILE_AVATAR,
+  PROFILE_HERO_PROFILE_NAME_ROW_MARGIN_TOP,
+  profileHeroProfileOverlapMarginTop,
 } from '../profileHeroLayout'
 import { loadProfileHeroPreferences, type ProfileHeroPreferences } from '../profileHeroPreferences'
 
@@ -34,14 +35,6 @@ const PROFILE_ACCENT = '#CBFF00'
 const PROFILE_FILL = '#000000'
 /** Hero tile body (below banner) — dark grey section on profile. */
 const PROFILE_HERO_TILE_BG = '#262626'
-/** Same Discord-style banner as community member profile. */
-const PROFILE_HERO_BANNER_PURPLE = '#5B45D6'
-
-/**
- * Entire profile hero: purple banner, avatar, name, badges, wonder coins / wallet, edit FAB.
- * Set `true` to show again (code stays in the block below).
- */
-const SHOW_PROFILE_HERO_CARD = false
 
 export function Profile({
   navigation,
@@ -176,35 +169,38 @@ export function Profile({
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {SHOW_PROFILE_HERO_CARD ? (
-        <View style={styles.profileHeroCard}>
-          <View style={[styles.profileHeroBanner, { height: PROFILE_HERO_BANNER_H }]}>
-            {heroPrefs?.bannerUri ? (
-              <Image
-                source={{ uri: heroPrefs.bannerUri }}
-                style={StyleSheet.absoluteFillObject}
-                resizeMode="cover"
-              />
-            ) : null}
-          </View>
+      <View style={styles.profileHeroCard}>
+        <View style={[styles.profileHeroBanner, { height: PROFILE_HERO_BANNER_H }]}>
+          {heroPrefs?.bannerUri ? (
+            <Image
+              source={{ uri: heroPrefs.bannerUri }}
+              style={StyleSheet.absoluteFillObject}
+              resizeMode="cover"
+            />
+          ) : null}
+        </View>
 
-          <View
-            style={[
-              styles.profileHeroOverlapBlock,
-              { marginTop: -profileHeroBannerOverlapPx() },
-            ]}
-          >
-            <View style={styles.profileHeroRow}>
+        <View
+          style={[
+            styles.profileHeroOverlapBlock,
+            { marginTop: profileHeroProfileOverlapMarginTop() },
+          ]}
+        >
+          <View style={styles.profileHeroRow}>
+            <View style={styles.profileHeroAvatarOnlyRow}>
               <View style={styles.profileHeroAvatarColumn}>
                 <Pressable
-                  style={[styles.profileHeroAvatarShell, { width: PROFILE_HERO_AVATAR, height: PROFILE_HERO_AVATAR }]}
+                  style={[
+                    styles.profileHeroAvatarShell,
+                    { width: PROFILE_HERO_PROFILE_AVATAR, height: PROFILE_HERO_PROFILE_AVATAR },
+                  ]}
                   onPress={handleChangePhoto}
                   accessibilityRole="button"
                   accessibilityLabel="Change profile photo"
                 >
                   <AvatarFrameWrapper
                     frameId={avatarFrameId}
-                    size={PROFILE_HERO_AVATAR}
+                    size={PROFILE_HERO_PROFILE_AVATAR}
                     fit="default"
                     innerBackgroundColor={
                       (localPreviewUri || user.profilePicture) ? 'transparent' : '#000000'
@@ -220,7 +216,7 @@ export function Profile({
                       <View style={styles.profileHeroAvatarPlaceholder}>
                         <FeatherIcon
                           name="user"
-                          size={Math.round(PROFILE_HERO_AVATAR * 0.45)}
+                          size={Math.round(PROFILE_HERO_PROFILE_AVATAR * 0.45)}
                           color="#A8A8A8"
                         />
                       </View>
@@ -228,7 +224,9 @@ export function Profile({
                   </AvatarFrameWrapper>
                 </Pressable>
               </View>
-              <View style={styles.profileHeroNameBadgeRow}>
+            </View>
+            <View style={styles.profileHeroNameWalletRow}>
+              <View style={styles.profileHeroNameBadgesCluster}>
                 <View style={styles.profileHeroNameBand}>
                   <Text style={styles.profileHeroName} numberOfLines={2}>
                     {user.fullName}
@@ -242,33 +240,31 @@ export function Profile({
                   />
                 </View>
               </View>
+              <View style={styles.profileHeroNameWalletRowSpacer} />
+              <View style={styles.profileHeroWalletCluster} pointerEvents="box-none">
+                {isUploading ? (
+                  <ActivityIndicator size="small" color={PROFILE_ACCENT} />
+                ) : null}
+                <Pressable style={styles.profileHeroWallet} onPress={() => setShowWalletModal(true)}>
+                  <WonderSpinningCoin size={18} fallbackColor={PROFILE_ACCENT} />
+                  <Text style={styles.profileHeroWalletValue}>{walletBalance}</Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
-
-          <View style={styles.profileHeroFloatingChrome} pointerEvents="box-none">
-            <View
-              style={[styles.profileHeroWalletCluster, { top: PROFILE_HERO_BANNER_H + 6 }]}
-              pointerEvents="box-none"
-            >
-              {isUploading ? (
-                <ActivityIndicator size="small" color={PROFILE_ACCENT} />
-              ) : null}
-              <Pressable style={styles.profileHeroWallet} onPress={() => setShowWalletModal(true)}>
-                <WonderSpinningCoin size={18} fallbackColor={PROFILE_ACCENT} />
-                <Text style={styles.profileHeroWalletValue}>{walletBalance}</Text>
-              </Pressable>
-            </View>
-            <Pressable
-              style={[styles.profileHeroEdit, styles.profileHeroEditFab]}
-              onPress={() => navigation.navigate('ProfileHeroEdit')}
-              accessibilityRole="button"
-              accessibilityLabel="Edit profile"
-            >
-              <FeatherIcon name="edit-2" size={14} color="#ffffff" />
-            </Pressable>
           </View>
         </View>
-      ) : null}
+
+        <View style={styles.profileHeroFloatingChrome} pointerEvents="box-none">
+          <Pressable
+            style={[styles.profileHeroEdit, styles.profileHeroEditFab]}
+            onPress={() => navigation.navigate('ProfileHeroEdit')}
+            accessibilityRole="button"
+            accessibilityLabel="Edit profile"
+          >
+            <FeatherIcon name="edit-2" size={16} color="#ffffff" />
+          </Pressable>
+        </View>
+      </View>
       {uploadError ? <Text style={styles.errorText}>{uploadError}</Text> : null}
 
       <View style={styles.statsGroupCard}>
@@ -443,7 +439,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   profileHeroBanner: {
     width: '100%',
-    backgroundColor: PROFILE_HERO_BANNER_PURPLE,
+    backgroundColor: PROFILE_ACCENT,
     borderTopLeftRadius: 14,
     borderTopRightRadius: 14,
     overflow: 'hidden',
@@ -453,46 +449,64 @@ const getStyles = (theme: any) => StyleSheet.create({
     zIndex: 4,
     borderRadius: 14,
   },
+  profileHeroNameWalletRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'stretch',
+    marginLeft: 8,
+    marginTop: PROFILE_HERO_PROFILE_NAME_ROW_MARGIN_TOP,
+    paddingRight: 8,
+  },
+  profileHeroNameBadgesCluster: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
+    minWidth: 0,
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  profileHeroNameWalletRowSpacer: {
+    flex: 1,
+    minWidth: 8,
+  },
   profileHeroWalletCluster: {
-    position: 'absolute',
-    right: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
+    flexShrink: 0,
     gap: 10,
   },
   profileHeroOverlapBlock: {
     width: '100%',
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     paddingTop: 0,
-    paddingBottom: 32,
+    paddingBottom: 10,
   },
   profileHeroRow: {
     flexDirection: 'column',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
     width: '100%',
-    minHeight: 168,
+  },
+  profileHeroAvatarOnlyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    alignSelf: 'stretch',
   },
   profileHeroAvatarColumn: {
-    width: PROFILE_HERO_AVATAR + 24,
+    width: PROFILE_HERO_PROFILE_AVATAR,
     alignItems: 'center',
-    alignSelf: 'flex-start',
+    marginLeft: 8,
   },
-  profileHeroNameBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    alignSelf: 'stretch',
-    gap: 14,
-    marginTop: 18,
-    flexWrap: 'wrap',
+  profileHeroNameBand: {
+    flexGrow: 0,
+    flexShrink: 1,
+    minWidth: 0,
+    justifyContent: 'center',
   },
   profileHeroBadgesWrap: {
     flexShrink: 0,
-  },
-  profileHeroNameBand: {
-    width: PROFILE_HERO_AVATAR + 24,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   profileHeroAvatarShell: {
     borderRadius: 999,
@@ -516,8 +530,8 @@ const getStyles = (theme: any) => StyleSheet.create({
     fontFamily: 'Montserrat_700Bold',
     fontSize: 22,
     lineHeight: 28,
-    textAlign: 'center',
-    alignSelf: 'stretch',
+    textAlign: 'left',
+    alignSelf: 'flex-start',
   },
   profileHeroWallet: {
     flexDirection: 'row',
@@ -539,10 +553,9 @@ const getStyles = (theme: any) => StyleSheet.create({
   profileHeroEdit: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
   profileHeroEditFab: {

@@ -9,7 +9,7 @@ import { resolveCommunityUserStub } from '../communityUserProfileStubs'
 import {
   PROFILE_HERO_AVATAR,
   PROFILE_HERO_BANNER_H,
-  profileHeroBannerOverlapPx,
+  PROFILE_HERO_BANNER_OVERLAP_PX,
   profileHeroRightColumnPaddingTop,
 } from '../profileHeroLayout'
 
@@ -86,7 +86,7 @@ export function CommunityUserProfile() {
 
   const styles = useMemo(() => getStyles(theme), [theme])
 
-  const overlap = profileHeroBannerOverlapPx()
+  const overlap = PROFILE_HERO_BANNER_OVERLAP_PX
 
   return (
     <ScrollView
