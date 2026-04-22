@@ -4,7 +4,6 @@
     <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
     <item name="colorPrimary">@color/colorPrimary</item>
     <item name="android:statusBarColor">#ffffff</item>
-    <!-- expo-image-picker crop / edit UI (EFT proof, etc.): dark chrome + white controls -->
     <item name="expoCropToolbarColor">@color/expo_crop_surface</item>
     <item name="expoCropToolbarIconColor">@color/expo_crop_foreground</item>
     <item name="expoCropToolbarActionTextColor">@color/expo_crop_foreground</item>

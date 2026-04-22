@@ -3,7 +3,6 @@
   <color name="iconBackground">#ffffff</color>
   <color name="colorPrimary">#023c69</color>
   <color name="colorPrimaryDark">#ffffff</color>
-  <!-- Referenced from AppTheme for expo-image-picker crop toolbar -->
   <color name="expo_crop_surface">#000000</color>
   <color name="expo_crop_foreground">#FFFFFF</color>
 </resources>
