@@ -28,11 +28,7 @@ import {
   PROFILE_HERO_BANNER_H,
   profileHeroBannerOverlapPx,
 } from '../profileHeroLayout'
-import {
-  loadProfileHeroPreferences,
-  PROFILE_HERO_BIO_PLACEHOLDER,
-  type ProfileHeroPreferences,
-} from '../profileHeroPreferences'
+import { loadProfileHeroPreferences, type ProfileHeroPreferences } from '../profileHeroPreferences'
 
 const PROFILE_ACCENT = '#CBFF00'
 const PROFILE_FILL = '#000000'
@@ -231,19 +227,14 @@ export function Profile({
                   {user.fullName}
                 </Text>
               </View>
-              <ProfileHeroBadgeStrip
-                slots={heroPrefs?.badgeSlots ?? [null, null, null]}
-                mode="home"
-                variant="inline"
-                onOpenEdit={() => navigation.navigate('ProfileHeroEdit')}
-              />
+              <View style={styles.profileHeroBadgesWrap}>
+                <ProfileHeroBadgeStrip
+                  slots={heroPrefs?.badgeSlots ?? [null, null, null]}
+                  mode="home"
+                  variant="inline"
+                />
+              </View>
             </View>
-            <Text
-              style={heroPrefs?.bio?.trim() ? styles.profileHeroBio : styles.profileHeroBioPlaceholder}
-              numberOfLines={8}
-            >
-              {heroPrefs?.bio?.trim() ? heroPrefs.bio.trim() : PROFILE_HERO_BIO_PLACEHOLDER}
-            </Text>
           </View>
         </View>
 
@@ -266,8 +257,7 @@ export function Profile({
             accessibilityRole="button"
             accessibilityLabel="Edit profile"
           >
-            <FeatherIcon name="edit-2" size={15} color={PROFILE_ACCENT} />
-            <Text style={styles.profileHeroEditLabel}>Edit</Text>
+            <FeatherIcon name="edit-2" size={14} color="#ffffff" />
           </Pressable>
         </View>
       </View>
@@ -473,7 +463,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'flex-start',
     width: '100%',
-    minHeight: 208,
+    minHeight: 168,
   },
   profileHeroAvatarColumn: {
     width: PROFILE_HERO_AVATAR + 24,
@@ -488,6 +478,9 @@ const getStyles = (theme: any) => StyleSheet.create({
     gap: 14,
     marginTop: 18,
     flexWrap: 'wrap',
+  },
+  profileHeroBadgesWrap: {
+    flexShrink: 0,
   },
   profileHeroNameBand: {
     width: PROFILE_HERO_AVATAR + 24,
@@ -512,30 +505,11 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   profileHeroName: {
     color: '#ffffff',
-    fontFamily: 'Geist-Bold',
-    fontSize: 19,
-    lineHeight: 24,
+    fontFamily: 'Montserrat_700Bold',
+    fontSize: 22,
+    lineHeight: 28,
     textAlign: 'center',
     alignSelf: 'stretch',
-  },
-  profileHeroBio: {
-    marginTop: 8,
-    alignSelf: 'stretch',
-    color: 'rgba(255,255,255,0.78)',
-    fontFamily: 'Geist-Regular',
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'left',
-  },
-  profileHeroBioPlaceholder: {
-    marginTop: 8,
-    alignSelf: 'stretch',
-    color: 'rgba(255,255,255,0.45)',
-    fontFamily: 'Geist-Regular',
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'left',
-    fontStyle: 'italic',
   },
   profileHeroWallet: {
     flexDirection: 'row',
@@ -555,26 +529,18 @@ const getStyles = (theme: any) => StyleSheet.create({
     fontSize: 15,
   },
   profileHeroEdit: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 9,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.45)',
-    backgroundColor: 'rgba(203,255,0,0.1)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 0,
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   profileHeroEditFab: {
     position: 'absolute',
+    top: 10,
     right: 10,
-    bottom: 10,
-  },
-  profileHeroEditLabel: {
-    color: PROFILE_ACCENT,
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 12,
   },
   statsRow: {
     flexDirection: 'row',

@@ -26,7 +26,7 @@ import { getDailyRewardStatus, listDbProducts, readDailyRewardsCache } from '../
 import { ShopifyProduct } from '../../types'
 import { formatMoney } from '../money'
 
-const categories = ['Popular', 'Pops', 'Figures', 'Anime']
+const categories = ['Hot', 'Pops', 'Figures', 'Anime']
 
 function getImageSource(item: ShopifyProduct): ImageSourcePropType | undefined {
   if (item?.featuredImageUrl) return { uri: item.featuredImageUrl }
@@ -168,7 +168,7 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
         </View>
 
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Popular Items</Text>
+          <Text style={styles.sectionTitle}>Hot Items</Text>
           <Text style={styles.sectionHint}>See all</Text>
         </View>
 

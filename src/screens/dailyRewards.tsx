@@ -21,7 +21,14 @@ import {
 } from '../components/AvatarFrame'
 import type { AvatarFrameId } from '../components/AvatarFrame'
 import { ThemeContext } from '../context'
-import { WonderSpinningCoin, WonderStaticCoin } from '../components'
+import { WonderBadgeImage, WonderSpinningCoin, WonderStaticCoin } from '../components'
+import {
+  isProfileBadgeSlotFreeForWonderEquip,
+  loadProfileHeroPreferences,
+  saveProfileHeroPreferences,
+  type ProfileHeroBadgeSlots,
+} from '../profileHeroPreferences'
+import { WONDER_BADGE_CATALOG, WONDER_BADGE_IDS, type WonderBadgeId } from '../wonderBadgesCatalog'
 
 const weekDays = ['1', '2', '3', '4', '5', '6', '7']
 const weekRewards = [1, 2, 3, 4, 5, 6, 7]
@@ -60,6 +67,7 @@ export function DailyRewards({ navigation, route }: any) {
     uri: string | null
     initial: string
   }>({ uri: null, initial: '?' })
+  const [heroBadgeSlots, setHeroBadgeSlots] = useState<ProfileHeroBadgeSlots>([null, null, null])
 
   const fallbackRewards = useMemo<DailyRewardItem[]>(
     () => weekDays.map((day, index) => ({ day: Number(day), amount: weekRewards[index], status: 'locked' })),
@@ -72,6 +80,11 @@ export function DailyRewards({ navigation, route }: any) {
   const ownedThemeIds = rewardStatus?.ownedStoreItemIds ?? []
   const availableCoins = walletBalance
   const rewardCardWidth = useMemo(() => Math.floor((screenWidth - 32 - 20 - 10) / 2), [screenWidth])
+  /** Two-column badge shop: fixed width avoids `%` + `space-between` layout glitches on web/native. */
+  const badgeStoreCardWidth = useMemo(
+    () => Math.max(148, Math.floor((screenWidth - 32 - 11) / 2)),
+    [screenWidth],
+  )
 
   useEffect(() => {
     loadEquippedAvatarFrame().then(setEquippedAvatarFrame)
@@ -96,10 +109,20 @@ export function DailyRewards({ navigation, route }: any) {
     loadPreviewUser()
   }, [loadPreviewUser])
 
+  const refreshHeroBadges = useCallback(async () => {
+    try {
+      const p = await loadProfileHeroPreferences()
+      setHeroBadgeSlots(p.badgeSlots)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
   useFocusEffect(
     useCallback(() => {
       loadPreviewUser()
-    }, [loadPreviewUser])
+      void refreshHeroBadges()
+    }, [loadPreviewUser, refreshHeroBadges])
   )
 
   useEffect(() => {
@@ -206,6 +229,30 @@ export function DailyRewards({ navigation, route }: any) {
     }
   }
 
+  async function equipWonderBadge(badgeId: WonderBadgeId) {
+    try {
+      const prefs = await loadProfileHeroPreferences()
+      const slots: ProfileHeroBadgeSlots = [...prefs.badgeSlots]
+      if (slots.some((s) => s === badgeId)) {
+        setStoreMessage('This badge is already on your profile showcase.')
+        return
+      }
+      const emptyIdx = slots.findIndex((s) => isProfileBadgeSlotFreeForWonderEquip(s))
+      if (emptyIdx === -1) {
+        setStoreMessage(
+          'All three showcase slots are full. Open Edit profile and remove a badge to equip another.',
+        )
+        return
+      }
+      slots[emptyIdx] = badgeId
+      await saveProfileHeroPreferences({ ...prefs, badgeSlots: slots })
+      setHeroBadgeSlots(slots)
+      setStoreMessage('')
+    } catch {
+      setStoreMessage('Could not save badge. Try again.')
+    }
+  }
+
   async function handleBuyTheme(themeId: string) {
     if (!sessionToken || ownedThemeIds.includes(themeId) || purchasingThemeId) return
     const theme = storeThemes.find((t) => t.id === themeId)
@@ -301,14 +348,26 @@ export function DailyRewards({ navigation, route }: any) {
           {rewards.map((reward, index) => {
             const isClaimed = reward.status === 'claimed'
             const isUnlocked = reward.status === 'unlocked'
+            const isDay7 = reward.day === 7
+            const day7BadgeSize = Math.min(112, Math.floor(rewardCardWidth * 0.72))
             return (
               <View key={`${reward.day}-${index}`} style={[styles.rewardCard, { width: rewardCardWidth }]}>
                 <Text style={styles.rewardCardDay}>Day {reward.day}</Text>
                 <View style={styles.rewardCardCoinWrap}>
-                  <RewardCarouselSpinningCoin color={DAILY_ACCENT} />
+                  {isDay7 ? (
+                    <WonderBadgeImage
+                      badgeId="badge:day7"
+                      size={day7BadgeSize}
+                      fallbackColor={DAILY_ACCENT}
+                    />
+                  ) : (
+                    <RewardCarouselSpinningCoin color={DAILY_ACCENT} />
+                  )}
                 </View>
                 <View style={styles.rewardCardFooter}>
-                  <Text style={styles.rewardCardCoins}>+{reward.amount} coins</Text>
+                  <Text style={[styles.rewardCardCoins, isDay7 ? styles.rewardCardCoinsDay7 : null]}>
+                    {isDay7 ? '7-day streak badge' : `+${reward.amount} coins`}
+                  </Text>
                   {isUnlocked ? (
                     <Pressable
                       style={[styles.rewardClaimButton, claimingReward ? styles.rewardClaimButtonDisabled : null]}
@@ -371,6 +430,46 @@ export function DailyRewards({ navigation, route }: any) {
           })}
         </View>
         {storeMessage ? <Text style={styles.infoText}>{storeMessage}</Text> : null}
+      </View>
+
+      <View style={styles.badgesSection}>
+        <Text style={styles.badgesHeading}>Badges</Text>
+        <Text style={styles.badgesSub}>
+          Equip up to three badges to your profile showcase. Saves on this device only.
+        </Text>
+        <View style={styles.badgesGrid}>
+          {WONDER_BADGE_IDS.map((id) => {
+            const meta = WONDER_BADGE_CATALOG[id]
+            const equipped = heroBadgeSlots.some((s) => s === id)
+            return (
+              <View
+                key={id}
+                style={[
+                  styles.badgeStoreCard,
+                  { width: badgeStoreCardWidth },
+                  equipped ? styles.badgeStoreCardEquipped : null,
+                ]}
+              >
+                <View style={[styles.badgePreviewPlate, equipped ? styles.badgePreviewPlateEquipped : null]}>
+                  <WonderBadgeImage badgeId={id} size={64} fallbackColor={DAILY_ACCENT} />
+                </View>
+                <Text style={styles.badgeStoreTitle}>{meta.label}</Text>
+                <Text style={styles.badgeAcquireText}>{meta.acquire}</Text>
+                <Pressable
+                  style={[styles.badgeEquipButton, equipped ? styles.badgeEquipButtonEquipped : null]}
+                  disabled={equipped}
+                  onPress={() => void equipWonderBadge(id)}
+                >
+                  <Text
+                    style={[styles.badgeEquipButtonText, equipped ? styles.badgeEquipButtonTextEquipped : null]}
+                  >
+                    {equipped ? 'Equipped' : 'Equip'}
+                  </Text>
+                </Pressable>
+              </View>
+            )
+          })}
+        </View>
       </View>
 
       <View style={styles.framesSection}>
@@ -548,6 +647,11 @@ const getStyles = (theme: any) => StyleSheet.create({
     fontFamily: 'Geist-Bold',
     fontSize: 22,
     marginBottom: 10,
+    textAlign: 'center',
+  },
+  rewardCardCoinsDay7: {
+    fontSize: 16,
+    lineHeight: 22,
   },
   rewardClaimButton: {
     minHeight: 40,
@@ -607,6 +711,90 @@ const getStyles = (theme: any) => StyleSheet.create({
     lineHeight: 32,
     letterSpacing: -0.4,
     marginBottom: 10,
+  },
+  badgesSection: {
+    marginTop: 22,
+  },
+  badgesHeading: {
+    color: '#ffffff',
+    fontFamily: 'Montserrat_800ExtraBold',
+    fontSize: 20,
+    marginBottom: 6,
+  },
+  badgesSub: {
+    color: 'rgba(255,255,255,0.72)',
+    fontFamily: 'Geist-Regular',
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 12,
+  },
+  badgesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 11,
+  },
+  badgeStoreCard: {
+    backgroundColor: DAILY_FILL,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(203,255,0,0.28)',
+    padding: 10,
+    alignItems: 'stretch',
+  },
+  badgeStoreCardEquipped: {
+    backgroundColor: 'rgba(0,0,0,0.62)',
+    borderColor: 'rgba(203,255,0,0.45)',
+  },
+  badgePreviewPlate: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    marginBottom: 8,
+    minHeight: 88,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(203,255,0,0.22)',
+  },
+  badgePreviewPlateEquipped: {
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderColor: 'rgba(203,255,0,0.38)',
+  },
+  badgeStoreTitle: {
+    color: '#ffffff',
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  badgeAcquireText: {
+    color: 'rgba(255,255,255,0.65)',
+    fontFamily: 'Geist-Regular',
+    fontSize: 11,
+    lineHeight: 15,
+    marginBottom: 10,
+    minHeight: 48,
+  },
+  badgeEquipButton: {
+    minHeight: 32,
+    borderRadius: 8,
+    backgroundColor: DAILY_ACCENT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeEquipButtonEquipped: {
+    backgroundColor: 'rgba(203,255,0,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(203,255,0,0.45)',
+  },
+  badgeEquipButtonText: {
+    color: '#050505',
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 12,
+  },
+  badgeEquipButtonTextEquipped: {
+    color: DAILY_ACCENT,
   },
   framesSection: {
     marginTop: 22,

@@ -1,15 +1,5 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { useCallback, useContext, useMemo, useState } from 'react'
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useFocusEffect } from '@react-navigation/native'
 import * as ImagePicker from 'expo-image-picker'
@@ -20,8 +10,6 @@ import { ProfileHeroBadgeStrip } from '../profileHeroBadgeStrip'
 import {
   loadProfileHeroPreferences,
   persistBannerFromPickedAssetUri,
-  PROFILE_HERO_BIO_MAX_LEN,
-  PROFILE_HERO_BIO_PLACEHOLDER,
   saveProfileHeroPreferences,
   type ProfileHeroBadgeSlots,
   type ProfileHeroPreferences,
@@ -51,8 +39,6 @@ export function ProfileHeroEdit({
   const { frameId: avatarFrameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
   const [prefs, setPrefs] = useState<ProfileHeroPreferences | null>(null)
   const [busy, setBusy] = useState(false)
-  const [savingBio, setSavingBio] = useState(false)
-  const [bioInput, setBioInput] = useState('')
 
   const reload = useCallback(async () => {
     const p = await loadProfileHeroPreferences()
@@ -65,10 +51,6 @@ export function ProfileHeroEdit({
       refreshAvatarFrame()
     }, [reload, refreshAvatarFrame])
   )
-
-  useEffect(() => {
-    if (prefs) setBioInput(prefs.bio ?? '')
-  }, [prefs])
 
   async function pickBanner() {
     if (busy) return
@@ -106,54 +88,18 @@ export function ProfileHeroEdit({
     setPrefs(next)
   }
 
-  async function persistBioFromInput() {
-    if (!prefs || savingBio) return
-    const trimmed = bioInput.trim() ? bioInput.trim().slice(0, PROFILE_HERO_BIO_MAX_LEN) : null
-    if ((prefs.bio ?? '') === (trimmed ?? '')) return
-    try {
-      setSavingBio(true)
-      const next: ProfileHeroPreferences = { ...prefs, bio: trimmed }
-      await saveProfileHeroPreferences(next)
-      setPrefs(next)
-    } finally {
-      setSavingBio(false)
-    }
-  }
-
   function goWonderStore() {
     navigation.navigate('ProfileDailyRewards', { sessionToken })
   }
 
-  function confirmRemoveBadge(index: 0 | 1 | 2) {
-    Alert.alert('Remove badge', 'Clear this showcase slot?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          void (async () => {
-            const base = prefs ?? (await loadProfileHeroPreferences())
-            const next: ProfileHeroBadgeSlots = [base.badgeSlots[0], base.badgeSlots[1], base.badgeSlots[2]]
-            next[index] = null
-            await persistBadgeSlots(next)
-          })()
-        },
-      },
-    ])
-  }
-
-  async function applySampleBadges() {
-    await persistBadgeSlots(['sample:star', 'sample:bolt', 'sample:spark'])
+  async function removeBadgeAt(index: 0 | 1 | 2) {
+    const base = prefs ?? (await loadProfileHeroPreferences())
+    const next: ProfileHeroBadgeSlots = [base.badgeSlots[0], base.badgeSlots[1], base.badgeSlots[2]]
+    next[index] = null
+    await persistBadgeSlots(next)
   }
 
   const overlap = profileHeroBannerOverlapPx()
-
-  const bioDirty = useMemo(() => {
-    if (!prefs) return false
-    const a = bioInput.trim()
-    const b = (prefs.bio ?? '').trim()
-    return a !== b
-  }, [prefs, bioInput])
 
   if (!prefs) {
     return (
@@ -166,7 +112,7 @@ export function ProfileHeroEdit({
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
       <Text style={styles.lead}>
-        Banner, showcase badges, and photo. Use the link below for account name and email.
+        Banner, showcase badges, and photo. Use the link below for your account name and email.
       </Text>
 
       <View style={styles.heroCard}>
@@ -191,7 +137,7 @@ export function ProfileHeroEdit({
           </Pressable>
         ) : null}
 
-        <View style={[styles.heroRow, { marginTop: -overlap, paddingBottom: 32 }]}>
+        <View style={[styles.heroRow, { marginTop: -overlap, paddingBottom: 20 }]}>
           <View style={styles.leftCol}>
             <View style={[styles.avatarShell, { width: PROFILE_HERO_AVATAR, height: PROFILE_HERO_AVATAR }]}>
               <AvatarFrameWrapper
@@ -221,38 +167,10 @@ export function ProfileHeroEdit({
               mode="edit"
               variant="inline"
               onEmptySlot={() => goWonderStore()}
-              onFilledSlot={(i) => confirmRemoveBadge(i)}
+              onFilledSlot={(i) => void removeBadgeAt(i)}
             />
           </View>
-          <Text style={styles.bioLabel}>Bio</Text>
-          <TextInput
-            style={styles.bioInput}
-            value={bioInput}
-            onChangeText={setBioInput}
-            onBlur={() => void persistBioFromInput()}
-            placeholder={PROFILE_HERO_BIO_PLACEHOLDER}
-            placeholderTextColor="rgba(255,255,255,0.35)"
-            multiline
-            maxLength={PROFILE_HERO_BIO_MAX_LEN}
-            textAlignVertical="top"
-            editable={!busy && !savingBio}
-          />
-          <View style={styles.bioSaveRow}>
-            <Text style={styles.bioCharHint}>
-              {bioInput.length}/{PROFILE_HERO_BIO_MAX_LEN}
-            </Text>
-            <Pressable
-              style={[styles.bioSaveBtn, (!bioDirty || savingBio) && styles.bioSaveBtnDisabled]}
-              onPress={() => void persistBioFromInput()}
-              disabled={!bioDirty || savingBio}
-            >
-              <Text style={styles.bioSaveBtnText}>Save bio</Text>
-            </Pressable>
-          </View>
         </View>
-        <Pressable style={styles.sampleLink} onPress={applySampleBadges}>
-          <Text style={styles.sampleLinkText}>Load sample badges (preview)</Text>
-        </Pressable>
       </View>
 
       <Pressable
@@ -345,7 +263,7 @@ function getStyles(theme: any) {
       width: '100%',
       paddingHorizontal: 14,
       paddingTop: 0,
-      minHeight: 208,
+      minHeight: 168,
     },
     leftCol: {
       width: PROFILE_HERO_AVATAR + 24,
@@ -384,75 +302,11 @@ function getStyles(theme: any) {
     },
     displayName: {
       color: '#ffffff',
-      fontFamily: 'Geist-Bold',
-      fontSize: 19,
-      lineHeight: 24,
+      fontFamily: 'Montserrat_700Bold',
+      fontSize: 22,
+      lineHeight: 28,
       textAlign: 'center',
       alignSelf: 'stretch',
-    },
-    bioLabel: {
-      marginTop: 10,
-      alignSelf: 'flex-start',
-      color: 'rgba(255,255,255,0.55)',
-      fontFamily: theme.mediumFont,
-      fontSize: 12,
-      letterSpacing: 0.3,
-    },
-    bioInput: {
-      marginTop: 6,
-      alignSelf: 'stretch',
-      minHeight: 72,
-      maxHeight: 160,
-      width: '100%',
-      paddingVertical: 10,
-      paddingHorizontal: 12,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.14)',
-      backgroundColor: 'rgba(0,0,0,0.25)',
-      color: 'rgba(255,255,255,0.9)',
-      fontFamily: theme.regularFont,
-      fontSize: 14,
-      lineHeight: 20,
-      textAlign: 'left',
-    },
-    bioSaveRow: {
-      marginTop: 8,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      alignSelf: 'stretch',
-    },
-    bioCharHint: {
-      color: 'rgba(255,255,255,0.4)',
-      fontFamily: theme.regularFont,
-      fontSize: 11,
-    },
-    bioSaveBtn: {
-      paddingVertical: 8,
-      paddingHorizontal: 16,
-      borderRadius: 10,
-      backgroundColor: 'rgba(203,255,0,0.18)',
-      borderWidth: 1,
-      borderColor: 'rgba(203,255,0,0.45)',
-    },
-    bioSaveBtnDisabled: {
-      opacity: 0.35,
-    },
-    bioSaveBtnText: {
-      color: PROFILE_ACCENT,
-      fontFamily: 'Geist-SemiBold',
-      fontSize: 13,
-    },
-    sampleLink: {
-      marginTop: 6,
-      paddingHorizontal: 14,
-      paddingBottom: 12,
-    },
-    sampleLinkText: {
-      color: PROFILE_ACCENT,
-      fontFamily: theme.mediumFont,
-      fontSize: 12,
     },
     secondaryRow: {
       flexDirection: 'row',

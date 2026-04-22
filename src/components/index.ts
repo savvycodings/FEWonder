@@ -29,3 +29,4 @@ export {
 export type { AvatarFrameId, BorderFrameId } from './AvatarFrame'
 export { AccountRowChevron } from './AccountRowChevron'
 export { WonderSpinningCoin, WonderStaticCoin } from './WonderCoin'
+export { WonderBadgeImage } from './WonderBadgeImage'
