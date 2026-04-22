@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -41,6 +41,10 @@ const TAB_SHELL_TOP_EXTRA = 6
 
 /** Matches `tabBarStyle.borderRadius` — clips blur + tint to the floating pill. */
 const TAB_BAR_RADIUS = 18
+/** Horizontal inset from screen edge; tab bar width = window width − 2×inset (narrower pill). */
+const TAB_BAR_SIDE_INSET_MIN = 48
+const TAB_BAR_SIDE_INSET_MAX = 80
+const TAB_BAR_SIDE_INSET_RATIO = 0.125
 
 /**
  * Frosted charcoal glass behind the tab bar: native blur + grey/black wash (no green).
@@ -351,8 +355,13 @@ function Tabs({
   onUserUpdated: (user: User) => Promise<void>
 }) {
   const insets = useSafeAreaInsets()
+  const { width: windowWidth } = useWindowDimensions()
   const { theme } = useContext(ThemeContext)
   const styles = getStyles({ theme, insets })
+  const tabBarSideInset = Math.min(
+    TAB_BAR_SIDE_INSET_MAX,
+    Math.max(TAB_BAR_SIDE_INSET_MIN, Math.round(windowWidth * TAB_BAR_SIDE_INSET_RATIO)),
+  )
 
   /** Stable component identity so Chat does not remount every Tabs render (would cancel hero timer). */
   const ChatTabScreen = useMemo(
@@ -381,8 +390,8 @@ function Tabs({
           tabBarBackground: () => <FrostedTabBarBackground />,
           tabBarStyle: {
             position: 'absolute',
-            left: 36,
-            right: 36,
+            left: tabBarSideInset,
+            right: tabBarSideInset,
             bottom: 8,
             height: 64,
             borderRadius: TAB_BAR_RADIUS,
@@ -417,7 +426,7 @@ function Tabs({
         />
         <Tab.Screen
           name="Search"
-          children={({ navigation }) => <Search navigation={navigation} user={user} />}
+          children={({ navigation }) => <Search navigation={navigation} />}
           options={{
             headerShown: false,
             tabBarIcon: ({ color, size }) => (

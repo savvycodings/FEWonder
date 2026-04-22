@@ -204,7 +204,11 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
                     onPress={() => navigation.navigate('Product', { product: item })}
                   >
                     <View style={styles.mediaPlaceholder}>
-                      <Text style={styles.mediaPlaceholderText} numberOfLines={2}>
+                      <Text
+                        style={styles.mediaPlaceholderText}
+                        numberOfLines={2}
+                        ellipsizeMode="tail"
+                      >
                         {item.title}
                       </Text>
                     </View>
@@ -215,12 +219,10 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
                     style={styles.cardFooter}
                     onPress={() => navigation.navigate('Product', { product: item })}
                   >
-                    <View style={styles.titleCell}>
-                      <Text style={styles.itemTitle} numberOfLines={2}>
-                        {item.title}
-                      </Text>
-                    </View>
-                    <View style={styles.priceCell}>
+                    <Text style={styles.itemTitle} numberOfLines={2} ellipsizeMode="tail">
+                      {item.title}
+                    </Text>
+                    <View style={styles.priceRow}>
                       <View style={styles.pricePill}>
                         <Text style={styles.pricePillText}>{priceLabel}</Text>
                       </View>
@@ -369,9 +371,11 @@ const getStyles = (theme: any) =>
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: GRID_GAP,
+      alignItems: 'stretch',
     },
     card: {
       flexDirection: 'column',
+      alignSelf: 'stretch',
       backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
       borderRadius: 18,
       paddingHorizontal: 4,
@@ -401,37 +405,37 @@ const getStyles = (theme: any) =>
       padding: 10,
     },
     mediaPlaceholderText: {
-      color: theme.mutedForegroundColor,
-      fontFamily: theme.mediumFont,
-      fontSize: 12,
+      color: theme.headingColor || theme.textColor,
+      fontFamily: theme.semiBoldFont,
+      fontSize: 13,
+      lineHeight: 18,
       textAlign: 'center',
     },
     footerBand: {
-      minHeight: 56,
-      justifyContent: 'center',
-      paddingVertical: 4,
+      flexGrow: 1,
+      minHeight: 1,
     },
     cardFooter: {
-      flexDirection: 'row',
-      alignItems: 'stretch',
-      justifyContent: 'space-between',
-      gap: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 0,
-    },
-    titleCell: {
       flex: 1,
-      justifyContent: 'center',
-      paddingRight: 4,
+      flexDirection: 'column',
+      alignItems: 'stretch',
+      justifyContent: 'flex-start',
+      paddingHorizontal: 10,
+      paddingTop: 8,
+      paddingBottom: 8,
     },
-    priceCell: {
-      justifyContent: 'center',
+    priceRow: {
+      flexDirection: 'row',
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+      marginTop: 8,
     },
     itemTitle: {
-      color: theme.textColor,
-      fontFamily: theme.semiBoldFont,
-      fontSize: 15,
+      color: theme.headingColor || theme.textColor,
+      fontFamily: theme.boldFont,
+      fontSize: 14,
       lineHeight: 18,
+      letterSpacing: -0.15,
     },
     pricePill: {
       backgroundColor: HOME_ACCENT_BG,

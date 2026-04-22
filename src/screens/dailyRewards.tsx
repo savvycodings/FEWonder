@@ -297,9 +297,11 @@ export function DailyRewards({ navigation, route }: any) {
         >
           <FeatherIcon name="chevron-left" size={20} color={DAILY_ACCENT} />
         </Pressable>
-        <Text style={styles.headerTitle}>Daily Rewards</Text>
+        <View style={styles.headerCenterFill} />
         <View style={styles.headerSpacer} />
       </View>
+
+      <Text style={styles.sectionHeading}>Daily Rewards</Text>
 
       <View style={styles.bannerCard}>
           <View style={styles.bannerTopRow}>
@@ -393,7 +395,7 @@ export function DailyRewards({ navigation, route }: any) {
       {rewardsError ? <Text style={styles.errorText}>{rewardsError}</Text> : null}
 
       <View style={styles.storeSection}>
-        <Text style={styles.storeMainTitle}>Wonder Store</Text>
+        <Text style={styles.sectionHeading}>Wonder Store</Text>
         <View style={styles.storeBalanceBadge}>
           <RewardStaticCoin size={22} />
           <Text style={styles.storeBalanceBadgeValue}>{availableCoins}</Text>
@@ -473,7 +475,7 @@ export function DailyRewards({ navigation, route }: any) {
       </View>
 
       <View style={styles.framesSection}>
-        <Text style={styles.framesHeading}>Avatar frames</Text>
+        <Text style={styles.sectionHeading}>Avatar Frames</Text>
         <Text style={styles.framesSub}>
           preview uses your profile photo. FREE FOR TESTING PURPOSES
         </Text>
@@ -536,14 +538,21 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
-    color: '#ffffff',
-    fontFamily: 'Montserrat_800ExtraBold',
-    fontSize: 24,
+  headerCenterFill: {
+    flex: 1,
   },
   headerSpacer: {
     width: 36,
     height: 36,
+  },
+  /** In-page section titles (matches Wonder Store / home chip weight) */
+  sectionHeading: {
+    color: '#ffffff',
+    fontFamily: 'Montserrat_800ExtraBold',
+    fontSize: 22,
+    lineHeight: 26,
+    letterSpacing: -0.3,
+    marginBottom: 10,
   },
   bannerCard: {
     backgroundColor: DAILY_FILL,
@@ -798,12 +807,6 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   framesSection: {
     marginTop: 22,
-  },
-  framesHeading: {
-    color: '#ffffff',
-    fontFamily: 'Montserrat_800ExtraBold',
-    fontSize: 20,
-    marginBottom: 6,
   },
   framesSub: {
     color: 'rgba(255,255,255,0.74)',

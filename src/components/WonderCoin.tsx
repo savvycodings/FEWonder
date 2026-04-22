@@ -1,10 +1,13 @@
 import { memo, useEffect, useRef, useState, type ReactElement } from 'react'
-import { ActivityIndicator, Platform, View } from 'react-native'
+import { View } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { SvgXml } from 'react-native-svg'
-import { DOMAIN, getDevClientOrigin } from '../../constants'
+import {
+  WONDER_COIN_FRONT_SVG_MARKUP,
+  WONDER_COIN_ROTATION_SVG_MARKUP,
+} from './wonderCoinFrames.generated'
 
-/** Full coin face for badges and price tiles (no animation). */
+/** Public URL path (e.g. web `<img src>`); animated coin uses bundled SVG strings instead. */
 export const WONDER_COIN_FRONT_SVG = '/homepageimgs/Coinrotation/CoinFRONT.svg'
 
 export const COIN_ROTATION_FRAME_URIS = [
@@ -48,63 +51,8 @@ const COIN_SPIN_FRAME_MS = 58
 /** Edge-on coin SVGs use a narrow viewBox; `meet` keeps scale even so rotation doesn’t “rush” mid-spin. */
 const COIN_SVG_PAR = 'xMidYMid meet' as const
 
-/** Where `/homepageimgs/...` is reachable for this runtime (Expo dev client vs API server). */
-function coinAssetUrl(path: string): string {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    if (/^https?:\/\//i.test(path)) return path
-    if (path.startsWith('/')) return `${window.location.origin}${path}`
-    return path
-  }
-  const devOrigin = getDevClientOrigin()
-  if (devOrigin) return `${devOrigin}${path}`
-  if (DOMAIN) return `${DOMAIN}${path}`
-  return path
-}
-
-function canResolveCoinUrl(): boolean {
-  if (Platform.OS === 'web') return true
-  return Boolean(getDevClientOrigin() || DOMAIN)
-}
-
-async function fetchSvgMarkup(path: string): Promise<string> {
-  const url = coinAssetUrl(path)
-  const res = await fetch(url)
-  const text = (await res.text()).replace(/^\uFEFF/, '').trimStart()
-  if (!res.ok) {
-    throw new Error(`Coin SVG not available (${res.status})`)
-  }
-  // Reject HTML error pages (also start with "<") so SvgXml never parses them.
-  if (!/<svg[\s>]/i.test(text)) {
-    throw new Error('Coin response was not SVG markup')
-  }
-  return text
-}
-
-let rotationFramesPromise: Promise<string[]> | null = null
-
-function loadRotationFrames(): Promise<string[]> {
-  if (!rotationFramesPromise) {
-    rotationFramesPromise = Promise.all(
-      COIN_ROTATION_FRAME_URIS.map((path) => fetchSvgMarkup(path))
-    ).catch((err) => {
-      rotationFramesPromise = null
-      return Promise.reject(err)
-    })
-  }
-  return rotationFramesPromise
-}
-
-let frontSvgPromise: Promise<string> | null = null
-
-function loadFrontSvg(): Promise<string> {
-  if (!frontSvgPromise) {
-    frontSvgPromise = fetchSvgMarkup(WONDER_COIN_FRONT_SVG).catch((err) => {
-      frontSvgPromise = null
-      return Promise.reject(err)
-    })
-  }
-  return frontSvgPromise
-}
+const BUNDLED_FRAMES_OK = WONDER_COIN_ROTATION_SVG_MARKUP.length > 0
+const BUNDLED_FRONT_OK = WONDER_COIN_FRONT_SVG_MARKUP.length > 0
 
 function DollarFallback({ size, color }: { size: number; color: string }): ReactElement {
   return <FeatherIcon name="dollar-sign" size={size} color={color} />
@@ -132,24 +80,8 @@ export const WonderSpinningCoin = memo(function WonderSpinningCoin({
   fallbackColor: string
 }): ReactElement {
   const [frameIndex, setFrameIndex] = useState(0)
-  const [frames, setFrames] = useState<string[] | null>(null)
-  const [loadFailed, setLoadFailed] = useState(false)
+  const frames = BUNDLED_FRAMES_OK ? WONDER_COIN_ROTATION_SVG_MARKUP : null
   const lastFrameIdxRef = useRef(-1)
-
-  useEffect(() => {
-    if (!canResolveCoinUrl()) return
-    let cancelled = false
-    loadRotationFrames()
-      .then((xml) => {
-        if (!cancelled) setFrames(xml)
-      })
-      .catch(() => {
-        if (!cancelled) setLoadFailed(true)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
 
   useEffect(() => {
     if (!frames?.length) return
@@ -172,18 +104,10 @@ export const WonderSpinningCoin = memo(function WonderSpinningCoin({
 
   const dollarSize = Math.max(12, Math.round(size * 0.62))
 
-  if (!canResolveCoinUrl() || loadFailed) {
+  if (!frames?.length) {
     return (
       <CoinSlot size={size}>
         <DollarFallback size={dollarSize} color={fallbackColor} />
-      </CoinSlot>
-    )
-  }
-
-  if (!frames) {
-    return (
-      <CoinSlot size={size}>
-        <ActivityIndicator color={fallbackColor} />
       </CoinSlot>
     )
   }
@@ -207,27 +131,9 @@ export function WonderStaticCoin({
   size?: number
   fallbackColor: string
 }): ReactElement {
-  const [xml, setXml] = useState<string | null>(null)
-  const [loadFailed, setLoadFailed] = useState(false)
-
-  useEffect(() => {
-    if (!canResolveCoinUrl()) return
-    let cancelled = false
-    loadFrontSvg()
-      .then((markup) => {
-        if (!cancelled) setXml(markup)
-      })
-      .catch(() => {
-        if (!cancelled) setLoadFailed(true)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   const dollarSize = Math.max(10, Math.round(size * 0.9))
 
-  if (!canResolveCoinUrl() || loadFailed) {
+  if (!BUNDLED_FRONT_OK) {
     return (
       <CoinSlot size={size}>
         <DollarFallback size={dollarSize} color={fallbackColor} />
@@ -235,17 +141,14 @@ export function WonderStaticCoin({
     )
   }
 
-  if (!xml) {
-    return (
-      <CoinSlot size={size}>
-        <ActivityIndicator color={fallbackColor} size="small" />
-      </CoinSlot>
-    )
-  }
-
   return (
     <CoinSlot size={size}>
-      <SvgXml xml={xml} width={size} height={size} preserveAspectRatio={COIN_SVG_PAR} />
+      <SvgXml
+        xml={WONDER_COIN_FRONT_SVG_MARKUP}
+        width={size}
+        height={size}
+        preserveAspectRatio={COIN_SVG_PAR}
+      />
     </CoinSlot>
   )
 }

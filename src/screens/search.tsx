@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Image,
   ImageSourcePropType,
@@ -7,14 +7,12 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
   useWindowDimensions,
 } from 'react-native'
-import { useFocusEffect } from '@react-navigation/native'
 import { Feather as FeatherIcon } from '@expo/vector-icons'
-import { AvatarFrameWrapper, ProductTileImageWithHeart, useEquippedAvatarFrame } from '../components'
-import { ShopifyProduct, User } from '../../types'
+import { ProductTileImageWithHeart } from '../components'
+import { ShopifyProduct } from '../../types'
 import { ThemeContext } from '../context'
 import { listDbProducts } from '../utils'
 import { formatMoney } from '../money'
@@ -24,6 +22,9 @@ const GRID_GAP = 12
 /** Match home.tsx price pills: lime fill + black label */
 const HOME_ACCENT_BG = '#CBFF00'
 const HOME_ACCENT_TEXT = '#000000'
+
+/** Same Montserrat weight as home category chips (e.g. Popular) — registered in App.tsx */
+const HOME_CHIP_MONTSERRAT = 'Montserrat_800ExtraBold' as const
 
 function getImageSource(item: ShopifyProduct): ImageSourcePropType | undefined {
   if (item?.featuredImageUrl) return { uri: item.featuredImageUrl }
@@ -46,13 +47,7 @@ const banners = [
   require('../../public/homepageimgs/searchbanner2.webp'),
   require('../../public/homepageimgs/searchbanner3.webp'),
 ]
-export function Search({
-  navigation,
-  user,
-}: {
-  navigation: any
-  user?: User
-}) {
+export function Search({ navigation }: { navigation: any }) {
   const [query, setQuery] = useState('')
   const [activeBanner, setActiveBanner] = useState(0)
   const bannerScrollRef = useRef<ScrollView | null>(null)
@@ -61,13 +56,6 @@ export function Search({
   const [products, setProducts] = useState<ShopifyProduct[]>([])
   const [loadingProducts, setLoadingProducts] = useState(true)
   const { theme } = useContext(ThemeContext)
-  const { frameId: avatarFrameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
-
-  useFocusEffect(
-    useCallback(() => {
-      refreshAvatarFrame()
-    }, [refreshAvatarFrame])
-  )
 
   const filtered = useMemo(() => {
     if (!query.trim()) return products
@@ -78,7 +66,6 @@ export function Search({
         String(item.productType || '').toLowerCase().includes(q)
     )
   }, [query, products])
-  const avatarInitial = (user?.fullName || 'U').slice(0, 1).toUpperCase()
   const displayProducts = useMemo(
     () => (filtered.length ? filtered : products),
     [filtered, products]
@@ -145,10 +132,6 @@ export function Search({
     return () => clearInterval(id)
   }, [bannerWidth])
 
-  function goToProfile() {
-    navigation.navigate('Profile', { screen: 'ProfileHome' })
-  }
-
   function renderProductCard(item: ShopifyProduct) {
     const src = getImageSource(item)
     const priceLabel =
@@ -174,7 +157,7 @@ export function Search({
             onPress={() => navigation.navigate('Product', { product: item })}
           >
             <View style={gridStyles.mediaPlaceholder}>
-              <Text style={gridStyles.mediaPlaceholderText} numberOfLines={2}>
+              <Text style={gridStyles.mediaPlaceholderText} numberOfLines={2} ellipsizeMode="tail">
                 {item.title}
               </Text>
             </View>
@@ -185,12 +168,10 @@ export function Search({
             style={gridStyles.cardFooter}
             onPress={() => navigation.navigate('Product', { product: item })}
           >
-            <View style={gridStyles.titleCell}>
-              <Text style={gridStyles.itemTitle} numberOfLines={2}>
-                {item.title}
-              </Text>
-            </View>
-            <View style={gridStyles.priceCell}>
+            <Text style={gridStyles.itemTitle} numberOfLines={2} ellipsizeMode="tail">
+              {item.title}
+            </Text>
+            <View style={gridStyles.priceRow}>
               <View style={gridStyles.pricePill}>
                 <Text style={gridStyles.pricePillText}>{priceLabel}</Text>
               </View>
@@ -209,30 +190,6 @@ export function Search({
         style={styles.scroll}
       >
         <View style={styles.hero}>
-          <View style={styles.heroTopRow}>
-            <TouchableOpacity
-              style={[styles.headerIconButton, styles.headerIconButtonClip]}
-              activeOpacity={0.85}
-              onPress={goToProfile}
-            >
-              <AvatarFrameWrapper
-                frameId={avatarFrameId}
-                size={38}
-                innerBackgroundColor={user?.profilePicture ? 'transparent' : '#ffbd8f'}
-              >
-                {user?.profilePicture ? (
-                  <Image source={{ uri: user.profilePicture }} style={styles.avatarImage} resizeMode="cover" />
-                ) : (
-                  <View style={styles.avatarPlaceholderInner}>
-                    <Text style={styles.avatarInitial}>{avatarInitial}</Text>
-                  </View>
-                )}
-              </AvatarFrameWrapper>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.greeting}>Hello, {user?.fullName || 'there'}!</Text>
-
           <View style={styles.searchBar}>
             <FeatherIcon name="search" size={16} color="#8e97ad" />
             <TextInput
@@ -302,7 +259,7 @@ export function Search({
           {topSellers.length > 0 ? (
             <View style={styles.productSection}>
               <View style={styles.resultsHeader}>
-                <Text style={[styles.resultsTitle, { color: theme.textColor }]}>Top sellers</Text>
+                <Text style={[styles.resultsTitleMontserrat, { color: theme.textColor }]}>Top sellers</Text>
               </View>
               <View style={gridStyles.grid}>{topSellers.map((item) => renderProductCard(item))}</View>
             </View>
@@ -311,7 +268,7 @@ export function Search({
           {newArrivals.length > 0 ? (
             <View style={styles.productSection}>
               <View style={styles.resultsHeader}>
-                <Text style={[styles.resultsTitle, { color: theme.textColor }]}>New arrivals</Text>
+                <Text style={[styles.resultsTitleMontserrat, { color: theme.textColor }]}>New arrivals</Text>
               </View>
               <View style={gridStyles.grid}>{newArrivals.map((item) => renderProductCard(item))}</View>
             </View>
@@ -328,9 +285,11 @@ function getProductGridStyles(theme: any) {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: GRID_GAP,
+      alignItems: 'stretch',
     },
     card: {
       flexDirection: 'column',
+      alignSelf: 'stretch',
       backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
       borderRadius: 18,
       paddingHorizontal: 4,
@@ -360,37 +319,37 @@ function getProductGridStyles(theme: any) {
       padding: 10,
     },
     mediaPlaceholderText: {
-      color: theme.mutedForegroundColor,
-      fontFamily: theme.mediumFont,
-      fontSize: 12,
+      color: theme.headingColor || theme.textColor,
+      fontFamily: theme.semiBoldFont,
+      fontSize: 13,
+      lineHeight: 18,
       textAlign: 'center',
     },
     footerBand: {
-      minHeight: 56,
-      justifyContent: 'center',
-      paddingVertical: 4,
+      flexGrow: 1,
+      minHeight: 1,
     },
     cardFooter: {
-      flexDirection: 'row',
-      alignItems: 'stretch',
-      justifyContent: 'space-between',
-      gap: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 0,
-    },
-    titleCell: {
       flex: 1,
-      justifyContent: 'center',
-      paddingRight: 4,
+      flexDirection: 'column',
+      alignItems: 'stretch',
+      justifyContent: 'flex-start',
+      paddingHorizontal: 10,
+      paddingTop: 8,
+      paddingBottom: 8,
     },
-    priceCell: {
-      justifyContent: 'center',
+    priceRow: {
+      flexDirection: 'row',
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+      marginTop: 8,
     },
     itemTitle: {
-      color: theme.textColor,
-      fontFamily: theme.semiBoldFont,
-      fontSize: 15,
+      color: theme.headingColor || theme.textColor,
+      fontFamily: theme.boldFont,
+      fontSize: 14,
       lineHeight: 18,
+      letterSpacing: -0.15,
     },
     pricePill: {
       backgroundColor: HOME_ACCENT_BG,
@@ -426,46 +385,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 18,
-  },
-  heroTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    marginBottom: 14,
-  },
-  headerIconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerIconButtonClip: {
-    overflow: 'visible',
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarPlaceholderInner: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#ffbd8f',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  avatarInitial: {
-    color: '#ffffff',
-    fontFamily: 'Geist-Bold',
-    fontSize: 12,
-  },
-  greeting: {
-    color: '#ffffff',
-    fontFamily: 'Geist-Bold',
-    fontSize: 28,
-    marginBottom: 12,
   },
   searchBar: {
     borderRadius: 12,
@@ -535,10 +454,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  resultsTitle: {
+  /** Match home Popular chip typography */
+  resultsTitleMontserrat: {
     color: '#2b3559',
-    fontFamily: 'Geist-SemiBold',
+    fontFamily: HOME_CHIP_MONTSERRAT,
     fontSize: 18,
+    lineHeight: 22,
   },
   loadingText: {
     color: '#8b94aa',

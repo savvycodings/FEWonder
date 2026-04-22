@@ -1,6 +1,7 @@
 import Expo
 import React
 import ReactAppDependencyProvider
+import UIKit
 
 @UIApplicationMain
 public class AppDelegate: ExpoAppDelegate {
@@ -8,6 +9,29 @@ public class AppDelegate: ExpoAppDelegate {
 
   var reactNativeDelegate: ExpoReactNativeFactoryDelegate?
   var reactNativeFactory: RCTReactNativeFactory?
+
+  /// Dark bar + white controls for `UIImagePickerController` crop step (e.g. EFT proof upload).
+  private static func configureImagePickerCropChrome() {
+    guard #available(iOS 13.0, *) else { return }
+    let bar = UINavigationBar.appearance(whenContainedInInstancesOf: [UIImagePickerController.self])
+    bar.tintColor = .white
+    let appearance = UINavigationBarAppearance()
+    appearance.configureWithOpaqueBackground()
+    appearance.backgroundColor = .black
+    appearance.titleTextAttributes = [.foregroundColor: UIColor.white]
+    let buttonAppearance = UIBarButtonItemAppearance()
+    buttonAppearance.normal.titleTextAttributes = [.foregroundColor: UIColor.white]
+    appearance.buttonAppearance = buttonAppearance
+    if #available(iOS 14.0, *) {
+      appearance.doneButtonAppearance.normal.titleTextAttributes = [.foregroundColor: UIColor.white]
+    }
+    bar.standardAppearance = appearance
+    bar.scrollEdgeAppearance = appearance
+    bar.compactAppearance = appearance
+    if #available(iOS 15.0, *) {
+      bar.compactScrollEdgeAppearance = appearance
+    }
+  }
 
   public override func application(
     _ application: UIApplication,
@@ -27,6 +51,9 @@ public class AppDelegate: ExpoAppDelegate {
       withModuleName: "main",
       in: window,
       launchOptions: launchOptions)
+#if os(iOS)
+    Self.configureImagePickerCropChrome()
+#endif
 #endif
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)

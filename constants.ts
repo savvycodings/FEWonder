@@ -47,22 +47,6 @@ if (env === 'DEVELOPMENT' && __DEV__) {
 
 export const DOMAIN = normalizeDomain(rawDomain || devUrl || prodUrl || '')
 
-/**
- * Metro / Expo dev server origin (from the JS bundle URL). In dev, `app/public` is
- * typically served here at `/homepageimgs/...`, while `DOMAIN` may point at the API only.
- */
-export function getDevClientOrigin(): string | null {
-  if (!__DEV__ || Platform.OS === 'web') return null
-  try {
-    const scriptURL = NativeModules.SourceCode?.scriptURL as string | undefined
-    if (!scriptURL) return null
-    const m = scriptURL.match(/^(https?:\/\/[^/?]+)/i)
-    return m ? m[1] : null
-  } catch {
-    return null
-  }
-}
-
 export const MODELS = {
   claudeOpus: {
     name: 'Claude Opus',

@@ -37,6 +37,12 @@ const PROFILE_HERO_TILE_BG = '#262626'
 /** Same Discord-style banner as community member profile. */
 const PROFILE_HERO_BANNER_PURPLE = '#5B45D6'
 
+/**
+ * Entire profile hero: purple banner, avatar, name, badges, wonder coins / wallet, edit FAB.
+ * Set `true` to show again (code stays in the block below).
+ */
+const SHOW_PROFILE_HERO_CARD = false
+
 export function Profile({
   navigation,
   user,
@@ -170,97 +176,99 @@ export function Profile({
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.profileHeroCard}>
-        <View style={[styles.profileHeroBanner, { height: PROFILE_HERO_BANNER_H }]}>
-          {heroPrefs?.bannerUri ? (
-            <Image
-              source={{ uri: heroPrefs.bannerUri }}
-              style={StyleSheet.absoluteFillObject}
-              resizeMode="cover"
-            />
-          ) : null}
-        </View>
+      {SHOW_PROFILE_HERO_CARD ? (
+        <View style={styles.profileHeroCard}>
+          <View style={[styles.profileHeroBanner, { height: PROFILE_HERO_BANNER_H }]}>
+            {heroPrefs?.bannerUri ? (
+              <Image
+                source={{ uri: heroPrefs.bannerUri }}
+                style={StyleSheet.absoluteFillObject}
+                resizeMode="cover"
+              />
+            ) : null}
+          </View>
 
-        <View
-          style={[
-            styles.profileHeroOverlapBlock,
-            { marginTop: -profileHeroBannerOverlapPx() },
-          ]}
-        >
-          <View style={styles.profileHeroRow}>
-            <View style={styles.profileHeroAvatarColumn}>
-              <Pressable
-                style={[styles.profileHeroAvatarShell, { width: PROFILE_HERO_AVATAR, height: PROFILE_HERO_AVATAR }]}
-                onPress={handleChangePhoto}
-                accessibilityRole="button"
-                accessibilityLabel="Change profile photo"
-              >
-                <AvatarFrameWrapper
-                  frameId={avatarFrameId}
-                  size={PROFILE_HERO_AVATAR}
-                  fit="default"
-                  innerBackgroundColor={
-                    (localPreviewUri || user.profilePicture) ? 'transparent' : '#000000'
-                  }
+          <View
+            style={[
+              styles.profileHeroOverlapBlock,
+              { marginTop: -profileHeroBannerOverlapPx() },
+            ]}
+          >
+            <View style={styles.profileHeroRow}>
+              <View style={styles.profileHeroAvatarColumn}>
+                <Pressable
+                  style={[styles.profileHeroAvatarShell, { width: PROFILE_HERO_AVATAR, height: PROFILE_HERO_AVATAR }]}
+                  onPress={handleChangePhoto}
+                  accessibilityRole="button"
+                  accessibilityLabel="Change profile photo"
                 >
-                  {(localPreviewUri || user.profilePicture) ? (
-                    <Image
-                      source={{ uri: localPreviewUri || user.profilePicture || '' }}
-                      style={styles.profileHeroAvatarImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={styles.profileHeroAvatarPlaceholder}>
-                      <FeatherIcon
-                        name="user"
-                        size={Math.round(PROFILE_HERO_AVATAR * 0.45)}
-                        color="#A8A8A8"
+                  <AvatarFrameWrapper
+                    frameId={avatarFrameId}
+                    size={PROFILE_HERO_AVATAR}
+                    fit="default"
+                    innerBackgroundColor={
+                      (localPreviewUri || user.profilePicture) ? 'transparent' : '#000000'
+                    }
+                  >
+                    {(localPreviewUri || user.profilePicture) ? (
+                      <Image
+                        source={{ uri: localPreviewUri || user.profilePicture || '' }}
+                        style={styles.profileHeroAvatarImage}
+                        resizeMode="cover"
                       />
-                    </View>
-                  )}
-                </AvatarFrameWrapper>
+                    ) : (
+                      <View style={styles.profileHeroAvatarPlaceholder}>
+                        <FeatherIcon
+                          name="user"
+                          size={Math.round(PROFILE_HERO_AVATAR * 0.45)}
+                          color="#A8A8A8"
+                        />
+                      </View>
+                    )}
+                  </AvatarFrameWrapper>
+                </Pressable>
+              </View>
+              <View style={styles.profileHeroNameBadgeRow}>
+                <View style={styles.profileHeroNameBand}>
+                  <Text style={styles.profileHeroName} numberOfLines={2}>
+                    {user.fullName}
+                  </Text>
+                </View>
+                <View style={styles.profileHeroBadgesWrap}>
+                  <ProfileHeroBadgeStrip
+                    slots={heroPrefs?.badgeSlots ?? [null, null, null]}
+                    mode="home"
+                    variant="inline"
+                  />
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.profileHeroFloatingChrome} pointerEvents="box-none">
+            <View
+              style={[styles.profileHeroWalletCluster, { top: PROFILE_HERO_BANNER_H + 6 }]}
+              pointerEvents="box-none"
+            >
+              {isUploading ? (
+                <ActivityIndicator size="small" color={PROFILE_ACCENT} />
+              ) : null}
+              <Pressable style={styles.profileHeroWallet} onPress={() => setShowWalletModal(true)}>
+                <WonderSpinningCoin size={18} fallbackColor={PROFILE_ACCENT} />
+                <Text style={styles.profileHeroWalletValue}>{walletBalance}</Text>
               </Pressable>
             </View>
-            <View style={styles.profileHeroNameBadgeRow}>
-              <View style={styles.profileHeroNameBand}>
-                <Text style={styles.profileHeroName} numberOfLines={2}>
-                  {user.fullName}
-                </Text>
-              </View>
-              <View style={styles.profileHeroBadgesWrap}>
-                <ProfileHeroBadgeStrip
-                  slots={heroPrefs?.badgeSlots ?? [null, null, null]}
-                  mode="home"
-                  variant="inline"
-                />
-              </View>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.profileHeroFloatingChrome} pointerEvents="box-none">
-          <View
-            style={[styles.profileHeroWalletCluster, { top: PROFILE_HERO_BANNER_H + 6 }]}
-            pointerEvents="box-none"
-          >
-            {isUploading ? (
-              <ActivityIndicator size="small" color={PROFILE_ACCENT} />
-            ) : null}
-            <Pressable style={styles.profileHeroWallet} onPress={() => setShowWalletModal(true)}>
-              <WonderSpinningCoin size={18} fallbackColor={PROFILE_ACCENT} />
-              <Text style={styles.profileHeroWalletValue}>{walletBalance}</Text>
+            <Pressable
+              style={[styles.profileHeroEdit, styles.profileHeroEditFab]}
+              onPress={() => navigation.navigate('ProfileHeroEdit')}
+              accessibilityRole="button"
+              accessibilityLabel="Edit profile"
+            >
+              <FeatherIcon name="edit-2" size={14} color="#ffffff" />
             </Pressable>
           </View>
-          <Pressable
-            style={[styles.profileHeroEdit, styles.profileHeroEditFab]}
-            onPress={() => navigation.navigate('ProfileHeroEdit')}
-            accessibilityRole="button"
-            accessibilityLabel="Edit profile"
-          >
-            <FeatherIcon name="edit-2" size={14} color="#ffffff" />
-          </Pressable>
         </View>
-      </View>
+      ) : null}
       {uploadError ? <Text style={styles.errorText}>{uploadError}</Text> : null}
 
       <View style={styles.statsGroupCard}>

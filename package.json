@@ -3,6 +3,7 @@
   "version": "1.1.0",
   "main": "index.js",
   "scripts": {
+    "gen:coin": "node scripts/genWonderCoinFrames.cjs",
     "start": "expo start",
     "android": "node scripts/run-android.cjs",
     "ios": "expo run:ios",
