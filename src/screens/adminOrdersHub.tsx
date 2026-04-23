@@ -45,6 +45,14 @@ export function AdminOrdersHub({ navigation }: any) {
 
   return (
     <View style={styles.page}>
+      <View style={styles.manageRow}>
+        <TouchableOpacity
+          style={styles.manageButton}
+          onPress={() => navigation.navigate('AdminReportedMessages')}
+        >
+          <Text style={styles.manageButtonText}>Open reported messages</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.segmentRow}>
         <TouchableOpacity
           style={[styles.segment, filter === 'peach' && styles.segmentActive]}
@@ -101,6 +109,25 @@ export function AdminOrdersHub({ navigation }: any) {
 const getStyles = (theme: any) =>
   StyleSheet.create({
     page: { flex: 1, backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+    manageRow: {
+      paddingHorizontal: 12,
+      paddingTop: 10,
+      paddingBottom: 2,
+    },
+    manageButton: {
+      minHeight: 42,
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.tileBackgroundColor || '#1f1f1f',
+      borderWidth: 1,
+      borderColor: theme.tintColor || '#CBFF00',
+    },
+    manageButtonText: {
+      color: theme.tintColor || '#CBFF00',
+      fontFamily: theme.boldFont,
+      fontSize: 13,
+    },
     segmentRow: {
       flexDirection: 'row',
       paddingHorizontal: 12,

@@ -9,11 +9,11 @@ import { User } from '../../types'
 import { ProfileHeroBadgeStrip } from '../profileHeroBadgeStrip'
 import {
   loadProfileHeroPreferences,
-  persistBannerFromPickedAssetUri,
   saveProfileHeroPreferences,
   type ProfileHeroBadgeSlots,
   type ProfileHeroPreferences,
 } from '../profileHeroPreferences'
+import { getProfileHero, updateProfileHero, uploadProfileBanner } from '../utils'
 import {
   PROFILE_HERO_BANNER_H,
   PROFILE_HERO_PROFILE_AVATAR,
@@ -41,9 +41,23 @@ export function ProfileHeroEdit({
   const [busy, setBusy] = useState(false)
 
   const reload = useCallback(async () => {
-    const p = await loadProfileHeroPreferences()
-    setPrefs(p)
-  }, [])
+    const local = await loadProfileHeroPreferences()
+    if (!sessionToken) {
+      setPrefs(local)
+      return
+    }
+    try {
+      const remote = await getProfileHero(sessionToken)
+      const merged: ProfileHeroPreferences = {
+        bannerUri: remote.bannerUrl,
+        badgeSlots: remote.badgeSlots,
+      }
+      await saveProfileHeroPreferences(merged)
+      setPrefs(merged)
+    } catch {
+      setPrefs(local)
+    }
+  }, [sessionToken])
 
   useFocusEffect(
     useCallback(() => {
@@ -58,15 +72,28 @@ export function ProfileHeroEdit({
     if (!permission.granted) return
     const picked = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      allowsEditing: false,
+      allowsEditing: true,
+      aspect: [3, 1],
       quality: 0.85,
+      base64: true,
     })
-    if (picked.canceled || !picked.assets?.[0]?.uri) return
+    if (picked.canceled || !picked.assets?.[0]?.base64) return
     try {
       setBusy(true)
-      const uri = await persistBannerFromPickedAssetUri(picked.assets[0].uri)
+      const uri = sessionToken
+        ? (
+            await uploadProfileBanner({
+              sessionToken,
+              imageBase64: String(picked.assets[0].base64 || ''),
+              mimeType: picked.assets[0].mimeType || 'image/jpeg',
+            })
+          ).bannerUrl
+        : null
       const base = prefs ?? (await loadProfileHeroPreferences())
       const next: ProfileHeroPreferences = { ...base, bannerUri: uri }
+      if (sessionToken) {
+        await updateProfileHero(sessionToken, { bannerUrl: uri })
+      }
       await saveProfileHeroPreferences(next)
       setPrefs(next)
     } finally {
@@ -77,6 +104,9 @@ export function ProfileHeroEdit({
   async function clearBanner() {
     const base = prefs ?? (await loadProfileHeroPreferences())
     const next: ProfileHeroPreferences = { ...base, bannerUri: null }
+    if (sessionToken) {
+      await updateProfileHero(sessionToken, { bannerUrl: null })
+    }
     await saveProfileHeroPreferences(next)
     setPrefs(next)
   }
@@ -84,6 +114,9 @@ export function ProfileHeroEdit({
   async function persistBadgeSlots(slots: ProfileHeroBadgeSlots) {
     const base = prefs ?? (await loadProfileHeroPreferences())
     const next: ProfileHeroPreferences = { ...base, badgeSlots: slots }
+    if (sessionToken) {
+      await updateProfileHero(sessionToken, { badgeSlots: slots })
+    }
     await saveProfileHeroPreferences(next)
     setPrefs(next)
   }

@@ -34,6 +34,8 @@ export interface User {
   eftBankAccountNumber?: string | null
   eftBankBranch?: string | null
   paymentMethod?: string | null
+  profileBannerUrl?: string | null
+  profileBadgeSlots?: [string | null, string | null, string | null]
 }
 
 export interface AuthPayload {

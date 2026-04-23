@@ -15,9 +15,10 @@ type SettingsProps = {
   user: User
   sessionToken: string
   onUserUpdated: (user: User) => Promise<void>
+  onLogout: () => Promise<void>
 }
 
-export function Settings({ user, sessionToken, onUserUpdated }: SettingsProps) {
+export function Settings({ user, sessionToken, onUserUpdated, onLogout }: SettingsProps) {
   const navigation = useNavigation<any>()
   const { theme } = useContext(ThemeContext)
 
@@ -117,6 +118,14 @@ export function Settings({ user, sessionToken, onUserUpdated }: SettingsProps) {
       {SHOW_IMAGE_MODEL_SECTION ? (
         <View />
       ) : null}
+
+      <View style={styles.titleContainer}>
+        <Text style={styles.mainText}>Session</Text>
+      </View>
+      <Pressable style={styles.logoutButton} onPress={() => void onLogout()}>
+        <FeatherIcon name="log-out" size={16} color={ACCENT} />
+        <Text style={styles.logoutText}>Log out</Text>
+      </Pressable>
     </ScrollView>
   )
 }
@@ -185,6 +194,26 @@ const getStyles = (theme:any) => StyleSheet.create({
     borderColor: 'rgba(203,255,0,0.32)',
     padding: 12,
     marginBottom: 10,
+  },
+  logoutButton: {
+    width: '100%',
+    alignSelf: 'stretch',
+    marginTop: 2,
+    marginBottom: 8,
+    borderRadius: 14,
+    minHeight: 48,
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: ACCENT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  logoutText: {
+    color: ACCENT,
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 15,
   },
   bannerRow: {
     minHeight: 64,

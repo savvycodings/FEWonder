@@ -23,6 +23,7 @@ import {
   editCommunityMessage,
   getCommunityMessages,
   listDbProducts,
+  reportCommunityMessage,
   sendCommunityMessage,
 } from '../utils'
 import { formatMoney } from '../money'
@@ -182,6 +183,9 @@ export function Chat({
   const [editInput, setEditInput] = useState('')
   const [editingBusy, setEditingBusy] = useState(false)
   const [activeOwnMessageId, setActiveOwnMessageId] = useState<string | null>(null)
+  const [reportMode, setReportMode] = useState(false)
+  const [selectedReportMessageId, setSelectedReportMessageId] = useState<string | null>(null)
+  const [reportSubmitting, setReportSubmitting] = useState(false)
   const [showReferencePicker, setShowReferencePicker] = useState(false)
   const [referenceSearch, setReferenceSearch] = useState('')
   const [catalogProducts, setCatalogProducts] = useState<ShopifyProduct[]>([])
@@ -403,7 +407,35 @@ export function Chat({
       setReferenceSearch('')
       setShowReferencePicker(true)
     } else {
-      console.log('Report message selected')
+      setActiveOwnMessageId(null)
+      setReportMode(true)
+      setSelectedReportMessageId(null)
+    }
+  }
+
+  function cancelReportMode() {
+    if (reportSubmitting) return
+    setReportMode(false)
+    setSelectedReportMessageId(null)
+  }
+
+  async function submitReportSelection() {
+    if (!selectedReportMessageId || reportSubmitting) return
+    const selected = messages.find((m) => m.id === selectedReportMessageId)
+    if (!selected) return
+    setReportSubmitting(true)
+    try {
+      await reportCommunityMessage({
+        sessionToken,
+        messageId: selected.id,
+      })
+      Alert.alert('Report sent', 'Thanks. We received your report and will review it.')
+      setReportMode(false)
+      setSelectedReportMessageId(null)
+    } catch (error: any) {
+      Alert.alert('Report failed', error?.message || 'Could not send report right now.')
+    } finally {
+      setReportSubmitting(false)
     }
   }
 
@@ -557,7 +589,8 @@ export function Chat({
               <View style={[styles.messageShell, isMe ? styles.meShell : styles.otherShell]}>
                 {!isMe ? (
                   <Pressable
-                    onPress={() => openCommunityUserProfile(item.user)}
+                    onPress={reportMode ? undefined : () => openCommunityUserProfile(item.user)}
+                    disabled={reportMode}
                     accessibilityRole="button"
                     accessibilityLabel={`Open profile for ${item.user.fullName}`}
                     hitSlop={8}
@@ -581,9 +614,18 @@ export function Chat({
                   </Pressable>
                 ) : null}
                 <Pressable
-                  style={[styles.messageRow, isMe ? styles.meRow : styles.otherRow]}
+                  style={[
+                    styles.messageRow,
+                    isMe ? styles.meRow : styles.otherRow,
+                    reportMode && selectedReportMessageId === item.id ? styles.reportSelectedMessage : null,
+                  ]}
                   onPress={(event) => {
                     event.stopPropagation()
+                    if (reportMode) {
+                      setActiveOwnMessageId(null)
+                      setSelectedReportMessageId((prev) => (prev === item.id ? null : item.id))
+                      return
+                    }
                     if (isMe) {
                       openOwnMessageActions(item)
                     } else {
@@ -603,7 +645,8 @@ export function Chat({
                     <Text style={[styles.authorLabel, styles.authorLabelMe]}>You</Text>
                   ) : (
                     <Pressable
-                      onPress={() => openCommunityUserProfile(item.user)}
+                      onPress={reportMode ? undefined : () => openCommunityUserProfile(item.user)}
+                      disabled={reportMode}
                       hitSlop={{ top: 8, bottom: 6, left: 4, right: 12 }}
                       accessibilityRole="button"
                       accessibilityLabel={`Open profile for ${item.user.fullName}`}
@@ -623,7 +666,12 @@ export function Chat({
                         {referencedProduct ? (
                           <Pressable
                             style={[styles.referencedItemCard, styles.referencedItemCardMe]}
-                            onPress={() => navigation.navigate('Product', { product: referencedProduct })}
+                            onPress={
+                              reportMode
+                                ? undefined
+                                : () => navigation.navigate('Product', { product: referencedProduct })
+                            }
+                            disabled={reportMode}
                           >
                             <View style={[styles.referencedItemImageWrap, styles.referencedItemImageWrapMe]}>
                               {refImage ? (
@@ -666,7 +714,7 @@ export function Chat({
                       </>
                     )
                   })()}
-                  {showOwnActions ? (
+                  {showOwnActions && !reportMode ? (
                     <View style={styles.inlineActionRow}>
                       <Pressable
                         style={styles.inlineActionButton}
@@ -757,6 +805,31 @@ export function Chat({
               </Pressable>
             </View>
           ) : null}
+        </View>
+      ) : null}
+
+      {reportMode ? (
+        <View style={styles.reportBar}>
+          <Text style={styles.reportBarHint}>
+            {selectedReportMessageId ? 'Message selected.' : 'Tap a message to select it for report.'}
+          </Text>
+          <View style={styles.reportBarButtons}>
+            <Pressable style={styles.reportCancelButton} onPress={cancelReportMode} disabled={reportSubmitting}>
+              <Text style={styles.reportCancelButtonText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={[
+                styles.reportSubmitButton,
+                !selectedReportMessageId || reportSubmitting ? styles.reportSubmitButtonDisabled : null,
+              ]}
+              onPress={submitReportSelection}
+              disabled={!selectedReportMessageId || reportSubmitting}
+            >
+              <Text style={styles.reportSubmitButtonText}>
+                {reportSubmitting ? 'Reporting...' : 'Report'}
+              </Text>
+            </Pressable>
+          </View>
         </View>
       ) : null}
 
@@ -1011,6 +1084,11 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       borderColor: CHAT_LIME,
       borderWidth: 3,
     },
+    reportSelectedMessage: {
+      borderColor: CHAT_LIME,
+      borderWidth: 3,
+      backgroundColor: 'rgba(203,255,0,0.12)',
+    },
     avatarBubble: {
       width: 36,
       height: 36,
@@ -1189,6 +1267,58 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       marginBottom: 8,
       gap: 8,
       zIndex: 4,
+    },
+    reportBar: {
+      marginHorizontal: 12,
+      marginBottom: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 14,
+      backgroundColor: CHAT_SURFACE,
+      borderWidth: 1,
+      borderColor: CHAT_BORDER,
+      zIndex: 4,
+    },
+    reportBarHint: {
+      color: CHAT_TEXT_MUTED,
+      fontFamily: theme.mediumFont,
+      fontSize: 12,
+      marginBottom: 8,
+    },
+    reportBarButtons: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    reportCancelButton: {
+      flex: 1,
+      minHeight: 38,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: CHAT_BORDER,
+      backgroundColor: CHAT_BLACK,
+    },
+    reportCancelButtonText: {
+      color: CHAT_TEXT_PRIMARY,
+      fontFamily: theme.semiBoldFont,
+      fontSize: 13,
+    },
+    reportSubmitButton: {
+      flex: 1,
+      minHeight: 38,
+      borderRadius: 999,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: CHAT_LIME,
+    },
+    reportSubmitButtonDisabled: {
+      backgroundColor: 'rgba(203,255,0,0.35)',
+    },
+    reportSubmitButtonText: {
+      color: CHAT_BLACK,
+      fontFamily: theme.boldFont,
+      fontSize: 13,
     },
     pendingImageCard: {
       width: 72,

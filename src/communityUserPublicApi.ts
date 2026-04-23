@@ -4,6 +4,8 @@ import { DOMAIN } from '../constants'
 export type CommunityUserPublicDetail = {
   bio?: string | null
   tagline?: string | null
+  bannerUrl?: string | null
+  badgeSlots?: [string | null, string | null, string | null]
 }
 
 /**

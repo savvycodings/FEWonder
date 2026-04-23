@@ -24,6 +24,7 @@ import {
   AdminOrdersHub,
   AdminOrderDetail,
   AdminUserOrders,
+  AdminReportedMessages,
   MyOrders,
   MyOrderDetail,
   CommunityUserProfile,
@@ -210,6 +211,7 @@ function ProfileStackScreen({
             user={user}
             sessionToken={sessionToken}
             onUserUpdated={onUserUpdated}
+            onLogout={onLogout}
           />
         )}
       </ProfileStack.Screen>
@@ -333,6 +335,19 @@ function ProfileStackScreen({
         options={{
           headerShown: true,
           headerTitle: 'User orders',
+          headerBackTitle: '',
+          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
+          headerTintColor: theme.textColor,
+          headerShadowVisible: false,
+        }}
+      />
+      <ProfileStack.Screen
+        name="AdminReportedMessages"
+        component={AdminReportedMessages}
+        options={{
+          headerShown: true,
+          headerTitle: 'Reported messages',
           headerBackTitle: '',
           headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
           headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },

@@ -21,7 +21,7 @@ import {
 import { AppContext, ThemeContext } from '../context'
 import { User } from '../../types'
 import * as ImagePicker from 'expo-image-picker'
-import { getDailyRewardStatus, uploadProfilePicture } from '../utils'
+import { getDailyRewardStatus, getProfileHero, uploadProfilePicture } from '../utils'
 import { fetchMyOrders } from '../ordersApi'
 import { ProfileHeroBadgeStrip } from '../profileHeroBadgeStrip'
 import {
@@ -95,13 +95,25 @@ export function Profile({
     }
   }, [sessionToken])
 
+  const refreshHeroPrefs = useCallback(async () => {
+    try {
+      const remote = await getProfileHero(sessionToken)
+      setHeroPrefs({
+        bannerUri: remote.bannerUrl,
+        badgeSlots: remote.badgeSlots,
+      })
+    } catch {
+      loadProfileHeroPreferences().then(setHeroPrefs)
+    }
+  }, [sessionToken])
+
   useFocusEffect(
     useCallback(() => {
       loadWalletBalance()
       refreshAvatarFrame()
       loadOrdersPreview()
-      loadProfileHeroPreferences().then(setHeroPrefs)
-    }, [loadWalletBalance, refreshAvatarFrame, loadOrdersPreview])
+      refreshHeroPrefs()
+    }, [loadWalletBalance, refreshAvatarFrame, loadOrdersPreview, refreshHeroPrefs])
   )
 
   async function handleChangePhoto() {
@@ -368,11 +380,6 @@ export function Profile({
           ))
         )}
       </View>
-
-      <Pressable style={styles.logoutButton} onPress={onLogout}>
-        <FeatherIcon name="log-out" size={16} color={PROFILE_ACCENT} />
-        <Text style={styles.logoutText}>Log out</Text>
-      </Pressable>
 
       <Modal visible={showWalletModal} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
@@ -752,26 +759,6 @@ const getStyles = (theme: any) => StyleSheet.create({
   orderTotal: {
     color: PROFILE_ACCENT,
     fontFamily: 'Geist-Bold',
-    fontSize: 15,
-  },
-  logoutButton: {
-    width: '100%',
-    alignSelf: 'stretch',
-    marginTop: 4,
-    marginBottom: 8,
-    borderRadius: 14,
-    minHeight: 48,
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: PROFILE_ACCENT,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  logoutText: {
-    color: PROFILE_ACCENT,
-    fontFamily: 'Geist-SemiBold',
     fontSize: 15,
   },
   errorText: {

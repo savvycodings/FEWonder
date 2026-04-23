@@ -4,17 +4,19 @@ import FeatherIcon from '@expo/vector-icons/Feather'
 import { useNavigation, useRoute } from '@react-navigation/native'
 import { ThemeContext } from '../context'
 import { AvatarFrameWrapper, coerceAvatarFrameId } from '../components'
+import { ProfileHeroBadgeStrip } from '../profileHeroBadgeStrip'
 import { fetchCommunityUserPublicProfile } from '../communityUserPublicApi'
 import { resolveCommunityUserStub } from '../communityUserProfileStubs'
 import {
-  PROFILE_HERO_AVATAR,
   PROFILE_HERO_BANNER_H,
-  PROFILE_HERO_BANNER_OVERLAP_PX,
-  profileHeroRightColumnPaddingTop,
+  PROFILE_HERO_PROFILE_AVATAR,
+  profileHeroProfileOverlapMarginTop,
 } from '../profileHeroLayout'
 
 /** Temporary banner fill (Discord-ish); swap for image URL when the API supports it. */
-const COMMUNITY_PROFILE_BANNER_PURPLE = '#5B45D6'
+const COMMUNITY_PROFILE_ACCENT = '#CBFF00'
+const COMMUNITY_PROFILE_FILL = '#000000'
+const COMMUNITY_PROFILE_HERO_TILE_BG = '#262626'
 
 export type CommunityUserProfileRouteParams = {
   userId: string
@@ -86,56 +88,68 @@ export function CommunityUserProfile() {
 
   const styles = useMemo(() => getStyles(theme), [theme])
 
-  const overlap = PROFILE_HERO_BANNER_OVERLAP_PX
-
   return (
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.profileCard}>
-        <View style={[styles.banner, { height: PROFILE_HERO_BANNER_H, backgroundColor: COMMUNITY_PROFILE_BANNER_PURPLE }]} />
+      <View style={styles.profileHeroCard}>
+        <View style={[styles.profileHeroBanner, { height: PROFILE_HERO_BANNER_H }]}>
+          {apiDetail?.bannerUrl ? (
+            <Image source={{ uri: apiDetail.bannerUrl }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+          ) : null}
+        </View>
 
-        <View style={[styles.discordRow, { marginTop: -overlap, paddingBottom: 16 }]}>
-          <View style={styles.leftCol}>
-            <View style={[styles.avatarShell, { width: PROFILE_HERO_AVATAR, height: PROFILE_HERO_AVATAR }]}>
+        <View style={[styles.profileHeroOverlapBlock, { marginTop: profileHeroProfileOverlapMarginTop() }]}>
+          <View style={styles.profileHeroAvatarRow}>
+            <View
+              style={[
+                styles.profileHeroAvatarShell,
+                { width: PROFILE_HERO_PROFILE_AVATAR, height: PROFILE_HERO_PROFILE_AVATAR },
+              ]}
+            >
               <AvatarFrameWrapper
                 frameId={avatarFrameId}
-                size={PROFILE_HERO_AVATAR}
+                size={PROFILE_HERO_PROFILE_AVATAR}
                 fit="default"
-                innerBackgroundColor={profilePicture ? 'transparent' : '#000000'}
+                innerBackgroundColor={profilePicture ? 'transparent' : COMMUNITY_PROFILE_FILL}
               >
                 {profilePicture ? (
-                  <Image source={{ uri: profilePicture }} style={styles.avatarImage} resizeMode="cover" />
+                  <Image source={{ uri: profilePicture }} style={styles.profileHeroAvatarImage} resizeMode="cover" />
                 ) : (
-                  <View style={styles.avatarPlaceholder}>
-                    <FeatherIcon name="user" size={Math.round(PROFILE_HERO_AVATAR * 0.45)} color="#A8A8A8" />
+                  <View style={styles.profileHeroAvatarPlaceholder}>
+                    <FeatherIcon
+                      name="user"
+                      size={Math.round(PROFILE_HERO_PROFILE_AVATAR * 0.45)}
+                      color="#A8A8A8"
+                    />
                   </View>
                 )}
               </AvatarFrameWrapper>
             </View>
-            <Text style={styles.displayName} numberOfLines={2}>
-              {fullName}
-            </Text>
           </View>
-
-          <View style={styles.rightCol}>
-            {tagline ? <Text style={styles.tagline}>{tagline}</Text> : null}
-
-            {bio ? (
-              <Text style={styles.bio}>{bio}</Text>
-            ) : apiChecked ? (
-              <Text style={styles.placeholder}>No extra bio for this person yet.</Text>
-            ) : (
-              <Text style={styles.placeholder}>Loading…</Text>
-            )}
-
-            <View style={styles.notice}>
-              <Text style={styles.noticeText}>
-                Photo, frame, and name from chat. More fields when the API exists or you add id-based stubs.
+          <View style={styles.profileHeroContent}>
+            <View style={styles.profileHeroNameBand}>
+              <Text style={styles.profileHeroName} numberOfLines={2}>
+                {fullName}
               </Text>
             </View>
+            <View style={styles.profileHeroBadgesWrap}>
+              <ProfileHeroBadgeStrip
+                slots={apiDetail?.badgeSlots ?? [null, null, null]}
+                mode="home"
+                variant="inline"
+              />
+            </View>
+            {tagline ? <Text style={styles.profileHeroTagline}>{tagline}</Text> : null}
+            {bio ? (
+              <Text style={styles.profileHeroBio}>{bio}</Text>
+            ) : apiChecked ? (
+              <Text style={styles.profileHeroPlaceholder}>No extra bio for this person yet.</Text>
+            ) : (
+              <Text style={styles.profileHeroPlaceholder}>Loading…</Text>
+            )}
           </View>
         </View>
       </View>
@@ -147,95 +161,96 @@ function getStyles(theme: any) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
+      backgroundColor: COMMUNITY_PROFILE_FILL,
     },
     scrollContent: {
-      paddingTop: 8,
-      paddingBottom: 32,
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 40,
     },
-    profileCard: {
-      borderBottomLeftRadius: 14,
-      borderBottomRightRadius: 14,
-      overflow: 'visible',
-      marginHorizontal: 12,
-      marginTop: 4,
-      backgroundColor: theme.tileBackgroundColor || 'rgba(255,255,255,0.06)',
-    },
-    banner: {
+    profileHeroCard: {
       width: '100%',
+      alignSelf: 'stretch',
+      borderRadius: 14,
+      overflow: 'visible',
+      backgroundColor: COMMUNITY_PROFILE_HERO_TILE_BG,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.08)',
+      position: 'relative',
+    },
+    profileHeroBanner: {
+      width: '100%',
+      backgroundColor: COMMUNITY_PROFILE_ACCENT,
       borderTopLeftRadius: 14,
       borderTopRightRadius: 14,
+      overflow: 'hidden',
     },
-    discordRow: {
+    profileHeroOverlapBlock: {
+      borderBottomLeftRadius: 14,
+      borderBottomRightRadius: 14,
+      width: '100%',
+      paddingHorizontal: 10,
+      paddingBottom: 12,
+    },
+    profileHeroAvatarRow: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
-      paddingHorizontal: 14,
-      gap: 14,
+      alignItems: 'center',
+      marginLeft: 8,
     },
-    leftCol: {
-      width: PROFILE_HERO_AVATAR + 24,
-      alignItems: 'flex-start',
-    },
-    avatarShell: {
+    profileHeroAvatarShell: {
       borderRadius: 999,
       overflow: 'visible',
     },
-    avatarImage: {
+    profileHeroAvatarImage: {
       width: '100%',
       height: '100%',
       borderRadius: 999,
     },
-    avatarPlaceholder: {
+    profileHeroAvatarPlaceholder: {
       width: '100%',
       height: '100%',
       borderRadius: 999,
-      backgroundColor: '#000000',
+      backgroundColor: COMMUNITY_PROFILE_FILL,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    displayName: {
-      marginTop: 10,
-      color: theme.textColor,
-      fontFamily: theme.boldFont,
-      fontSize: 19,
-      lineHeight: 24,
-      textAlign: 'left',
-      width: '100%',
+    profileHeroContent: {
+      marginTop: 12,
+      paddingHorizontal: 8,
     },
-    rightCol: {
-      flex: 1,
+    profileHeroNameBand: {
+      alignSelf: 'flex-start',
       minWidth: 0,
-      paddingTop: profileHeroRightColumnPaddingTop(),
+      marginBottom: 6,
     },
-    tagline: {
-      color: theme.mutedForegroundColor || 'rgba(255,255,255,0.65)',
+    profileHeroName: {
+      color: '#ffffff',
+      fontFamily: 'Montserrat_700Bold',
+      fontSize: 22,
+      lineHeight: 28,
+      textAlign: 'left',
+    },
+    profileHeroTagline: {
+      color: 'rgba(255,255,255,0.78)',
       fontFamily: theme.mediumFont,
-      fontSize: 13,
-      marginBottom: 8,
+      fontSize: 14,
+      marginBottom: 10,
     },
-    bio: {
-      color: theme.textColor,
+    profileHeroBadgesWrap: {
+      marginBottom: 8,
+      minHeight: 20,
+    },
+    profileHeroBio: {
+      color: '#ffffff',
       fontFamily: theme.regularFont,
       fontSize: 15,
       lineHeight: 22,
     },
-    placeholder: {
-      color: theme.mutedForegroundColor || 'rgba(255,255,255,0.6)',
+    profileHeroPlaceholder: {
+      color: 'rgba(255,255,255,0.65)',
       fontFamily: theme.regularFont,
       fontSize: 14,
       lineHeight: 20,
-    },
-    notice: {
-      marginTop: 14,
-      padding: 10,
-      borderRadius: 10,
-      backgroundColor: 'rgba(255,255,255,0.05)',
-    },
-    noticeText: {
-      color: theme.mutedForegroundColor || 'rgba(255,255,255,0.55)',
-      fontFamily: theme.regularFont,
-      fontSize: 11,
-      lineHeight: 16,
     },
   })
 }

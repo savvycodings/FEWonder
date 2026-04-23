@@ -707,6 +707,131 @@ export async function deleteCommunityMessage(payload: {
   }
 }
 
+function normalizeHeroBadgeSlots(raw: unknown): [string | null, string | null, string | null] {
+  if (!Array.isArray(raw)) return [null, null, null]
+  const next = raw.slice(0, 3).map((v) => (typeof v === 'string' && v.trim() ? v.trim() : null))
+  while (next.length < 3) next.push(null)
+  return [next[0], next[1], next[2]] as [string | null, string | null, string | null]
+}
+
+export async function getProfileHero(sessionToken: string): Promise<{
+  bannerUrl: string | null
+  badgeSlots: [string | null, string | null, string | null]
+}> {
+  const response = await fetch(`${DOMAIN}/auth/profile-hero`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+    },
+  })
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { raw }
+  }
+  if (!response.ok) {
+    throw new Error(data?.error || data?.raw || 'Unable to load profile hero')
+  }
+  return {
+    bannerUrl: typeof data?.bannerUrl === 'string' && data.bannerUrl.trim() ? data.bannerUrl.trim() : null,
+    badgeSlots: normalizeHeroBadgeSlots(data?.badgeSlots),
+  }
+}
+
+export async function updateProfileHero(
+  sessionToken: string,
+  payload: {
+    bannerUrl?: string | null
+    badgeSlots?: [string | null, string | null, string | null]
+  }
+): Promise<{
+  bannerUrl: string | null
+  badgeSlots: [string | null, string | null, string | null]
+}> {
+  const body: Record<string, unknown> = {}
+  if (payload.bannerUrl !== undefined) body.bannerUrl = payload.bannerUrl
+  if (payload.badgeSlots !== undefined) body.badgeSlots = payload.badgeSlots
+  const response = await fetch(`${DOMAIN}/auth/profile-hero`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { raw }
+  }
+  if (!response.ok) {
+    throw new Error(data?.error || data?.raw || 'Unable to update profile hero')
+  }
+  return {
+    bannerUrl: typeof data?.bannerUrl === 'string' && data.bannerUrl.trim() ? data.bannerUrl.trim() : null,
+    badgeSlots: normalizeHeroBadgeSlots(data?.badgeSlots),
+  }
+}
+
+export async function uploadProfileBanner(payload: {
+  sessionToken: string
+  imageBase64: string
+  mimeType: string
+}): Promise<{ bannerUrl: string | null }> {
+  const response = await fetch(`${DOMAIN}/auth/profile-banner`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${payload.sessionToken}`,
+    },
+    body: JSON.stringify({
+      imageBase64: payload.imageBase64,
+      mimeType: payload.mimeType,
+    }),
+  })
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { raw }
+  }
+  if (!response.ok) {
+    throw new Error(data?.error || data?.raw || 'Unable to upload profile banner')
+  }
+  return {
+    bannerUrl: typeof data?.bannerUrl === 'string' && data.bannerUrl.trim() ? data.bannerUrl.trim() : null,
+  }
+}
+
+export async function reportCommunityMessage(payload: {
+  sessionToken: string
+  messageId: string
+  reason?: string
+}): Promise<void> {
+  const response = await fetch(`${DOMAIN}/community/messages/${payload.messageId}/report`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${payload.sessionToken}`,
+    },
+    body: JSON.stringify({ reason: payload.reason || '' }),
+  })
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { raw }
+  }
+  if (!response.ok) {
+    throw new Error(data?.error || data?.raw || 'Unable to report message')
+  }
+}
+
 export async function listShopifyProducts(params?: {
   first?: number
   query?: string

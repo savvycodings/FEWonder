@@ -201,6 +201,24 @@ export async function adminLogout() {
   await setAdminOrdersToken(null)
 }
 
+export type AdminCommunityReport = {
+  id: string
+  messageId: string
+  reportedByUserId: string
+  reportedUserId: string
+  reason: string | null
+  status: 'open' | 'resolved'
+  createdAt: string
+  resolvedAt: string | null
+  messageBody: string
+  messageImageUrl: string | null
+  messageMissing: boolean
+  reporterName: string | null
+  reporterEmail: string | null
+  reportedName: string | null
+  reportedEmail: string | null
+}
+
 export async function fetchAdminOrders(paymentMethod: 'peach' | 'eft' | 'all', limit = 50, offset = 0) {
   const q =
     paymentMethod === 'all'
@@ -220,6 +238,30 @@ export async function fetchAdminOrders(paymentMethod: 'peach' | 'eft' | 'all', l
       userName: string | null
     }[]
   }>
+}
+
+export async function fetchAdminCommunityReports(
+  status: 'open' | 'resolved' | 'all' = 'open',
+  limit = 100
+) {
+  const q = `?status=${encodeURIComponent(status)}&limit=${Math.max(1, Math.min(200, limit))}`
+  return adminFetch(`/admin/community/reports${q}`) as Promise<{
+    reports: AdminCommunityReport[]
+  }>
+}
+
+export async function dismissAdminCommunityReport(reportId: string) {
+  return adminFetch(`/admin/community/reports/${encodeURIComponent(reportId)}/dismiss`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }) as Promise<{ ok: boolean }>
+}
+
+export async function deleteAdminReportedCommunityMessage(reportId: string) {
+  return adminFetch(`/admin/community/reports/${encodeURIComponent(reportId)}/delete-message`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }) as Promise<{ ok: boolean; deleted: boolean }>
 }
 
 export async function fetchAdminUserOrders(userId: string) {
