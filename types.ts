@@ -75,7 +75,14 @@ export interface DailyRewardStatus {
 export interface WonderJumpProgress {
   highScore: number
   unlockedBiomes: string[]
+  /** ISO time when tropical chest becomes openable; null if no chest in progress. */
+  chestUnlocksAt: string | null
 }
+
+/** Result of POST /auth/wonder-jump-chest/claim */
+export type WonderJumpChestClaimResult =
+  | { ok: true; wonderCoins: number; chestUnlocksAt: null }
+  | { ok: false; error: string; chestUnlocksAt?: string | null; msRemaining?: number }
 
 export interface ShopifyMoney {
   amount: string

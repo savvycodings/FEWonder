@@ -8,6 +8,7 @@ import {
   Model,
   ShopifyProduct,
   User,
+  WonderJumpChestClaimResult,
   WonderJumpProgress,
 } from '../types'
 
@@ -428,7 +429,9 @@ export async function fetchWonderJumpProgress(sessionToken: string): Promise<Won
   const unlockedBiomes = Array.isArray(data.unlockedBiomes)
     ? data.unlockedBiomes.filter((x: unknown) => typeof x === 'string')
     : []
-  return { highScore, unlockedBiomes }
+  const chestUnlocksAt =
+    typeof data.chestUnlocksAt === 'string' && data.chestUnlocksAt.length > 0 ? data.chestUnlocksAt : null
+  return { highScore, unlockedBiomes, chestUnlocksAt }
 }
 
 export async function saveWonderJumpProgress(
@@ -460,7 +463,68 @@ export async function saveWonderJumpProgress(
   const unlockedBiomes = Array.isArray(data.unlockedBiomes)
     ? data.unlockedBiomes.filter((x: unknown) => typeof x === 'string')
     : []
-  return { highScore, unlockedBiomes }
+  const chestUnlocksAt =
+    typeof data.chestUnlocksAt === 'string' && data.chestUnlocksAt.length > 0 ? data.chestUnlocksAt : null
+  return { highScore, unlockedBiomes, chestUnlocksAt }
+}
+
+export async function pickupWonderJumpChest(sessionToken: string): Promise<WonderJumpProgress> {
+  const response = await fetch(`${DOMAIN}/auth/wonder-jump-chest/pickup`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+    },
+  })
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { raw }
+  }
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to pick up chest')
+  }
+  const highScore = typeof data.highScore === 'number' && Number.isFinite(data.highScore) ? data.highScore : 0
+  const unlockedBiomes = Array.isArray(data.unlockedBiomes)
+    ? data.unlockedBiomes.filter((x: unknown) => typeof x === 'string')
+    : []
+  const chestUnlocksAt =
+    typeof data.chestUnlocksAt === 'string' && data.chestUnlocksAt.length > 0 ? data.chestUnlocksAt : null
+  return { highScore, unlockedBiomes, chestUnlocksAt }
+}
+
+export async function claimWonderJumpChest(sessionToken: string): Promise<WonderJumpChestClaimResult> {
+  const response = await fetch(`${DOMAIN}/auth/wonder-jump-chest/claim`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+    },
+  })
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { raw }
+  }
+  if (response.ok && data.ok === true) {
+    const wonderCoins =
+      typeof data.wonderCoins === 'number' && Number.isFinite(data.wonderCoins) ? data.wonderCoins : 0
+    return { ok: true, wonderCoins, chestUnlocksAt: null }
+  }
+  if (response.status === 409) {
+    return {
+      ok: false,
+      error: String(data?.error || 'Chest is still opening'),
+      chestUnlocksAt: typeof data.chestUnlocksAt === 'string' ? data.chestUnlocksAt : undefined,
+      msRemaining: typeof data.msRemaining === 'number' ? data.msRemaining : undefined,
+    }
+  }
+  return {
+    ok: false,
+    error: String(data?.error || 'Unable to claim chest'),
+  }
 }
 
 export async function purchaseWonderStoreItem(

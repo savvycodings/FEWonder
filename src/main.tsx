@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -376,9 +376,9 @@ function Tabs({
   const WonderJumpTabScreen = useMemo(
     () =>
       function WonderJumpTabScreen(props: { navigation: any; route: any }) {
-        return <WonderJump {...props} sessionToken={sessionToken} />
+        return <WonderJump {...props} sessionToken={sessionToken} onUserUpdated={onUserUpdated} />
       },
-    [sessionToken]
+    [sessionToken, onUserUpdated]
   )
 
   return (
@@ -530,12 +530,12 @@ export function Main() {
     setSessionToken(payload.sessionToken)
   }
 
-  async function onUserUpdated(nextUser: User) {
+  const onUserUpdated = useCallback(async (nextUser: User) => {
     const nextAuth: AuthPayload = { user: nextUser, sessionToken }
     await AsyncStorage.setItem('wonderport-auth', JSON.stringify(nextAuth))
     await AsyncStorage.setItem('wonderport-user', JSON.stringify(nextUser))
     setUser(nextUser)
-  }
+  }, [sessionToken])
 
   async function onLogout() {
     if (sessionToken) {

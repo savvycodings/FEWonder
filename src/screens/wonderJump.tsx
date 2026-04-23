@@ -1,9 +1,31 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Animated, Dimensions, Image, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Easing,
+  Image,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native'
 import { useIsFocused } from '@react-navigation/native'
-import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, Rect, Stop } from 'react-native-svg'
+import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, Rect, Stop, SvgXml } from 'react-native-svg'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { fetchWonderJumpProgress, saveWonderJumpProgress } from '../utils'
+import type { User } from '../../types'
+import { GiftboxAnimationPreview } from '../components/GiftboxAnimationPreview'
+import { WonderSpinningCoin } from '../components/WonderCoin'
+import {
+  claimWonderJumpChest,
+  fetchSessionUser,
+  fetchWonderJumpProgress,
+  pickupWonderJumpChest,
+  saveWonderJumpProgress,
+} from '../utils'
 
 type RunMode = 'menu' | 'playing' | 'paused' | 'gameOver'
 type PlatformKind = 'normal' | 'bouncy' | 'moving' | 'breakable'
@@ -91,6 +113,16 @@ type JetpackPickup = {
   hoverPhase: number
 }
 
+/** In-world gift chest (no hover bob — sits flush on the platform). */
+type ChestPickup = {
+  id: string
+  x: number
+  y: number
+  width: number
+  height: number
+  collected: boolean
+}
+
 type Crab = {
   id: string
   hostPlatformId: string
@@ -124,6 +156,9 @@ type GameState = {
   platforms: PlatformItem[]
   spikes: Spike[]
   jetpacks: JetpackPickup[]
+  chests: ChestPickup[]
+  /** At most one chest entity per run; server blocks another until claim. */
+  chestSpawnedThisRun: boolean
   crabs: Crab[]
   cameraY: number
   heightScore: number
@@ -150,6 +185,8 @@ type InputState = {
 }
 
 const PLAYER_SIZE = 24
+/** Feet may sit this far from the math platform top and still count as grounded (float + tick timing). */
+const GROUND_SUPPORT_SLACK_PX = 4
 const PLATFORM_HEIGHT = 12
 /** Extra pixels drawn below hitbox so dirt “hangs” like the reference sprite (collision stays 12px). */
 const PLATFORM_VISUAL_OVERHANG = 7
@@ -168,6 +205,29 @@ const PALM_TREE_W = 44
 const PALM_TREE_H = 74
 const PALM_TREE_BASE_Y = 20
 const PALM_TREE_IMAGE = require('../../public/wonderjump/palm-tree.png')
+/** Chest sits on platform tops in tropical gameplay; spawn chance per new main-chain platform. */
+const CHEST_SPAWN_P = 0.012
+const CHEST_PICKUP_W = 32
+const CHEST_PICKUP_H = 30
+const WONDER_JUMP_CHEST_REWARD_COINS = 2
+
+/**
+ * TEMP debug overrides (set false + server `WONDER_JUMP_CHEST_PICKUP_INSTANT_UNLOCK_DEBUG` false for production).
+ * When true: one chest is placed on a fixed main-chain tile at world build; random tropical spawn is skipped.
+ */
+const WONDER_JUMP_CHEST_DEBUG_FIXED_THIRD_PLATFORM = true
+/**
+ * Which main-chain step gets the debug chest: `0` = start tile (always in view), `2` = third chain platform (two jumps up).
+ * Siblings are not in `mainChainIndices`; indices count only the vertical chain.
+ */
+const WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX = 0
+
+/** Human-readable rarity for hub copy (reflects debug vs production). */
+const WONDER_JUMP_CHEST_RARITY_TEXT_PRODUCTION =
+  'Very rare in normal play: about a 1-in-80 roll each time a new main-chain platform appears in the tropical stretch, plus at most one chest per run.'
+const WONDER_JUMP_CHEST_RARITY_DISPLAY = WONDER_JUMP_CHEST_DEBUG_FIXED_THIRD_PLATFORM
+  ? `Debug: fixed chest on main-chain step ${WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX + 1} (index ${WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX}); instant open on server debug flag.`
+  : WONDER_JUMP_CHEST_RARITY_TEXT_PRODUCTION
 const CRAB_W = 26
 const CRAB_H = 20
 /** Base chance when tropical gameplay first applies (climbing from grass/mushroom). */
@@ -265,6 +325,18 @@ function deathBlurb(cause: WonderJumpDeathCause | null): string {
     default:
       return ''
   }
+}
+
+function formatWonderJumpChestRemaining(unlockIso: string): string {
+  const t = new Date(unlockIso).getTime() - Date.now()
+  if (!Number.isFinite(t) || t <= 0) return 'Ready!'
+  const totalSec = Math.ceil(t / 1000)
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  if (h > 0) return `${h}h ${m}m`
+  if (m > 0) return `${m}m ${s}s`
+  return `${s}s`
 }
 
 /** Extra vertical gap range for main-chain spawns in mushroom (still clamped jump-safe). */
@@ -1020,6 +1092,43 @@ function spawnJetpack(
   ]
 }
 
+function trySpawnWonderJumpChest(
+  platform: PlatformItem,
+  chestSpawnedThisRun: boolean,
+  tropicalBlend: number,
+  startBiome: WonderJumpStartBiome,
+  allowChestForAccount: boolean
+): ChestPickup[] {
+  if (WONDER_JUMP_CHEST_DEBUG_FIXED_THIRD_PLATFORM) {
+    return []
+  }
+  if (!allowChestForAccount) return []
+  if (chestSpawnedThisRun) return []
+  if (startBiome !== 'tropical' && tropicalBlend < TROPICAL_GAMEPLAY_BLEND) return []
+  if (platform.kind === 'moving' || platform.kind === 'breakable' || platform.isFalling) return []
+  if (platform.surface !== 'grass' && platform.surface !== 'sand') return []
+  if (Math.random() > CHEST_SPAWN_P) return []
+  const topY = platformTopY(platform)
+  return [
+    {
+      id: `wj-chest-${platform.id}`,
+      x: chestHorizontalLeftOnPlatform(platform, 'center'),
+      y: topY - CHEST_PICKUP_H,
+      width: CHEST_PICKUP_W,
+      height: CHEST_PICKUP_H,
+      collected: false,
+    },
+  ]
+}
+
+/** Keeps chest on the platform rim; `right` avoids overlapping the player on the wide start tile. */
+function chestHorizontalLeftOnPlatform(platform: PlatformItem, placement: 'center' | 'right'): number {
+  const minX = platform.x + 8
+  const maxX = Math.max(minX, platform.x + platform.width - CHEST_PICKUP_W - 8)
+  if (placement === 'right') return maxX
+  return clamp(platform.x + platform.width / 2 - CHEST_PICKUP_W / 2, minX, maxX)
+}
+
 function springPadBoundsForPlatform(width: number) {
   const padW = clamp(Math.max(32, width - 8), 36, 78)
   const left = (width - padW) / 2
@@ -1233,11 +1342,40 @@ function createInitialWorld(
     }
   }
 
+  let chests: ChestPickup[] = []
+  let chestSpawnedThisRun = false
+  if (
+    WONDER_JUMP_CHEST_DEBUG_FIXED_THIRD_PLATFORM &&
+    mainChainIndices.length > WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX
+  ) {
+    const chainIdx = mainChainIndices[WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX]
+    const host = chainIdx !== undefined ? platforms[chainIdx] : undefined
+    if (host) {
+      const topY = platformTopY(host)
+      const chestPlacement: 'center' | 'right' =
+        WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX === 0 ? 'right' : 'center'
+      const left = chestHorizontalLeftOnPlatform(host, chestPlacement)
+      chests = [
+        {
+          id: `wj-chest-${host.id}-debug-chain-${WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX}`,
+          x: left,
+          y: topY - CHEST_PICKUP_H,
+          width: CHEST_PICKUP_W,
+          height: CHEST_PICKUP_H,
+          collected: false,
+        },
+      ]
+      chestSpawnedThisRun = true
+    }
+  }
+
   return {
     player,
     platforms,
     spikes: safeSpikes,
     jetpacks,
+    chests,
+    chestSpawnedThisRun,
     crabs,
     lastJetpackY,
   }
@@ -1267,6 +1405,8 @@ function createInitialState(
     platforms: world.platforms,
     spikes: world.spikes,
     jetpacks: world.jetpacks,
+    chests: world.chests,
+    chestSpawnedThisRun: world.chestSpawnedThisRun,
     crabs: world.crabs,
     cameraY: 0,
     heightScore: 0,
@@ -1946,6 +2086,58 @@ const JumpPlatformRow = memo(function JumpPlatformRow({
   )
 })
 
+/** Same asset + fetch pattern as Daily Rewards’ gift (SvgXml); cached so hub + pickups share one load. */
+let wonderJumpGiftboxSvgXmlCache: string | null = null
+let wonderJumpGiftboxSvgXmlInflight: Promise<string> | null = null
+
+async function loadWonderJumpGiftboxSvgXml(): Promise<string> {
+  if (wonderJumpGiftboxSvgXmlCache) return wonderJumpGiftboxSvgXmlCache
+  if (!wonderJumpGiftboxSvgXmlInflight) {
+    wonderJumpGiftboxSvgXmlInflight = (async () => {
+      const resolved = Image.resolveAssetSource(require('../../assets/giftbox.svg'))
+      const uri = resolved?.uri
+      if (!uri) throw new Error('giftbox.svg has no uri')
+      const res = await fetch(uri)
+      if (!res.ok) throw new Error(`giftbox fetch ${res.status}`)
+      const xml = await res.text()
+      wonderJumpGiftboxSvgXmlCache = xml
+      return xml
+    })()
+  }
+  return wonderJumpGiftboxSvgXmlInflight
+}
+
+const WonderJumpGiftboxFromAsset = memo(function WonderJumpGiftboxFromAsset({
+  width,
+  height,
+}: {
+  width: number
+  height: number
+}) {
+  const [xml, setXml] = useState<string | null>(() => wonderJumpGiftboxSvgXmlCache)
+  useEffect(() => {
+    if (xml) return
+    let cancelled = false
+    void loadWonderJumpGiftboxSvgXml()
+      .then((s) => {
+        if (!cancelled) setXml(s)
+      })
+      .catch(() => {
+        if (!cancelled) setXml(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [xml])
+  if (!xml) {
+    return <View style={{ width, height }} pointerEvents="none" />
+  }
+  return <SvgXml xml={xml} width={width} height={height} pointerEvents="none" preserveAspectRatio="xMidYMid meet" />
+})
+
+/** Dock tile gift size — matches static hub gift before “ready” animation. */
+const WJ_DOCK_GIFT_BOX_PX = 46
+
 const JetpackPickupView = memo(function JetpackPickupView({
   left,
   top,
@@ -1982,6 +2174,24 @@ const JetpackPickupView = memo(function JetpackPickupView({
       <Rect x="22" y="14" width="1" height="8" fill="#111318" opacity={0.35} />
       <Rect x="12" y="20" width="6" height="1" fill="#68707b" opacity={0.45} />
     </Svg>
+  )
+})
+
+const WonderJumpChestPickupView = memo(function WonderJumpChestPickupView({
+  left,
+  top,
+  width,
+  height,
+}: {
+  left: number
+  top: number
+  width: number
+  height: number
+}) {
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', left, top, width, height, zIndex: 2 }}>
+      <WonderJumpGiftboxFromAsset width={width} height={height} />
+    </View>
   )
 })
 
@@ -2264,10 +2474,12 @@ export function WonderJump({
   navigation,
   route,
   sessionToken,
+  onUserUpdated,
 }: {
   navigation: any
   route: any
   sessionToken?: string
+  onUserUpdated?: (user: User) => Promise<void>
 }) {
   const isFocused = useIsFocused()
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
@@ -2319,6 +2531,8 @@ export function WonderJump({
       platforms: world.platforms.map((p) => ({ ...p })),
       spikes: world.spikes.map((s) => ({ ...s })),
       jetpacks: world.jetpacks.map((j) => ({ ...j })),
+      chests: world.chests.map((c) => ({ ...c })),
+      chestSpawnedThisRun: world.chestSpawnedThisRun,
       crabs: world.crabs.map((c) => ({ ...c })),
       cameraY: 0,
       heightScore: 0,
@@ -2341,10 +2555,33 @@ export function WonderJump({
   /** Authoritative playing snapshot between React renders (throttled setState while running). */
   const playingSimSnapRef = useRef<GameState | null>(null)
   const prevRunModeForProgressSyncRef = useRef<RunMode>(gameState.mode)
+  const sessionTokenRef = useRef<string | undefined>(sessionToken)
+  const wonderJumpChestUnlocksAtRef = useRef<string | null>(null)
+  const [serverChestUnlocksAt, setServerChestUnlocksAt] = useState<string | null>(null)
+  const [chestHubTick, setChestHubTick] = useState(0)
+  const [chestClaimBusy, setChestClaimBusy] = useState(false)
+  const [hubChestRevealPhase, setHubChestRevealPhase] = useState<
+    null | 'opening' | 'claiming' | 'success' | 'error'
+  >(null)
+  const [hubChestRevealError, setHubChestRevealError] = useState('')
+  const hubChestGiftPop = useRef(new Animated.Value(0)).current
+  const hubChestGiftOpacity = useRef(new Animated.Value(1)).current
+  /** Ensures we POST pickup at least once after game over if a collected chest is still in state (RAF safety net). */
+  const gameOverChestPickupPostedRef = useRef(false)
+
+  useEffect(() => {
+    sessionTokenRef.current = sessionToken
+  }, [sessionToken])
+
+  useEffect(() => {
+    void loadWonderJumpGiftboxSvgXml().catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!sessionToken) {
       setUnlockedBiomes([...DEFAULT_WONDER_JUMP_UNLOCKED])
+      wonderJumpChestUnlocksAtRef.current = null
+      setServerChestUnlocksAt(null)
       return
     }
     let cancelled = false
@@ -2356,6 +2593,8 @@ export function WonderJump({
           x === 'grassland' || x === 'mushroom' || x === 'tropical'
         )
         setUnlockedBiomes(next.length > 0 ? next : [...DEFAULT_WONDER_JUMP_UNLOCKED])
+        wonderJumpChestUnlocksAtRef.current = p.chestUnlocksAt ?? null
+        setServerChestUnlocksAt(p.chestUnlocksAt ?? null)
       })
       .catch(() => {
         /* offline / old server — keep local gameplay */
@@ -2364,6 +2603,29 @@ export function WonderJump({
       cancelled = true
     }
   }, [sessionToken])
+
+  useEffect(() => {
+    if (gameState.mode !== 'gameOver') {
+      gameOverChestPickupPostedRef.current = false
+      return
+    }
+    if (!sessionToken) return
+    if (!(gameState.chests ?? []).some((c) => c.collected)) return
+    if (gameOverChestPickupPostedRef.current) return
+    gameOverChestPickupPostedRef.current = true
+    void pickupWonderJumpChest(sessionToken)
+      .then((p) => {
+        wonderJumpChestUnlocksAtRef.current = p.chestUnlocksAt ?? null
+        setServerChestUnlocksAt(p.chestUnlocksAt ?? null)
+        setGameState((s) => ({
+          ...s,
+          chests: (s.chests ?? []).filter((ch) => !ch.collected),
+        }))
+      })
+      .catch(() => {
+        gameOverChestPickupPostedRef.current = false
+      })
+  }, [gameState.mode, sessionToken])
 
   useEffect(() => {
     const prev = prevRunModeForProgressSyncRef.current
@@ -2379,9 +2641,25 @@ export function WonderJump({
           x === 'grassland' || x === 'mushroom' || x === 'tropical'
         )
         if (next.length > 0) setUnlockedBiomes(next)
+        wonderJumpChestUnlocksAtRef.current = p.chestUnlocksAt ?? null
+        setServerChestUnlocksAt(p.chestUnlocksAt ?? null)
       })
       .catch(() => {})
   }, [gameState.mode, gameState.heightScore, gameState.startBiome, sessionToken, unlockedBiomes])
+
+  /** After a run ends, re-sync chest dock from the server in case pickup finished after the progress save. */
+  useEffect(() => {
+    if (gameState.mode !== 'gameOver' || !sessionToken) return
+    const id = setTimeout(() => {
+      void fetchWonderJumpProgress(sessionToken)
+        .then((p) => {
+          wonderJumpChestUnlocksAtRef.current = p.chestUnlocksAt ?? null
+          setServerChestUnlocksAt(p.chestUnlocksAt ?? null)
+        })
+        .catch(() => {})
+    }, 450)
+    return () => clearTimeout(id)
+  }, [gameState.mode, sessionToken])
 
   useEffect(() => {
     const p = route?.params?.startBiome
@@ -2426,6 +2704,9 @@ export function WonderJump({
         const difficulty = Math.min(1, previous.heightScore / 2200)
         const mushroomBlendTick = getMushroomBlend(previous.heightScore, previous.startBiome)
         const tropicalBlendTick = getTropicalBlend(previous.heightScore, previous.startBiome)
+        const tokenForChest = sessionTokenRef.current
+        const allowServerChest =
+          Boolean(tokenForChest && tokenForChest.length > 0) && wonderJumpChestUnlocksAtRef.current == null
         const speed = BASE_SPEED + difficulty * 1.5
         const nextPlatforms = previous.platforms.map((platform) => {
           let x = platform.x
@@ -2492,7 +2773,7 @@ export function WonderJump({
           const support = nextPlatforms.find((platform) => {
             if (!isSolid(platform)) return false
             const topY = platformTopY(platform)
-            const closeToTop = Math.abs(player.y + player.height - topY) <= 2
+            const closeToTop = Math.abs(player.y + player.height - topY) <= GROUND_SUPPORT_SLACK_PX
             const overlapX =
               player.x + player.width - 4 >= platform.x &&
               player.x + 4 <= platform.x + platform.width
@@ -2505,6 +2786,8 @@ export function WonderJump({
           } else {
             player.groundPlatformId = support.id
             player.groundKind = support.kind
+            const snapTop = platformTopY(support)
+            player.y = snapTop - player.height
           }
         }
 
@@ -2630,6 +2913,24 @@ export function WonderJump({
           return jetpack
         })
 
+        const currentChests = (previous.chests ?? [])
+          .filter((chest) => !chest.collected)
+          .filter((chest) => {
+            const y = chest.y - previous.cameraY
+            return y > -playHeight - 170 && y < playHeight + 220
+          })
+        const resolvedChests = currentChests.map((chest) => {
+          const hit =
+            player.x < chest.x + chest.width &&
+            player.x + player.width > chest.x &&
+            player.y < chest.y + chest.height &&
+            player.y + player.height > chest.y
+          if (hit) {
+            return { ...chest, collected: true }
+          }
+          return chest
+        })
+
         const hitSpike =
           jetpackFuelMs > 0 || jetpackEndGraceMs > 0
             ? false
@@ -2643,6 +2944,12 @@ export function WonderJump({
         let platforms = [...mutatedPlatforms]
         let spikes = [...currentSpikes]
         let jetpacks = [...resolvedJetpacks]
+        /** Keep already-collected chests in state so pickup + hub sync survive extra sim ticks in the same frame. */
+        let chests = [
+          ...resolvedChests,
+          ...(previous.chests ?? []).filter((chest) => chest.collected),
+        ]
+        let chestSpawnedThisRun = previous.chestSpawnedThisRun
         let crabs = [...previous.crabs]
         let lastJetpackY = previous.lastJetpackY
         const hostById = platformById
@@ -2752,6 +3059,17 @@ export function WonderJump({
             jetpacksAliveSpawn += jetpackAdded.length
             lastJetpackY = jetpackAdded[0].y
           }
+          const chestAdded = trySpawnWonderJumpChest(
+            chainPlatform,
+            chestSpawnedThisRun,
+            tropicalBlendTick,
+            previous.startBiome,
+            allowServerChest
+          )
+          if (chestAdded.length) {
+            chests.push(...chestAdded)
+            chestSpawnedThisRun = true
+          }
           crabs.push(...spawnCrabOnPlatform(chainPlatform, newSpikes.length > 0, tropicalBlendTick, previous.startBiome, seed))
           const sibling = trySpawnSiblingPlatform(
             highestY,
@@ -2824,6 +3142,11 @@ export function WonderJump({
           const screenY = jetpack.y - cameraY
           return screenY > -playHeight - 170 && screenY < playHeight + 250
         })
+        chests = chests.filter((chest) => {
+          if (chest.collected) return true
+          const screenY = chest.y - cameraY
+          return screenY > -playHeight - 170 && screenY < playHeight + 250
+        })
 
         // Crab collisions + stomps (stomp works with jetpack; touch damage only without jetpack).
         let touchedCrab = false
@@ -2872,6 +3195,8 @@ export function WonderJump({
             platforms,
             spikes,
             jetpacks,
+            chests,
+            chestSpawnedThisRun,
             crabs,
             cameraY,
             heightScore,
@@ -2892,6 +3217,8 @@ export function WonderJump({
           platforms,
           spikes,
           jetpacks,
+          chests,
+          chestSpawnedThisRun,
           crabs,
           cameraY,
           heightScore,
@@ -2936,6 +3263,38 @@ export function WonderJump({
         playingSimSnapRef.current = next
         stepped = true
         if (next.mode !== 'playing') break
+      }
+
+      if (stepped && (next.mode === 'playing' || next.mode === 'gameOver')) {
+        const token = sessionTokenRef.current
+        if (token) {
+          const prevChests = prevSnap.chests ?? []
+          for (const c of next.chests ?? []) {
+            const prevC = prevChests.find((x) => x.id === c.id)
+            if (c.collected && prevC && !prevC.collected) {
+              void pickupWonderJumpChest(token)
+                .then((p) => {
+                  wonderJumpChestUnlocksAtRef.current = p.chestUnlocksAt ?? null
+                  setServerChestUnlocksAt(p.chestUnlocksAt ?? null)
+                  setGameState((s) => ({
+                    ...s,
+                    chests: (s.chests ?? []).filter((ch) => !ch.collected),
+                  }))
+                })
+                .catch(() => {
+                  setGameState((s) => {
+                    if (s.mode !== 'playing' && s.mode !== 'gameOver') return s
+                    if (!s.chests.some((ch) => ch.id === c.id && ch.collected)) return s
+                    return {
+                      ...s,
+                      chests: s.chests.map((ch) => (ch.id === c.id ? { ...ch, collected: false } : ch)),
+                    }
+                  })
+                })
+              break
+            }
+          }
+        }
       }
 
       if (stepped || next.mode !== 'playing') {
@@ -3044,6 +3403,13 @@ export function WonderJump({
   }
   const panelBiomeLabel = panelAccent.label
   const isHubPanel = gameState.mode === 'menu' || gameState.mode === 'gameOver'
+
+  useEffect(() => {
+    if (!isHubPanel || !serverChestUnlocksAt) return
+    const id = setInterval(() => setChestHubTick((n) => n + 1), 1000)
+    return () => clearInterval(id)
+  }, [isHubPanel, serverChestUnlocksAt])
+
   const activeOverlay =
     settingsOpen
       ? 'settings'
@@ -3132,6 +3498,92 @@ export function WonderJump({
     setGameState((prev) => (prev.mode === 'menu' ? createMenuPreviewState(biome) : prev))
   }
 
+  const resetHubChestRevealAnim = useCallback(() => {
+    hubChestGiftPop.setValue(0)
+    hubChestGiftOpacity.setValue(1)
+  }, [hubChestGiftPop, hubChestGiftOpacity])
+
+  const closeHubChestRevealModal = useCallback(() => {
+    setHubChestRevealPhase(null)
+    setHubChestRevealError('')
+    resetHubChestRevealAnim()
+  }, [resetHubChestRevealAnim])
+
+  const beginHubChestReveal = useCallback(async () => {
+    if (!sessionToken || chestClaimBusy || !serverChestUnlocksAt) return
+    if (new Date(serverChestUnlocksAt).getTime() > Date.now()) return
+
+    resetHubChestRevealAnim()
+    setHubChestRevealError('')
+    setHubChestRevealPhase('opening')
+
+    await new Promise<void>((resolve) => {
+      Animated.sequence([
+        Animated.spring(hubChestGiftPop, {
+          toValue: 1,
+          useNativeDriver: true,
+          friction: 5,
+          tension: 88,
+        }),
+        Animated.timing(hubChestGiftOpacity, {
+          toValue: 0,
+          duration: 260,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.quad),
+        }),
+      ]).start(() => resolve())
+    })
+
+    setHubChestRevealPhase('claiming')
+    setChestClaimBusy(true)
+    try {
+      const res = await claimWonderJumpChest(sessionToken)
+      if (res.ok) {
+        wonderJumpChestUnlocksAtRef.current = null
+        setServerChestUnlocksAt(null)
+        if (onUserUpdated) {
+          try {
+            const u = await fetchSessionUser(sessionToken)
+            await onUserUpdated(u)
+          } catch {
+            /* ignore */
+          }
+        }
+        setHubChestRevealPhase('success')
+      } else {
+        setHubChestRevealError(res.error || 'Could not open your gift.')
+        hubChestGiftOpacity.setValue(1)
+        hubChestGiftPop.setValue(0)
+        setHubChestRevealPhase('error')
+      }
+    } catch {
+      setHubChestRevealError('Something went wrong. Try again.')
+      hubChestGiftOpacity.setValue(1)
+      hubChestGiftPop.setValue(0)
+      setHubChestRevealPhase('error')
+    } finally {
+      setChestClaimBusy(false)
+    }
+  }, [
+    sessionToken,
+    chestClaimBusy,
+    serverChestUnlocksAt,
+    onUserUpdated,
+    resetHubChestRevealAnim,
+    hubChestGiftPop,
+    hubChestGiftOpacity,
+  ])
+
+  const wjChestReadyToOpen = useMemo(() => {
+    if (!isHubPanel || !serverChestUnlocksAt) return false
+    return new Date(serverChestUnlocksAt).getTime() <= Date.now()
+  }, [isHubPanel, serverChestUnlocksAt, chestHubTick])
+
+  const wjChestCountdownText = useMemo(() => {
+    if (!isHubPanel || !serverChestUnlocksAt) return ''
+    return formatWonderJumpChestRemaining(serverChestUnlocksAt)
+  }, [isHubPanel, serverChestUnlocksAt, chestHubTick])
+
   const cam = gameState.cameraY
   /** Platforms near the viewport — avoids mapping hundreds of rows per frame as the run climbs. */
   const visiblePlatforms = useMemo(() => {
@@ -3153,6 +3605,12 @@ export function WonderJump({
     const hi = cam + playHeight + 260
     return gameState.jetpacks.filter((j) => !j.collected && j.y > lo && j.y < hi)
   }, [gameState.jetpacks, cam, playHeight])
+  const visibleChests = useMemo(() => {
+    const lo = cam - playHeight - 200
+    const hi = cam + playHeight + 260
+    const list = gameState.chests ?? []
+    return list.filter((c) => !c.collected && c.y > lo && c.y < hi)
+  }, [gameState.chests, cam, playHeight])
   const platformByIdNear = useMemo(() => {
     const lo = cam - 420
     const hi = cam + playHeight + 420
@@ -3273,6 +3731,16 @@ export function WonderJump({
             />
           )
         })}
+
+        {visibleChests.map((chest) => (
+          <WonderJumpChestPickupView
+            key={chest.id}
+            left={snapX(chest.x)}
+            top={Math.round(chest.y)}
+            width={chest.width}
+            height={chest.height}
+          />
+        ))}
 
         {visibleCrabs.map((crab) => {
           const host = platformByIdNear.get(crab.hostPlatformId)
@@ -3482,6 +3950,55 @@ export function WonderJump({
               {gameOverNewBest ? <Text style={styles.gameOverNewBest}>New high score!</Text> : null}
             </View>
 
+            <View style={styles.wjChestHubCard}>
+              <View style={styles.wjChestHubRow}>
+                {!sessionToken ? (
+                  <View style={styles.wjChestDockTile}>
+                    <View style={styles.wjChestDockTileInnerEmpty} />
+                  </View>
+                ) : serverChestUnlocksAt ? (
+                  wjChestReadyToOpen ? (
+                    <Pressable
+                      onPress={() => void beginHubChestReveal()}
+                      disabled={chestClaimBusy || hubChestRevealPhase !== null}
+                      style={[styles.wjChestDockTile, styles.wjChestDockTileReady]}
+                    >
+                      <GiftboxAnimationPreview size={WJ_DOCK_GIFT_BOX_PX} active />
+                    </Pressable>
+                  ) : (
+                    <View style={[styles.wjChestDockTile, styles.wjChestDockTileCollected]}>
+                      <View style={styles.wjChestDockCollectedGiftDim}>
+                        <WonderJumpGiftboxFromAsset width={34} height={34} />
+                      </View>
+                      <Text style={styles.wjChestDockCollectedLabel}>Collected gift</Text>
+                    </View>
+                  )
+                ) : (
+                  <View style={styles.wjChestDockTile}>
+                    <View style={styles.wjChestDockTileInnerEmpty} />
+                  </View>
+                )}
+                <View style={styles.wjChestHubCopy}>
+                  <Text style={styles.wjChestHubTitle}>Tropical gift dock</Text>
+                  <Text style={styles.wjChestHubRarity}>{WONDER_JUMP_CHEST_RARITY_DISPLAY}</Text>
+                  {!sessionToken ? (
+                    <Text style={styles.wjChestHubMeta}>Sign in to save gifts from Sunset Keys climbs.</Text>
+                  ) : serverChestUnlocksAt ? (
+                    wjChestReadyToOpen ? (
+                      <Text style={styles.wjChestHubMeta}>Tap the gift to open it and claim your Wonder coins.</Text>
+                    ) : (
+                      <Text style={styles.wjChestHubMeta}>Opens in {wjChestCountdownText}</Text>
+                    )
+                  ) : (
+                    <Text style={styles.wjChestHubMeta}>
+                      Your dock is empty. Rare gift boxes can appear on platforms during tropical runs — touch one to
+                      stash it here, then open it when the timer finishes.
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </View>
+
             <View style={styles.gameOverFooter}>
               <Text style={styles.gameOverFooterHint}>
                 {gameState.mode === 'gameOver' ? 'Next run · starting biome' : 'Starting biome for next run'}
@@ -3619,6 +4136,76 @@ export function WonderJump({
           </View>
         ) : null}
       </View>
+
+      <Modal
+        visible={hubChestRevealPhase !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          if (hubChestRevealPhase === 'success' || hubChestRevealPhase === 'error') closeHubChestRevealModal()
+        }}
+      >
+        <Pressable
+          style={styles.wjChestModalBackdrop}
+          onPress={() => {
+            if (hubChestRevealPhase === 'success' || hubChestRevealPhase === 'error') closeHubChestRevealModal()
+          }}
+        >
+          <Pressable style={styles.wjChestModalCard} onPress={(e) => e.stopPropagation()}>
+            {hubChestRevealPhase === 'error' ? (
+              <>
+                <Text style={styles.wjChestModalTitle}>Could not open</Text>
+                <Text style={styles.wjChestModalBody}>{hubChestRevealError}</Text>
+                <Pressable onPress={closeHubChestRevealModal} style={[styles.wjChestModalButton, primaryButtonTone]}>
+                  <Text style={styles.wjChestModalButtonText}>Close</Text>
+                </Pressable>
+              </>
+            ) : hubChestRevealPhase === 'success' ? (
+              <>
+                <Text style={styles.wjChestModalTitle}>You earned {WONDER_JUMP_CHEST_REWARD_COINS} Wonder coins</Text>
+                <View style={styles.wjChestModalCoinsRow}>
+                  <WonderSpinningCoin size={56} fallbackColor={panelAccent.accent} />
+                  <WonderSpinningCoin size={56} fallbackColor={panelAccent.accent} />
+                </View>
+                <Text style={styles.wjChestModalSub}>They are already in your wallet.</Text>
+                <Pressable onPress={closeHubChestRevealModal} style={[styles.wjChestModalButton, primaryButtonTone]}>
+                  <Text style={styles.wjChestModalButtonText}>Great</Text>
+                </Pressable>
+              </>
+            ) : hubChestRevealPhase === 'claiming' ? (
+              <View style={styles.wjChestModalClaiming}>
+                <ActivityIndicator size="large" color={panelAccent.accent} />
+                <Text style={styles.wjChestModalClaimingText}>Adding coins…</Text>
+              </View>
+            ) : (
+              <Animated.View
+                style={[
+                  styles.wjChestModalGiftWrap,
+                  {
+                    opacity: hubChestGiftOpacity,
+                    transform: [
+                      {
+                        scale: hubChestGiftPop.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [1, 1.14],
+                        }),
+                      },
+                      {
+                        rotate: hubChestGiftPop.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ['0deg', '-7deg'],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              >
+                <WonderJumpGiftboxFromAsset width={112} height={112} />
+              </Animated.View>
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   )
 }
@@ -3955,6 +4542,169 @@ const styles = StyleSheet.create({
     marginBottom: -2,
     width: '100%',
     textAlign: 'center',
+  },
+  wjChestHubCard: {
+    width: '100%',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 230, 255, 0.22)',
+    backgroundColor: 'rgba(18, 32, 58, 0.55)',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  wjChestHubRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  wjChestDockTile: {
+    width: 96,
+    minHeight: 96,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 230, 255, 0.26)',
+    backgroundColor: 'rgba(10, 18, 40, 0.42)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wjChestDockTileReady: {
+    borderColor: 'rgba(255, 210, 120, 0.82)',
+    backgroundColor: 'rgba(28, 44, 82, 0.55)',
+  },
+  wjChestDockTileCollected: {
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 8,
+  },
+  wjChestDockTileInnerEmpty: {
+    width: 46,
+    height: 46,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: 'rgba(150, 180, 220, 0.28)',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  wjChestDockCollectedGiftDim: {
+    opacity: 0.58,
+  },
+  wjChestDockCollectedLabel: {
+    color: 'rgba(236, 244, 255, 0.96)',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 10,
+    letterSpacing: 0.14,
+    textAlign: 'center',
+    lineHeight: 12,
+    paddingHorizontal: 4,
+  },
+  wjChestHubCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  wjChestHubTitle: {
+    color: '#f6fbff',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 13,
+    letterSpacing: 0.2,
+    marginBottom: 2,
+  },
+  wjChestHubRarity: {
+    color: 'rgba(188, 214, 239, 0.92)',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 10,
+    letterSpacing: 0.12,
+    lineHeight: 14,
+    marginBottom: 6,
+  },
+  wjChestHubMeta: {
+    color: '#bcd6ef',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 11,
+    letterSpacing: 0.15,
+    lineHeight: 15,
+  },
+  wjChestModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(6, 10, 20, 0.62)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 22,
+  },
+  wjChestModalCard: {
+    width: '100%',
+    maxWidth: 300,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 230, 255, 0.32)',
+    backgroundColor: 'rgba(12, 20, 44, 0.97)',
+    paddingVertical: 22,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+    gap: 14,
+    minHeight: 248,
+  },
+  wjChestModalGiftWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  wjChestModalClaiming: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    paddingVertical: 28,
+  },
+  wjChestModalClaimingText: {
+    color: '#c8daf4',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 14,
+    letterSpacing: 0.2,
+  },
+  wjChestModalTitle: {
+    color: '#f6fbff',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 18,
+    letterSpacing: 0.2,
+    textAlign: 'center',
+  },
+  wjChestModalBody: {
+    color: '#bcd6ef',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 13,
+    letterSpacing: 0.15,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  wjChestModalSub: {
+    color: 'rgba(188, 214, 239, 0.9)',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 12,
+    letterSpacing: 0.12,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
+  wjChestModalCoinsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 18,
+    paddingVertical: 4,
+  },
+  wjChestModalButton: {
+    marginTop: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 11,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 140,
+  },
+  wjChestModalButtonText: {
+    color: '#ffffff',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 14,
+    letterSpacing: 0.28,
   },
   gameOverBiomeChipText: {
     color: '#dfebf7',
