@@ -34,6 +34,11 @@ import type { ShopifyMoney, ShopifyProduct } from '../../types'
 
 const CHECKOUT_ACCENT = '#CBFF00'
 const CHECKOUT_FILL = '#000000'
+const PRODUCT_PAGE_BG = '#000000'
+const PRODUCT_SURFACE_BG = '#111111'
+const PRODUCT_SURFACE_BORDER = 'rgba(203,255,0,0.3)'
+const PRODUCT_TEXT_PRIMARY = '#ffffff'
+const PRODUCT_TEXT_MUTED = 'rgba(255,255,255,0.72)'
 
 /** Match `home.tsx` — lime accent, black fills, Montserrat for hero title */
 const HOME_ACCENT_BG = '#CBFF00'
@@ -341,7 +346,7 @@ export function Product({ route, navigation }: any) {
             accessibilityLabel="Go back"
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <FeatherIcon name="chevron-left" size={20} color={theme.textColor} />
+            <FeatherIcon name="chevron-left" size={20} color={HOME_ACCENT_BG} />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -742,10 +747,10 @@ export function Product({ route, navigation }: any) {
 const getStyles = (theme: any) => StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
+    backgroundColor: PRODUCT_PAGE_BG,
   },
   safeTop: {
-    backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
+    backgroundColor: PRODUCT_PAGE_BG,
   },
   /** ~44pt content area under status bar — iOS nav bar convention */
   topNavRow: {
@@ -767,18 +772,18 @@ const getStyles = (theme: any) => StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+    backgroundColor: HOME_CHIP_FILL,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: theme.tileBorderColor || theme.borderColor,
+    borderWidth: 1.5,
+    borderColor: PRODUCT_SURFACE_BORDER,
   },
   heroImageWrap: {
     borderRadius: 16,
-    backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+    backgroundColor: PRODUCT_SURFACE_BG,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: theme.tileBorderColor || theme.borderColor,
+    borderColor: PRODUCT_SURFACE_BORDER,
   },
   heroPlaceholder: {
     ...StyleSheet.absoluteFillObject,
@@ -789,7 +794,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   heroPlaceholderText: {
     fontFamily: theme.semiBoldFont,
     fontSize: 16,
-    color: theme.mutedForegroundColor,
+    color: PRODUCT_TEXT_MUTED,
     textAlign: 'center',
   },
   infoCardOuter: {
@@ -865,11 +870,11 @@ const getStyles = (theme: any) => StyleSheet.create({
     marginTop: 14,
   },
   sectionCard: {
-    backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+    backgroundColor: PRODUCT_SURFACE_BG,
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: theme.tileBorderColor || theme.borderColor,
+    borderColor: PRODUCT_SURFACE_BORDER,
   },
   optionRow: {
     flexDirection: 'row',
@@ -905,14 +910,14 @@ const getStyles = (theme: any) => StyleSheet.create({
     fontFamily: theme.boldFont,
   },
   sectionTitle: {
-    fontFamily: theme.boldFont,
-    color: theme.headingColor || theme.textColor,
+    fontFamily: HOME_MONTSERRAT_BOLD,
+    color: PRODUCT_TEXT_PRIMARY,
     fontSize: 18,
     marginBottom: 10,
   },
   sectionBody: {
     fontFamily: theme.regularFont,
-    color: theme.mutedForegroundColor,
+    color: PRODUCT_TEXT_MUTED,
     fontSize: 15,
     lineHeight: 23,
   },
@@ -1014,20 +1019,20 @@ const getStyles = (theme: any) => StyleSheet.create({
     borderRadius: 18,
     padding: 16,
     maxHeight: '92%',
-    backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+    backgroundColor: PRODUCT_SURFACE_BG,
     borderWidth: 1,
-    borderColor: theme.tileBorderColor || theme.borderColor,
+    borderColor: PRODUCT_SURFACE_BORDER,
   },
   deliveryTitle: {
-    fontFamily: theme.boldFont,
+    fontFamily: HOME_MONTSERRAT_BOLD,
     fontSize: 20,
-    color: theme.headingColor || theme.textColor,
+    color: PRODUCT_TEXT_PRIMARY,
     marginBottom: 6,
   },
   deliverySub: {
     fontFamily: theme.regularFont,
     fontSize: 13,
-    color: theme.mutedForegroundColor,
+    color: PRODUCT_TEXT_MUTED,
     lineHeight: 18,
     marginBottom: 12,
   },
@@ -1065,19 +1070,20 @@ const getStyles = (theme: any) => StyleSheet.create({
   deliveryFieldLabel: {
     fontFamily: theme.mediumFont,
     fontSize: 12,
-    color: theme.mutedForegroundColor,
+    color: PRODUCT_TEXT_MUTED,
     marginBottom: 4,
     marginTop: 8,
   },
   deliveryInput: {
     borderWidth: 1,
-    borderColor: theme.borderColor,
+    borderColor: PRODUCT_SURFACE_BORDER,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontFamily: theme.mediumFont,
     fontSize: 15,
-    color: theme.textColor,
+    color: PRODUCT_TEXT_PRIMARY,
+    backgroundColor: HOME_CHIP_FILL,
   },
   deliveryInputMultiline: {
     minHeight: 72,
@@ -1100,12 +1106,13 @@ const getStyles = (theme: any) => StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: theme.borderColor,
+    borderColor: PRODUCT_SURFACE_BORDER,
+    backgroundColor: HOME_CHIP_FILL,
   },
   deliveryCancelText: {
     fontFamily: theme.semiBoldFont,
     fontSize: 14,
-    color: theme.textColor,
+    color: PRODUCT_TEXT_PRIMARY,
   },
   deliveryContinueBtn: {
     flex: 1,

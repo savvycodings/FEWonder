@@ -11,6 +11,7 @@ import {
 } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useFocusEffect } from '@react-navigation/native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   AccountRowChevron,
   AvatarFrameWrapper,
@@ -35,6 +36,7 @@ const PROFILE_ACCENT = '#CBFF00'
 const PROFILE_FILL = '#000000'
 /** Hero tile body (below banner) — dark grey section on profile. */
 const PROFILE_HERO_TILE_BG = '#262626'
+const GIFT_BOX_BONUS_COINS_KEY = 'daily-reward-giftbox-bonus-coins'
 
 export function Profile({
   navigation,
@@ -75,8 +77,11 @@ export function Profile({
   const loadWalletBalance = useCallback(async () => {
     if (!sessionToken) return
     try {
+      const rawBonus = await AsyncStorage.getItem(GIFT_BOX_BONUS_COINS_KEY)
+      const parsedBonus = Number(rawBonus || 0)
+      const bonusCoins = Number.isFinite(parsedBonus) && parsedBonus > 0 ? parsedBonus : 0
       const rewards = await getDailyRewardStatus(sessionToken)
-      setWalletBalance(rewards.walletBalance || 0)
+      setWalletBalance((rewards.walletBalance || 0) + bonusCoins)
     } catch (error) {
       console.log('Failed to load wallet balance', error)
     }

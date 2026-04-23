@@ -46,6 +46,10 @@ const REF_ITEM_PREFIX = '__REF_ITEM__:'
 const CHAT_LIME = '#CBFF00'
 const CHAT_BLACK = '#000000'
 const CHAT_TILE_GREY = '#2d2d2d'
+const CHAT_SURFACE = '#111111'
+const CHAT_BORDER = 'rgba(203,255,0,0.3)'
+const CHAT_TEXT_PRIMARY = '#ffffff'
+const CHAT_TEXT_MUTED = 'rgba(255,255,255,0.72)'
 
 /** Gap above the floating tab bar when keyboard is hidden (clearance over the pill nav). */
 const CHAT_ABOVE_TAB_BAR = 68
@@ -820,17 +824,17 @@ export function Chat({
                 setReferenceSearch('')
               }}
             >
-              <FeatherIcon name="x" size={16} color="#2a335f" />
+              <FeatherIcon name="x" size={18} color="#ffffff" />
             </Pressable>
           </View>
           <View style={styles.referenceSearchWrap}>
-            <FeatherIcon name="search" size={16} color="#8b94aa" />
+            <FeatherIcon name="search" size={16} color={CHAT_LIME} />
             <TextInput
               value={referenceSearch}
               onChangeText={setReferenceSearch}
               style={styles.referenceSearchInput}
               placeholder="Search item for sale"
-              placeholderTextColor="#9da7bf"
+              placeholderTextColor="rgba(255,255,255,0.5)"
             />
           </View>
           <FlatList
@@ -1211,15 +1215,15 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       borderRadius: 10,
       overflow: 'hidden',
       borderWidth: 1,
-      borderColor: '#d9dee8',
-      backgroundColor: '#ffffff',
+      borderColor: CHAT_BORDER,
+      backgroundColor: CHAT_SURFACE,
       paddingBottom: 6,
     },
     pendingReferenceImageFrame: {
       width: '100%',
       height: 68,
       overflow: 'hidden',
-      backgroundColor: '#edf1f9',
+      backgroundColor: CHAT_BLACK,
     },
     pendingReferenceImagePlaceholder: {
       ...StyleSheet.absoluteFillObject,
@@ -1228,13 +1232,13 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       paddingHorizontal: 4,
     },
     pendingReferencePlaceholderLabel: {
-      color: '#5c6788',
+      color: CHAT_TEXT_MUTED,
       fontFamily: theme.mediumFont,
       fontSize: 9,
       textAlign: 'center',
     },
     pendingReferenceText: {
-      color: '#243056',
+      color: CHAT_TEXT_PRIMARY,
       fontFamily: theme.semiBoldFont,
       fontSize: 11,
       paddingHorizontal: 6,
@@ -1255,24 +1259,24 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       width: 170,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: '#333333',
+      borderColor: CHAT_BORDER,
       overflow: 'hidden',
-      backgroundColor: '#ffffff',
+      backgroundColor: CHAT_SURFACE,
       marginBottom: 6,
       marginTop: 2,
     },
     referencedItemCardMe: {
-      borderColor: '#525252',
-      backgroundColor: '#252525',
+      borderColor: CHAT_BORDER,
+      backgroundColor: CHAT_SURFACE,
     },
     referencedItemImageWrap: {
       width: '100%',
       height: 130,
       overflow: 'hidden',
-      backgroundColor: '#e8e8e8',
+      backgroundColor: CHAT_BLACK,
     },
     referencedItemImageWrapMe: {
-      backgroundColor: '#1f1f1f',
+      backgroundColor: CHAT_BLACK,
     },
     referencedItemImagePlaceholder: {
       ...StyleSheet.absoluteFillObject,
@@ -1281,7 +1285,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       paddingHorizontal: 8,
     },
     referencedItemPlaceholderText: {
-      color: '#555555',
+      color: CHAT_TEXT_MUTED,
       fontFamily: theme.mediumFont,
       fontSize: 11,
       textAlign: 'center',
@@ -1290,7 +1294,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       color: 'rgba(255,255,255,.75)',
     },
     referencedItemName: {
-      color: '#111111',
+      color: CHAT_TEXT_PRIMARY,
       fontFamily: theme.semiBoldFont,
       fontSize: 12,
       paddingHorizontal: 8,
@@ -1301,7 +1305,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       color: '#ffffff',
     },
     referencedItemPrice: {
-      color: '#333333',
+      color: CHAT_LIME,
       fontFamily: theme.boldFont,
       fontSize: 12,
       paddingHorizontal: 8,
@@ -1314,8 +1318,8 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       maxWidth: 200,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: '#333333',
-      backgroundColor: '#ffffff',
+      borderColor: CHAT_BORDER,
+      backgroundColor: CHAT_SURFACE,
       paddingHorizontal: 10,
       paddingVertical: 8,
       marginBottom: 6,
@@ -1326,7 +1330,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       backgroundColor: '#363636',
     },
     referencedItemFallbackText: {
-      color: '#444444',
+      color: CHAT_TEXT_MUTED,
       fontFamily: theme.mediumFont,
       fontSize: 12,
     },
@@ -1337,7 +1341,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       ...StyleSheet.absoluteFillObject,
       zIndex: 40,
       elevation: 24,
-      backgroundColor: '#f4f6fb',
+      backgroundColor: CHAT_BLACK,
       paddingTop: insets.top + 12,
       paddingHorizontal: 14,
       paddingBottom: insets.bottom + 18,
@@ -1349,23 +1353,19 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       marginBottom: 12,
     },
     referencePickerTitle: {
-      color: '#1f2b52',
-      fontFamily: theme.boldFont,
+      color: CHAT_TEXT_PRIMARY,
+      fontFamily: 'Montserrat_700Bold',
       fontSize: 20,
     },
     referencePickerClose: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: '#e8edf7',
-      alignItems: 'center',
-      justifyContent: 'center',
+      paddingHorizontal: 4,
+      paddingVertical: 4,
     },
     referenceSearchWrap: {
       borderWidth: 1,
-      borderColor: '#d7deec',
+      borderColor: CHAT_BORDER,
       borderRadius: 12,
-      backgroundColor: '#ffffff',
+      backgroundColor: CHAT_SURFACE,
       paddingHorizontal: 12,
       paddingVertical: 10,
       flexDirection: 'row',
@@ -1375,7 +1375,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     },
     referenceSearchInput: {
       flex: 1,
-      color: '#243056',
+      color: CHAT_TEXT_PRIMARY,
       fontFamily: theme.mediumFont,
       fontSize: 14,
     },
@@ -1391,15 +1391,15 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       flex: 1,
       borderRadius: 14,
       overflow: 'hidden',
-      backgroundColor: '#ffffff',
+      backgroundColor: CHAT_SURFACE,
       borderWidth: 1,
-      borderColor: '#e1e7f2',
+      borderColor: CHAT_BORDER,
     },
     referenceProductImageFrame: {
       width: '100%',
       height: 160,
       overflow: 'hidden',
-      backgroundColor: '#edf1f9',
+      backgroundColor: CHAT_BLACK,
     },
     referenceProductImagePlaceholder: {
       ...StyleSheet.absoluteFillObject,
@@ -1408,13 +1408,13 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       paddingHorizontal: 8,
     },
     referenceProductImagePlaceholderText: {
-      color: '#5c6788',
+      color: CHAT_TEXT_MUTED,
       fontFamily: theme.mediumFont,
       fontSize: 11,
       textAlign: 'center',
     },
     referenceProductTitle: {
-      color: '#1f2b52',
+      color: CHAT_TEXT_PRIMARY,
       fontFamily: theme.semiBoldFont,
       fontSize: 13,
       paddingHorizontal: 10,
@@ -1422,7 +1422,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       paddingBottom: 2,
     },
     referenceProductPrice: {
-      color: '#e8703a',
+      color: CHAT_LIME,
       fontFamily: theme.boldFont,
       fontSize: 12,
       paddingHorizontal: 10,
@@ -1433,7 +1433,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       paddingTop: 50,
     },
     referenceEmptyText: {
-      color: '#8b94aa',
+      color: CHAT_TEXT_MUTED,
       fontFamily: theme.mediumFont,
       fontSize: 13,
     },

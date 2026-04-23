@@ -1,7 +1,18 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import {
+  Animated,
+  Easing,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { SvgUri } from 'react-native-svg'
+import Svg, { Polygon, SvgUri, SvgXml } from 'react-native-svg'
 import { useFocusEffect } from '@react-navigation/native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { DailyRewardItem, DailyRewardStatus, User } from '../../types'
@@ -33,6 +44,11 @@ const weekDays = ['1', '2', '3', '4', '5', '6', '7']
 const weekRewards = [1, 2, 3, 4, 5, 6, 7]
 const DAILY_ACCENT = '#CBFF00'
 const DAILY_FILL = '#000000'
+const GIFT_BOX_STORAGE_KEY = 'daily-reward-giftbox-ready-at'
+const GIFT_BOX_COOLDOWN_MS = 6 * 60 * 60 * 1000
+const GIFT_BOX_BONUS_COINS_KEY = 'daily-reward-giftbox-bonus-coins'
+const GIFT_BOX_REWARD_COINS = 2
+const GIFT_BOX_PREVIEW_RAY_ANGLES = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]
 /** Horizontal gap between reward cards (must match `rewardCarousel` `gap`). */
 const REWARD_CAROUSEL_GAP = 10
 /** Matches `rewardCarousel` `paddingRight`. */
@@ -48,6 +64,50 @@ function RewardStaticCoin({ size = 20 }: { size?: number }): ReactElement {
   return <WonderStaticCoin size={size} fallbackColor={DAILY_ACCENT} />
 }
 
+function formatDuration(totalMs: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(totalMs / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  const hh = String(hours).padStart(2, '0')
+  const mm = String(minutes).padStart(2, '0')
+  const ss = String(seconds).padStart(2, '0')
+  return `${hh}:${mm}:${ss}`
+}
+
+function GiftBoxPrizeRays(): ReactElement {
+  const size = 236
+  const center = size / 2
+  const innerRadius = 28
+  const outerRadius = 116
+  const halfSpreadDeg = 7
+  const pointAt = (radius: number, deg: number) => {
+    const rad = (deg * Math.PI) / 180
+    return {
+      x: center + Math.cos(rad) * radius,
+      y: center + Math.sin(rad) * radius,
+    }
+  }
+
+  return (
+    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      {GIFT_BOX_PREVIEW_RAY_ANGLES.map((angle, idx) => {
+        const tip = pointAt(outerRadius, angle)
+        const left = pointAt(innerRadius, angle - halfSpreadDeg)
+        const right = pointAt(innerRadius, angle + halfSpreadDeg)
+        const opacity = idx % 2 === 0 ? 0.52 : 0.34
+        return (
+          <Polygon
+            key={`ray-${angle}`}
+            points={`${tip.x},${tip.y} ${left.x},${left.y} ${right.x},${right.y}`}
+            fill={`rgba(255,223,120,${opacity})`}
+          />
+        )
+      })}
+    </Svg>
+  )
+}
+
 export function DailyRewards({ navigation, route }: any) {
   const { theme } = useContext(ThemeContext)
   const styles = useMemo(() => getStyles(theme), [theme])
@@ -58,6 +118,12 @@ export function DailyRewards({ navigation, route }: any) {
   const [claimingReward, setClaimingReward] = useState(false)
   const [rewardsError, setRewardsError] = useState('')
   const [storeMessage, setStoreMessage] = useState('')
+  const [giftBoxSvgUri, setGiftBoxSvgUri] = useState('')
+  const [giftBoxSvgXml, setGiftBoxSvgXml] = useState('')
+  const [giftBoxBonusCoins, setGiftBoxBonusCoins] = useState(0)
+  const [giftBoxReadyAt, setGiftBoxReadyAt] = useState<number | null>(null)
+  const [giftBoxNow, setGiftBoxNow] = useState(() => Date.now())
+  const [claimingGiftBoxReward, setClaimingGiftBoxReward] = useState(false)
   const [equippedAvatarFrame, setEquippedAvatarFrame] = useState<AvatarFrameId>('none')
   const [framePreviewUser, setFramePreviewUser] = useState<{
     uri: string | null
@@ -73,7 +139,7 @@ export function DailyRewards({ navigation, route }: any) {
   const claimedCount = rewardStatus?.claimedCount || 0
   const currentStreak = rewardStatus?.currentStreakDays || claimedCount
   const walletBalance = rewardStatus?.walletBalance || 0
-  const availableCoins = walletBalance
+  const availableCoins = walletBalance + giftBoxBonusCoins
   const rewardCarouselViewportW = screenWidth - REWARD_CONTENT_H_PAD
   /** Two cards + one gap fill the viewport so only ~2 cards show at once. */
   const rewardCardWidth = useMemo(
@@ -83,6 +149,8 @@ export function DailyRewards({ navigation, route }: any) {
   const rewardCarouselRef = useRef<ScrollView>(null)
   const scrollXRef = useRef(0)
   const [carouselScrollX, setCarouselScrollX] = useState(0)
+  const giftBoxPreviewPhase = useRef(new Animated.Value(0)).current
+  const giftBoxGlowRotateAnim = useRef(new Animated.Value(0)).current
 
   const rewardCarouselStep = rewardCardWidth + REWARD_CAROUSEL_GAP
   const rewardCarouselContentW = useMemo(() => {
@@ -94,6 +162,33 @@ export function DailyRewards({ navigation, route }: any) {
 
   const carouselCanGoBack = carouselScrollX > 2
   const carouselCanGoForward = carouselScrollX < rewardCarouselMaxX - 2
+  const giftBoxRemainingMs = useMemo(() => {
+    if (!giftBoxReadyAt) return 0
+    return Math.max(0, giftBoxReadyAt - giftBoxNow)
+  }, [giftBoxNow, giftBoxReadyAt])
+  const isGiftBoxCoolingDown = giftBoxRemainingMs > 0
+  const isGiftBoxReadyToClaim = Boolean(giftBoxReadyAt) && !isGiftBoxCoolingDown
+  const giftBoxTimerText = useMemo(() => formatDuration(giftBoxRemainingMs), [giftBoxRemainingMs])
+  const giftBoxFloatY = useMemo(
+    () =>
+      giftBoxPreviewPhase.interpolate({
+        inputRange: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1],
+        outputRange: [0, -4, -9, -5, 0, 4, 8, 4, 0],
+      }),
+    [giftBoxPreviewPhase],
+  )
+  const giftBoxTiltDeg = useMemo(
+    () =>
+      giftBoxPreviewPhase.interpolate({
+        inputRange: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1],
+        outputRange: ['-2.4deg', '-1deg', '2.2deg', '0.8deg', '-2deg', '-0.8deg', '2.2deg', '1deg', '-2.4deg'],
+      }),
+    [giftBoxPreviewPhase],
+  )
+  const giftBoxGlowRotateDeg = useMemo(
+    () => giftBoxGlowRotateAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }),
+    [giftBoxGlowRotateAnim],
+  )
 
   function scrollRewardCarousel(dir: -1 | 1) {
     const step = rewardCarouselStep
@@ -130,6 +225,108 @@ export function DailyRewards({ navigation, route }: any) {
   useEffect(() => {
     loadPreviewUser()
   }, [loadPreviewUser])
+
+  const grantGiftBoxReward = useCallback(async () => {
+    const rawBonus = await AsyncStorage.getItem(GIFT_BOX_BONUS_COINS_KEY)
+    const currentBonus = Number(rawBonus || 0)
+    const safeBonus = Number.isFinite(currentBonus) && currentBonus > 0 ? currentBonus : 0
+    const nextBonus = safeBonus + GIFT_BOX_REWARD_COINS
+    await AsyncStorage.setItem(GIFT_BOX_BONUS_COINS_KEY, String(nextBonus))
+    setGiftBoxBonusCoins(nextBonus)
+    setStoreMessage(`Gift opened! +${GIFT_BOX_REWARD_COINS} coins added.`)
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+    async function loadGiftBoxSvg() {
+      try {
+        const resolved = Image.resolveAssetSource(require('../../assets/giftbox.svg'))
+        const uri = resolved?.uri || ''
+        if (!isMounted || !uri) return
+        setGiftBoxSvgUri(uri)
+        const response = await fetch(uri)
+        const xml = await response.text()
+        if (isMounted) {
+          setGiftBoxSvgXml(xml)
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    loadGiftBoxSvg()
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+    async function loadGiftBoxTimer() {
+      try {
+        const rawBonus = await AsyncStorage.getItem(GIFT_BOX_BONUS_COINS_KEY)
+        const parsedBonus = Number(rawBonus || 0)
+        if (isMounted && Number.isFinite(parsedBonus) && parsedBonus > 0) {
+          setGiftBoxBonusCoins(parsedBonus)
+        }
+        const rawReadyAt = await AsyncStorage.getItem(GIFT_BOX_STORAGE_KEY)
+        const parsedReadyAt = Number(rawReadyAt || 0)
+        if (!isMounted || !Number.isFinite(parsedReadyAt) || parsedReadyAt <= 0) return
+        setGiftBoxNow(Date.now())
+        setGiftBoxReadyAt(parsedReadyAt)
+      } catch {
+        /* ignore */
+      }
+    }
+    loadGiftBoxTimer()
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isGiftBoxCoolingDown) return
+    const interval = setInterval(() => {
+      setGiftBoxNow(Date.now())
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [isGiftBoxCoolingDown])
+
+  useEffect(() => {
+    if (!isGiftBoxReadyToClaim) {
+      giftBoxPreviewPhase.stopAnimation()
+      giftBoxGlowRotateAnim.stopAnimation()
+      giftBoxPreviewPhase.setValue(0)
+      giftBoxGlowRotateAnim.setValue(0)
+      return
+    }
+
+    const motionLoop = Animated.loop(
+      Animated.timing(giftBoxPreviewPhase, {
+        toValue: 1,
+        duration: 4200,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    )
+    const glowSpinLoop = Animated.loop(
+      Animated.timing(giftBoxGlowRotateAnim, {
+        toValue: 1,
+        duration: 5000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      }),
+    )
+
+    giftBoxPreviewPhase.setValue(0)
+    motionLoop.start()
+    glowSpinLoop.start()
+
+    return () => {
+      motionLoop.stop()
+      glowSpinLoop.stop()
+      giftBoxGlowRotateAnim.setValue(0)
+    }
+  }, [giftBoxGlowRotateAnim, giftBoxPreviewPhase, isGiftBoxReadyToClaim])
 
   const refreshHeroBadges = useCallback(async () => {
     try {
@@ -272,6 +469,33 @@ export function DailyRewards({ navigation, route }: any) {
       setStoreMessage('')
     } catch {
       setStoreMessage('Could not save badge. Try again.')
+    }
+  }
+
+  async function handleOpenGiftBox() {
+    if (isGiftBoxCoolingDown || isGiftBoxReadyToClaim || claimingGiftBoxReward) return
+    const nextReadyAt = Date.now() + GIFT_BOX_COOLDOWN_MS
+    setGiftBoxReadyAt(nextReadyAt)
+    setGiftBoxNow(Date.now())
+    try {
+      await AsyncStorage.setItem(GIFT_BOX_STORAGE_KEY, String(nextReadyAt))
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function handleClaimGiftBoxReward() {
+    if (!isGiftBoxReadyToClaim || claimingGiftBoxReward) return
+    try {
+      setClaimingGiftBoxReward(true)
+      await grantGiftBoxReward()
+      setGiftBoxReadyAt(null)
+      setGiftBoxNow(Date.now())
+      await AsyncStorage.removeItem(GIFT_BOX_STORAGE_KEY)
+    } catch {
+      /* ignore */
+    } finally {
+      setClaimingGiftBoxReward(false)
     }
   }
 
@@ -422,6 +646,69 @@ export function DailyRewards({ navigation, route }: any) {
             )
           })}
       </ScrollView>
+      <View style={styles.giftBoxCard}>
+        <Text style={styles.giftBoxTitle}>Mystery Gift Box</Text>
+        <Text style={styles.giftBoxSubtitle}>
+          {isGiftBoxReadyToClaim
+            ? 'Ready to open! Tap the box to claim +2 coins.'
+            : 'Click Open to start a 6-hour timer. When it ends, tap the box to claim your coins.'}
+        </Text>
+        <View style={styles.giftBoxPreviewStage}>
+          <Pressable onPress={handleClaimGiftBoxReward} disabled={!isGiftBoxReadyToClaim || claimingGiftBoxReward}>
+            <Animated.View
+              style={[
+                styles.giftBoxAnimatedPreviewGroup,
+                {
+                  transform: [
+                    { translateY: isGiftBoxReadyToClaim ? giftBoxFloatY : 0 },
+                    { rotate: isGiftBoxReadyToClaim ? giftBoxTiltDeg : '0deg' },
+                  ],
+                },
+              ]}
+            >
+              {isGiftBoxReadyToClaim ? (
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    styles.giftBoxPrizeRaysOrbit,
+                    {
+                      transform: [{ rotate: giftBoxGlowRotateDeg }],
+                    },
+                  ]}
+                >
+                  <GiftBoxPrizeRays />
+                </Animated.View>
+              ) : null}
+              <View style={styles.giftBoxAnimatedWrap}>
+                {giftBoxSvgXml ? (
+                  <SvgXml xml={giftBoxSvgXml} width={180} height={146} />
+                ) : giftBoxSvgUri ? (
+                  <SvgUri uri={giftBoxSvgUri} width={180} height={146} />
+                ) : (
+                  <FeatherIcon name="gift" size={64} color={DAILY_ACCENT} />
+                )}
+              </View>
+            </Animated.View>
+          </Pressable>
+        </View>
+        <Pressable
+          style={[
+            styles.giftBoxButton,
+            isGiftBoxCoolingDown || isGiftBoxReadyToClaim ? styles.giftBoxButtonDisabled : null,
+          ]}
+          onPress={handleOpenGiftBox}
+          disabled={isGiftBoxCoolingDown || isGiftBoxReadyToClaim}
+        >
+          <Text
+            style={[
+              styles.giftBoxButtonText,
+              isGiftBoxCoolingDown || isGiftBoxReadyToClaim ? styles.giftBoxButtonTextDisabled : null,
+            ]}
+          >
+            {isGiftBoxReadyToClaim ? (claimingGiftBoxReward ? 'Claiming...' : 'Tap box to claim') : isGiftBoxCoolingDown ? `Opens in ${giftBoxTimerText}` : 'Open'}
+          </Text>
+        </Pressable>
+      </View>
       {loadingRewards ? <Text style={styles.infoText}>Loading rewards...</Text> : null}
       {rewardsError ? <Text style={styles.errorText}>{rewardsError}</Text> : null}
 
@@ -719,6 +1006,76 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   rewardStatusTextClaimed: {
     color: DAILY_ACCENT,
+  },
+  giftBoxCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(203,255,0,0.32)',
+    backgroundColor: DAILY_FILL,
+    padding: 14,
+    marginBottom: 8,
+  },
+  giftBoxTitle: {
+    color: '#ffffff',
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 20,
+  },
+  giftBoxSubtitle: {
+    color: 'rgba(255,255,255,0.72)',
+    fontFamily: 'Geist-Regular',
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  giftBoxSvgWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+  },
+  giftBoxButton: {
+    minHeight: 40,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: DAILY_ACCENT,
+    marginTop: 8,
+  },
+  giftBoxButtonDisabled: {
+    backgroundColor: DAILY_FILL,
+    borderWidth: 1,
+    borderColor: 'rgba(203,255,0,0.3)',
+  },
+  giftBoxButtonText: {
+    color: '#050505',
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 14,
+  },
+  giftBoxButtonTextDisabled: {
+    color: DAILY_ACCENT,
+  },
+  giftBoxPreviewStage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 190,
+    marginTop: 4,
+  },
+  giftBoxAnimatedPreviewGroup: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 236,
+    height: 236,
+  },
+  giftBoxPrizeRaysOrbit: {
+    position: 'absolute',
+    width: 236,
+    height: 236,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  giftBoxAnimatedWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
   },
   infoText: {
     marginTop: 10,
