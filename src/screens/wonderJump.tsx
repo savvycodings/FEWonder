@@ -1,7 +1,9 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, Dimensions, Image, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native'
-import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Polygon, Rect, Stop } from 'react-native-svg'
+import { useIsFocused } from '@react-navigation/native'
+import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, Rect, Stop } from 'react-native-svg'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { fetchWonderJumpProgress, saveWonderJumpProgress } from '../utils'
 
 type RunMode = 'menu' | 'playing' | 'paused' | 'gameOver'
 type PlatformKind = 'normal' | 'bouncy' | 'moving' | 'breakable'
@@ -9,6 +11,8 @@ type ControlScheme = 'touchSplit' | 'dpad'
 
 /** Starting biome from Home or in-game menu (affects visuals + mushroom surface mix). */
 export type WonderJumpStartBiome = 'grassland' | 'mushroom' | 'tropical'
+
+export type WonderJumpDeathCause = 'fall' | 'spike' | 'crab'
 
 type PlatformSurfaceKind = 'grass' | 'sand' | 'mushroom_grey' | 'mushroom_red'
 
@@ -77,18 +81,6 @@ type Spike = {
   offsetX: number
 }
 
-type Coin = {
-  id: string
-  x: number
-  y: number
-  radius: number
-  collected: boolean
-  /** Stable horizontal offset from host platform’s left edge (world x = host.x + offsetX) */
-  offsetX: number
-  /** When set, coin follows the host platform each tick; otherwise it stays in world coords (drops). */
-  hostPlatformId: string | null
-}
-
 type JetpackPickup = {
   id: string
   x: number
@@ -112,7 +104,6 @@ type Crab = {
   height: number
   alive: boolean
   deathMs: number
-  plus2Ms: number
 }
 
 type Player = {
@@ -132,16 +123,10 @@ type GameState = {
   player: Player
   platforms: PlatformItem[]
   spikes: Spike[]
-  coins: Coin[]
   jetpacks: JetpackPickup[]
   crabs: Crab[]
   cameraY: number
   heightScore: number
-  coinScore: number
-  /** World Y of last platform that spawned a coin — keeps new coins vertically separated */
-  lastCoinHostY: number | null
-  /** World X of last spawned coin — avoids a straight vertical column up the lane */
-  lastCoinWorldX: number | null
   /** World Y of last jetpack spawn to avoid clustering. */
   lastJetpackY: number | null
   /** Milliseconds of jetpack boost remaining while equipped. */
@@ -152,6 +137,10 @@ type GameState = {
   jetpackAnimTick: number
   /** Global UI animation tick for hover/shake effects. */
   uiAnimTick: number
+  /** Jetpack pickups collected this run (each pickup counts once). */
+  jetpacksUsedThisRun: number
+  /** Set when entering game over; cleared on menu / new run. */
+  deathCause: WonderJumpDeathCause | null
   startBiome: WonderJumpStartBiome
 }
 
@@ -181,8 +170,12 @@ const PALM_TREE_BASE_Y = 20
 const PALM_TREE_IMAGE = require('../../public/wonderjump/palm-tree.png')
 const CRAB_W = 26
 const CRAB_H = 20
+/** Base chance when tropical gameplay first applies (climbing from grass/mushroom). */
 const CRAB_SPAWN_CHANCE = 0.14
-const CRAB_PLUS2_MS = 650
+/** Higher when the run started in the tropical biome. */
+const CRAB_SPAWN_CHANCE_TROPICAL_START = 0.24
+/** When tropical blend is active but not full start-biome. */
+const CRAB_SPAWN_CHANCE_TROPICAL_BLEND = 0.2
 const CRAB_DEATH_MS = 520
 /** Bouncy platforms collide on spring tray, not grass top. */
 const SPRING_COLLISION_RAISE = 6
@@ -194,10 +187,6 @@ const SPIKE_MIN_HEIGHT_SCORE_MUSHROOM = 0
 /** First N main-chain platforms in the initial world never get spikes. */
 const SPIKE_START_INITIAL_INDEX_GRASS = 8
 const SPIKE_START_INITIAL_INDEX_MUSHROOM = 4
-/** Procedural `while` can add many platforms in one tick — keep mints tiny so coins never “rain”. */
-const MAX_COINS_MINTED_PER_TICK = 2
-/** Hard cap on simultaneous coins; procedural + initial spawns both respect this when minting. */
-const MAX_COINS_ALIVE = 16
 const MAX_JETPACKS_ALIVE = 2
 const MIN_JETPACK_VERTICAL_SEP = 220
 const JETPACK_SPAWN_P_GRASS = 0.04
@@ -205,24 +194,22 @@ const JETPACK_SPAWN_P_MUSHROOM = 0.065
 const JETPACK_PICKUP_W = 30
 const JETPACK_PICKUP_H = 34
 const JETPACK_DURATION_MS = 1650
-const JETPACK_THRUST_VELOCITY = -12.2
+const JETPACK_THRUST_VELOCITY = -11.79
 const JETPACK_END_SPIKE_GRACE_MS = 420
-/** Min |ΔY| between coin host platforms so they don’t stack into vertical clusters */
-const MIN_COIN_VERTICAL_SEP = 64
-/** Min |ΔX| from previous coin when spawning so they don’t form a vertical line */
-const MIN_COIN_HORIZONTAL_SEP = 26
 /** Doodle-style: faster lateral, floaty jump, pass-through platforms */
-const BASE_SPEED = 6.2
+const BASE_SPEED = 6.85
 const GRAVITY = 0.52
-const NORMAL_JUMP_VELOCITY = -10.8
+const NORMAL_JUMP_VELOCITY = -11.12
 /** Spring pad — a clear boost over normal, not a sky launch */
-const BOUNCY_JUMP_VELOCITY = -13.4
+const BOUNCY_JUMP_VELOCITY = -13.59
 /**
  * Physics are tuned for a fixed ~60 Hz tick. `requestAnimationFrame` follows display refresh
  * (90–120 Hz) and applies velocity/gravity extra times per second, which makes jumps feel “broken”.
  */
 const SIM_TICK_MS = 1000 / 60
 const MAX_FALL_VELOCITY = 13
+/** Stable identity when jetpack shake is off so child memo comparisons stay cheap. */
+const JETPACK_SHAKE_NONE = Object.freeze({ x: 0 as number, y: 0 as number })
 const TILE_HORIZONTAL_MARGIN = 12
 /** Fewer starting rows = less crowded climbs (tune with vertical gaps below). */
 const INITIAL_PLATFORM_COUNT = 22
@@ -238,7 +225,7 @@ const MAX_CHAIN_VERTICAL_GAP = 78
 const MUSHROOM_BIOME_HEIGHT_START = 50 * 58
 /** Height score distance over which grassland scenery lerps into mushroom isles */
 const MUSHROOM_BIOME_BLEND_RANGE = 780
-/** When blend ≥ this, mushroom-biome gameplay tuning applies (sparser rows, fewer coins/pads). */
+/** When blend ≥ this, mushroom-biome gameplay tuning applies (sparser rows, fewer pads). */
 const MUSHROOM_GAMEPLAY_BLEND = 0.5
 /** After mushroom isles, transition into the tropical archipelago biome. */
 const TROPICAL_BIOME_HEIGHT_START = MUSHROOM_BIOME_HEIGHT_START + 50 * 58
@@ -246,14 +233,46 @@ const TROPICAL_BIOME_HEIGHT_START = MUSHROOM_BIOME_HEIGHT_START + 50 * 58
 const TROPICAL_BIOME_BLEND_RANGE = 820
 /** When tropical blend ≥ this, tropical gameplay tuning applies (matches mushroom rates). */
 const TROPICAL_GAMEPLAY_BLEND = 0.5
+
+/** Raw climb below this uses a simple divisor (~+1 per platform row). */
+const DISPLAY_SCORE_EARLY_RAW_MAX = 1200
+const DISPLAY_SCORE_EARLY_DIVISOR = 58
+/** Displayed score at tropical threshold — keeps numbers human-sized, not millions. */
+const DISPLAY_SCORE_AT_TROPICAL = 300
+
+/** UI score from internal height metric (same input as biome blends). */
+function displayRunScore(rawHeightScore: number): number {
+  if (rawHeightScore <= 0) return 0
+  const earlyPts = Math.floor(Math.min(rawHeightScore, DISPLAY_SCORE_EARLY_RAW_MAX) / DISPLAY_SCORE_EARLY_DIVISOR)
+  if (rawHeightScore <= DISPLAY_SCORE_EARLY_RAW_MAX) return earlyPts
+  if (rawHeightScore < TROPICAL_BIOME_HEIGHT_START) {
+    const span = TROPICAL_BIOME_HEIGHT_START - DISPLAY_SCORE_EARLY_RAW_MAX
+    const t = (rawHeightScore - DISPLAY_SCORE_EARLY_RAW_MAX) / span
+    return earlyPts + Math.floor(t * (DISPLAY_SCORE_AT_TROPICAL - earlyPts))
+  }
+  const past = rawHeightScore - TROPICAL_BIOME_HEIGHT_START
+  return DISPLAY_SCORE_AT_TROPICAL + Math.floor(past / 45)
+}
+
+function deathBlurb(cause: WonderJumpDeathCause | null): string {
+  switch (cause) {
+    case 'fall':
+      return 'You fell off the bottom of the climb.'
+    case 'spike':
+      return 'A spike ended that jump.'
+    case 'crab':
+      return 'A tropical crab got you.'
+    default:
+      return ''
+  }
+}
+
 /** Extra vertical gap range for main-chain spawns in mushroom (still clamped jump-safe). */
 const MUSHROOM_CHAIN_GAP_EXTRA_MIN = 8
 const MUSHROOM_CHAIN_GAP_EXTRA_MAX = 10
 /** P(attempt sibling row) — lower in mushroom for sparser side platforms */
 const SIBLING_TRY_CHANCE_GRASS = 0.12
 const SIBLING_TRY_CHANCE_MUSHROOM = 0.07
-const COIN_SPAWN_P_GRASS = 0.15
-const COIN_SPAWN_P_MUSHROOM = 0.12
 const BOUNCY_CHANCE_GRASS = 0.21
 const BOUNCY_CHANCE_MUSHROOM = 0.17
 
@@ -302,6 +321,17 @@ const CLASSIC_GAME_FONT_BOLD = Platform.select({
   ios: 'Courier-Bold',
   default: 'monospace',
 })
+
+/** WonderJump modals — same face as home (`App.tsx` `useFonts`). */
+const WONDER_JUMP_UI_BOLD = 'Montserrat_700Bold' as const
+
+/** Game-over line: biome you died in (readable on dark panel). */
+const GAME_OVER_DEAD_BIOME_TEXT: Record<WonderJumpStartBiome, string> = {
+  grassland: '#a8e9a0',
+  /** Light maroon / dusty wine — readable on dark glass */
+  mushroom: '#c97a8e',
+  tropical: '#5ee8f0',
+}
 
 const BIOME_UI_ACCENTS: Record<
   WonderJumpStartBiome,
@@ -403,6 +433,13 @@ function biomeHudLabel(mushroomBlend: number, tropicalBlend: number, startBiome:
   return 'Mushroom frontier'
 }
 
+/** Map in-run HUD label to accent biome for colors (game over should match where you were, not only run start). */
+function hudBiomeLabelToAccentBiome(hudLabel: string): WonderJumpStartBiome {
+  if (hudLabel === 'Sunset Keys') return 'tropical'
+  if (hudLabel === 'Mushroom Isles' || hudLabel === 'Mushroom frontier') return 'mushroom'
+  return 'grassland'
+}
+
 function randomInRange(min: number, max: number) {
   return Math.random() * (max - min) + min
 }
@@ -471,7 +508,7 @@ function rectsOverlap(
   )
 }
 
-/** Tighter AABB inside the triangle so hits feel like the pointy spike, not a big box. */
+/** Only the upper (pointy) band is lethal — not the wide triangle base / stem under it. */
 function playerHitsSpike(player: Player, spike: Spike) {
   const shrinkX = spike.width * 0.24
   const padTop = 2
@@ -479,32 +516,26 @@ function playerHitsSpike(player: Player, spike: Spike) {
   const hitY = spike.y + padTop
   const hitW = spike.width - 2 * shrinkX
   const hitH = spike.height - padTop
-  if (!rectsOverlap(player, { x: hitX, y: hitY, width: hitW, height: hitH })) {
+  const lethalH = Math.max(hitH * 0.44, 5.5)
+  if (!rectsOverlap(player, { x: hitX, y: hitY, width: hitW, height: lethalH })) {
     return false
   }
 
   const vx = player.velocityX
   const vy = player.velocityY
-  const playerBottom = player.y + player.height
 
-  // Falling onto / through the spike from above — lethal.
+  // Falling onto the sharp band — lethal.
   if (vy > 0.28) {
     return true
   }
 
-  // Clear sideways motion into the hazard — lethal (walk / air strafe into the sides).
+  // Strong sideways scrape through the point — lethal.
   if (Math.abs(vx) > 1.2) {
     return true
   }
 
-  // Rising: allow passing through the underside so heads don’t clip the spike base on the way up.
+  // Rising / brushing the underside or stem — safe.
   if (vy < -0.1) {
-    return false
-  }
-
-  // Jump apex / tiny vertical speed: still safe if the body is mostly in the lower (wide) part of the spike.
-  const baseZoneBottom = hitY + hitH * 0.58
-  if (playerBottom > baseZoneBottom) {
     return false
   }
 
@@ -656,7 +687,7 @@ function spawnPlatform(
     surface,
     topMushrooms: buildPlatformTopMushrooms(surface, width, kind),
     topPalmTree: undefined,
-    topFlowers: buildPlatformTopFlowers(surface, width, kind),
+    topFlowers: buildPlatformTopFlowers(surface, width, kind, mushroomBlend, tropicalBlend),
   }
 }
 
@@ -774,57 +805,6 @@ function spawnSpikes(
   if (!forceSpawn && Math.random() > spikeSpawnChance(mushroomBlend, tropicalBlend, startBiome, heightDifficulty)) return []
   const spike = createSpikeOnPlatform(platform)
   return spike ? [spike] : []
-}
-
-function pickCoinOffsetX(platform: PlatformItem, lastCoinWorldX: number | null): number {
-  const pad = 10
-  const lo = pad
-  const hi = Math.max(lo + 4, platform.width - pad)
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    const ox = randomInRange(lo, hi)
-    if (lastCoinWorldX === null) return ox
-    if (Math.abs(platform.x + ox - lastCoinWorldX) >= MIN_COIN_HORIZONTAL_SEP) return ox
-  }
-  if (lastCoinWorldX === null) return randomInRange(lo, hi)
-  const towardLeft = lastCoinWorldX > platform.x + platform.width / 2
-  return clamp(towardLeft ? lo + 3 : hi - 3, lo, hi)
-}
-
-function spawnCoin(
-  platform: PlatformItem,
-  hasSpike: boolean,
-  currentAliveCount: number,
-  lastCoinHostY: number | null,
-  lastCoinWorldX: number | null,
-  mushroomBlend: number,
-  tropicalBlend: number,
-  startBiome: WonderJumpStartBiome
-): Coin[] {
-  if (hasSpike) return []
-  if (currentAliveCount >= MAX_COINS_ALIVE) return []
-  if (
-    lastCoinHostY !== null &&
-    Math.abs(platform.y - lastCoinHostY) < MIN_COIN_VERTICAL_SEP
-  ) {
-    return []
-  }
-  const coinP = isMushroomGameplay(startBiome, mushroomBlend, tropicalBlend)
-    ? COIN_SPAWN_P_MUSHROOM
-    : COIN_SPAWN_P_GRASS
-  if (Math.random() > coinP) return []
-  const offsetX = pickCoinOffsetX(platform, lastCoinWorldX)
-  const x = platform.x + offsetX
-  return [
-    {
-      id: `coin-${platform.id}`,
-      x,
-      offsetX,
-      y: platform.y - 20,
-      radius: 6,
-      collected: false,
-      hostPlatformId: platform.id,
-    },
-   ]
 }
 
 function buildPlatformTopMushrooms(
@@ -954,7 +934,13 @@ function spawnCrabOnPlatform(
   if (platform.isFalling || platform.kind === 'breakable') return []
   if (platform.surface !== 'grass' && platform.surface !== 'sand') return []
   if (platform.width < 78) return []
-  if (Math.random() > CRAB_SPAWN_CHANCE) return []
+  const spawnChance =
+    startBiome === 'tropical'
+      ? CRAB_SPAWN_CHANCE_TROPICAL_START
+      : tropicalBlend >= TROPICAL_GAMEPLAY_BLEND
+        ? CRAB_SPAWN_CHANCE_TROPICAL_BLEND
+        : CRAB_SPAWN_CHANCE
+  if (Math.random() > spawnChance) return []
 
   const edge = 10
   let minLocalX = edge
@@ -994,7 +980,6 @@ function spawnCrabOnPlatform(
       height: CRAB_H,
       alive: true,
       deathMs: 0,
-      plus2Ms: 0,
     },
   ]
 }
@@ -1044,9 +1029,13 @@ function springPadBoundsForPlatform(width: number) {
 function buildPlatformTopFlowers(
   surface: PlatformSurfaceKind,
   width: number,
-  kind: PlatformKind
+  kind: PlatformKind,
+  mushroomBlend: number,
+  tropicalBlend: number
 ): PlatformTopFlower[] | undefined {
-  if (surface !== 'grass' && surface !== 'sand') return undefined
+  /* Flowers only in pure grasslands — not mushroom isles, not tropical / Sunset Keys (incl. sand strips). */
+  if (tropicalBlend >= 0.08 || mushroomBlend >= MUSHROOM_GAMEPLAY_BLEND) return undefined
+  if (surface !== 'grass') return undefined
 
   const kindPool: PlatformFlowerDecoKind[] = [
     'rosePink',
@@ -1117,12 +1106,9 @@ function createInitialWorld(
 ) {
   const platforms: PlatformItem[] = []
   const spikes: Spike[] = []
-  const coins: Coin[] = []
   const jetpacks: JetpackPickup[] = []
   const crabs: Crab[] = []
   const mainChainIndices: number[] = []
-  let lastCoinHostY: number | null = null
-  let lastCoinWorldX: number | null = null
   let lastJetpackY: number | null = null
   const initMushroomBlend = getMushroomBlend(0, startBiome)
   const initTropicalBlend = getTropicalBlend(0, startBiome)
@@ -1156,21 +1142,6 @@ function createInitialWorld(
       newSpikes.length > 0
     )
     crabs.push(...spawnCrabOnPlatform(platforms[platforms.length - 1], newSpikes.length > 0, initTropicalBlend, startBiome, i))
-    const fromChain = spawnCoin(
-      platform,
-      newSpikes.length > 0,
-      coins.length,
-      lastCoinHostY,
-      lastCoinWorldX,
-      initMushroomBlend,
-      initTropicalBlend,
-      startBiome
-    )
-    coins.push(...fromChain)
-    if (fromChain.length) {
-      lastCoinHostY = platform.y
-      lastCoinWorldX = fromChain[0].x
-    }
     const jetpackFromChain = spawnJetpack(platform, jetpacks.length, lastJetpackY, initMushroomBlend, initTropicalBlend, startBiome)
     if (jetpackFromChain.length) {
       jetpacks.push(...jetpackFromChain)
@@ -1189,24 +1160,6 @@ function createInitialWorld(
           sSpikes.length > 0
         )
         crabs.push(...spawnCrabOnPlatform(platforms[platforms.length - 1], sSpikes.length > 0, initTropicalBlend, startBiome, i + 9000))
-        /* Same row as chain — only allow a sibling coin if the chain didn’t get one (no horizontal pairs) */
-        if (fromChain.length === 0) {
-          const fromSib = spawnCoin(
-            sibling,
-            sSpikes.length > 0,
-            coins.length,
-            lastCoinHostY,
-            lastCoinWorldX,
-            initMushroomBlend,
-            initTropicalBlend,
-            startBiome
-          )
-          coins.push(...fromSib)
-          if (fromSib.length) {
-            lastCoinHostY = sibling.y
-            lastCoinWorldX = fromSib[0].x
-          }
-        }
         const jetpackFromSib = spawnJetpack(sibling, jetpacks.length, lastJetpackY, initMushroomBlend, initTropicalBlend, startBiome)
         if (jetpackFromSib.length) {
           jetpacks.push(...jetpackFromSib)
@@ -1233,7 +1186,7 @@ function createInitialWorld(
     surface: spawnSurface,
     topMushrooms: buildPlatformTopMushrooms(spawnSurface, 116, 'normal'),
     topPalmTree: undefined,
-    topFlowers: buildPlatformTopFlowers(spawnSurface, 116, 'normal'),
+    topFlowers: buildPlatformTopFlowers(spawnSurface, 116, 'normal', initMushroomBlend, initTropicalBlend),
   }
 
   for (let k = 1; k < mainChainIndices.length; k += 1) {
@@ -1284,11 +1237,8 @@ function createInitialWorld(
     player,
     platforms,
     spikes: safeSpikes,
-    coins,
     jetpacks,
     crabs,
-    lastCoinHostY,
-    lastCoinWorldX,
     lastJetpackY,
   }
 }
@@ -1316,19 +1266,17 @@ function createInitialState(
     player,
     platforms: world.platforms,
     spikes: world.spikes,
-    coins: world.coins,
     jetpacks: world.jetpacks,
     crabs: world.crabs,
     cameraY: 0,
     heightScore: 0,
-    coinScore: 0,
-    lastCoinHostY: world.lastCoinHostY,
-    lastCoinWorldX: world.lastCoinWorldX,
     lastJetpackY: world.lastJetpackY,
     jetpackFuelMs: 0,
     jetpackEndGraceMs: 0,
     jetpackAnimTick: 0,
     uiAnimTick: 0,
+    jetpacksUsedThisRun: 0,
+    deathCause: null,
     startBiome,
   }
 }
@@ -1420,6 +1368,50 @@ const SURFACE_PALETTES: Record<
   },
 }
 
+const PLATFORM_FACE_VB_W = 100
+const PLATFORM_FACE_VB_H = 14
+const PLATFORM_FACE_GRASS_H = 5.25
+const PLATFORM_FACE_BLADE_XS = [6, 18, 30, 44, 58, 71, 85, 94]
+
+/** Dirt + grass/mycelium cap paths in the 100×14 viewBox. Callers wrap these in an <Svg> or <G transform>. */
+function renderPlatformFaceShapes(surface: PlatformSurfaceKind) {
+  const p = SURFACE_PALETTES[surface]
+  return (
+    <>
+      <Path
+        fill={p.dirtA}
+        d="M0,5.6 L0,12.6 L2.5,13.9 L7,12 L13.5,13.4 L21,11.7 L29.5,12.9 L38,11.1 L48,13 L56.5,11.4 L66,12.7 L74,11 L82.5,13.1 L90,11.6 L95.5,12.9 L100,11.8 L100,5.6 Z"
+      />
+      <Path
+        fill={p.dirtB}
+        d="M0,5.6 L0,11.8 L3,13.2 L9,11.5 L16,12.8 L25,10.9 L34,12.2 L44,10.6 L54,12.4 L63,10.8 L72.5,12.5 L81,11 L89.5,12.6 L96,11.2 L100,12 L100,5.6 Z"
+      />
+      <Rect x="0" y="0" width={PLATFORM_FACE_VB_W} height={PLATFORM_FACE_GRASS_H} fill={p.top} />
+      <Rect
+        x="0"
+        y={PLATFORM_FACE_GRASS_H - 0.35}
+        width={PLATFORM_FACE_VB_W}
+        height={0.55}
+        fill={p.topLine}
+        opacity={0.88}
+      />
+      <Rect x="0" y="0" width={PLATFORM_FACE_VB_W} height={1.15} fill={p.topHi} opacity={0.55} />
+      {PLATFORM_FACE_BLADE_XS.map((cx, i) => (
+        <Rect
+          key={i}
+          x={cx - 0.45}
+          y={PLATFORM_FACE_GRASS_H - 1.35}
+          width={0.9}
+          height={1.45}
+          rx={0.2}
+          fill={p.blade}
+          opacity={0.45}
+        />
+      ))}
+    </>
+  )
+}
+
 /** Pixel-style grass / mycelium cap + jagged dirt; palette from biome surface. */
 const BiomePlatformFace = memo(function BiomePlatformFace({
   width,
@@ -1430,35 +1422,14 @@ const BiomePlatformFace = memo(function BiomePlatformFace({
   height: number
   surface: PlatformSurfaceKind
 }) {
-  const W = 100
-  const H = 14
-  const grassH = 5.25
-  const p = SURFACE_PALETTES[surface]
   return (
-    <Svg width={width} height={height} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-      <Path
-        fill={p.dirtA}
-        d="M0,5.6 L0,12.6 L2.5,13.9 L7,12 L13.5,13.4 L21,11.7 L29.5,12.9 L38,11.1 L48,13 L56.5,11.4 L66,12.7 L74,11 L82.5,13.1 L90,11.6 L95.5,12.9 L100,11.8 L100,5.6 Z"
-      />
-      <Path
-        fill={p.dirtB}
-        d="M0,5.6 L0,11.8 L3,13.2 L9,11.5 L16,12.8 L25,10.9 L34,12.2 L44,10.6 L54,12.4 L63,10.8 L72.5,12.5 L81,11 L89.5,12.6 L96,11.2 L100,12 L100,5.6 Z"
-      />
-      <Rect x="0" y="0" width={W} height={grassH} fill={p.top} />
-      <Rect x="0" y={grassH - 0.35} width={W} height={0.55} fill={p.topLine} opacity={0.88} />
-      <Rect x="0" y="0" width={W} height={1.15} fill={p.topHi} opacity={0.55} />
-      {[6, 18, 30, 44, 58, 71, 85, 94].map((cx, i) => (
-        <Rect
-          key={i}
-          x={cx - 0.45}
-          y={grassH - 1.35}
-          width={0.9}
-          height={1.45}
-          rx={0.2}
-          fill={p.blade}
-          opacity={0.45}
-        />
-      ))}
+    <Svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${PLATFORM_FACE_VB_W} ${PLATFORM_FACE_VB_H}`}
+      preserveAspectRatio="none"
+    >
+      {renderPlatformFaceShapes(surface)}
     </Svg>
   )
 })
@@ -1599,10 +1570,19 @@ const SpikeGraphic = memo(function SpikeGraphic({
   )
 })
 
-/** Tiny vector fly-agaric props (no raster assets). */
-const DecoMushroomSingleSvg = memo(function DecoMushroomSingleSvg() {
+const MUSHROOM_SINGLE_VB_W = 14
+const MUSHROOM_SINGLE_VB_H = 18
+const MUSHROOM_GROUP_VB_W = 30
+const MUSHROOM_GROUP_VB_H = 20
+const MUSHROOM_SINGLE_PX_W = 17
+const MUSHROOM_SINGLE_PX_H = 21
+const MUSHROOM_GROUP_PX_W = 30
+const MUSHROOM_GROUP_PX_H = 22
+
+/** Mushroom prop paths in a 14×18 viewBox; caller wraps in <Svg> or <G transform>. */
+function renderMushroomSingleShapes() {
   return (
-    <Svg width="100%" height="100%" viewBox="0 0 14 18" preserveAspectRatio="xMidYMax meet">
+    <>
       <Path
         d="M 4.5 17.2 L 3.6 11.2 L 10.4 11.2 L 9.5 17.2 L 8.2 18 L 5.8 18 Z"
         fill="#f2eee8"
@@ -1621,13 +1601,14 @@ const DecoMushroomSingleSvg = memo(function DecoMushroomSingleSvg() {
       <Circle cx={4.8} cy={7.2} r={1.15} fill="#faf8f5" />
       <Circle cx={9.1} cy={8.4} r={0.85} fill="#faf8f5" />
       <Circle cx={7} cy={5.3} r={0.75} fill="#faf8f5" />
-    </Svg>
+    </>
   )
-})
+}
 
-const DecoMushroomGroupSvg = memo(function DecoMushroomGroupSvg() {
+/** Mushroom-group paths in a 30×20 viewBox; caller wraps in <Svg> or <G transform>. */
+function renderMushroomGroupShapes() {
   return (
-    <Svg width="100%" height="100%" viewBox="0 0 30 20" preserveAspectRatio="xMidYMax meet">
+    <>
       <Path
         d="M 5.2 18.5 L 4.2 12.5 L 11.8 12.5 L 10.8 18.5 L 9 19.2 L 7 19.2 Z"
         fill="#f2eee8"
@@ -1664,6 +1645,33 @@ const DecoMushroomGroupSvg = memo(function DecoMushroomGroupSvg() {
       />
       <Circle cx={20.5} cy={11.2} r={0.75} fill="#faf8f5" />
       <Circle cx={24} cy={12} r={0.65} fill="#faf8f5" />
+    </>
+  )
+}
+
+/** Tiny vector fly-agaric props (no raster assets). */
+const DecoMushroomSingleSvg = memo(function DecoMushroomSingleSvg() {
+  return (
+    <Svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${MUSHROOM_SINGLE_VB_W} ${MUSHROOM_SINGLE_VB_H}`}
+      preserveAspectRatio="xMidYMax meet"
+    >
+      {renderMushroomSingleShapes()}
+    </Svg>
+  )
+})
+
+const DecoMushroomGroupSvg = memo(function DecoMushroomGroupSvg() {
+  return (
+    <Svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${MUSHROOM_GROUP_VB_W} ${MUSHROOM_GROUP_VB_H}`}
+      preserveAspectRatio="xMidYMax meet"
+    >
+      {renderMushroomGroupShapes()}
     </Svg>
   )
 })
@@ -1679,10 +1687,16 @@ const FLOWER_PALETTES: Record<PlatformFlowerDecoKind, { petal: string; petal2: s
   sunburst: { petal: '#d78b00', petal2: '#f0bf3d', center: '#ffe077' },
 }
 
-const DecoFlowerSvg = memo(function DecoFlowerSvg({ kind }: { kind: PlatformFlowerDecoKind }) {
+const FLOWER_VB_W = 16
+const FLOWER_VB_H = 22
+const FLOWER_PX_W = 16
+const FLOWER_PX_H = 22
+
+/** Pixel-art flower paths in a 16×22 viewBox; caller wraps in <Svg> or <G transform>. */
+function renderFlowerShapes(kind: PlatformFlowerDecoKind) {
   const p = FLOWER_PALETTES[kind]
   return (
-    <Svg width="100%" height="100%" viewBox="0 0 16 22" preserveAspectRatio="xMidYMax meet">
+    <>
       <Rect x="7" y="11" width="2" height="10" fill="#2a9c4d" />
       <Rect x="6" y="12" width="1" height="6" fill="#2fbe5f" />
       <Rect x="9" y="13" width="1" height="6" fill="#2fbe5f" />
@@ -1708,6 +1722,19 @@ const DecoFlowerSvg = memo(function DecoFlowerSvg({ kind }: { kind: PlatformFlow
       <Rect x="6" y="9" width="4" height="1" fill="#142f63" opacity={0.62} />
       <Rect x="3" y="5" width="1" height="2" fill="#142f63" opacity={0.62} />
       <Rect x="12" y="5" width="1" height="2" fill="#142f63" opacity={0.62} />
+    </>
+  )
+}
+
+const DecoFlowerSvg = memo(function DecoFlowerSvg({ kind }: { kind: PlatformFlowerDecoKind }) {
+  return (
+    <Svg
+      width="100%"
+      height="100%"
+      viewBox={`0 0 ${FLOWER_VB_W} ${FLOWER_VB_H}`}
+      preserveAspectRatio="xMidYMax meet"
+    >
+      {renderFlowerShapes(kind)}
     </Svg>
   )
 })
@@ -1750,8 +1777,8 @@ const PlatformTopFlowersLayer = memo(function PlatformTopFlowersLayer({
   return (
     <>
       {flowers.map((f, i) => {
-        const w = 16
-        const h = 22
+        const w = FLOWER_PX_W
+        const h = FLOWER_PX_H
         return (
           <View
             key={`${f.kind}-${f.offsetX.toFixed(1)}-${i}`}
@@ -1769,6 +1796,82 @@ const PlatformTopFlowersLayer = memo(function PlatformTopFlowersLayer({
         )
       })}
     </>
+  )
+})
+
+/**
+ * Vertical overhang (in px) reserved above the platform shell for decoration
+ * inside the merged Svg. Large enough to fit the tallest deco (22px flowers)
+ * plus a small bottom overlap where props sit into the grass cap.
+ */
+const MERGED_DECO_OVERHANG = 24
+
+/**
+ * Single Svg covering the platform face + top-of-platform decorations
+ * (flowers, mushrooms). Replaces the per-deco `View` + `Svg` pairs for
+ * non-breakable platforms so each row contributes just one vector root.
+ *
+ * Coordinate system: pixels. The Svg has a `viewBox` matching its rendered
+ * size and `preserveAspectRatio="none"`, so inner `<G transform>` translates
+ * map 1:1 to platform-local pixels. The dirt face is drawn in its original
+ * 100×14 space via `scale(width/100, height/14)` — visually identical to
+ * the original stretched `BiomePlatformFace`.
+ */
+const MergedPlatformFace = memo(function MergedPlatformFace({
+  width,
+  height,
+  surface,
+  topFlowers,
+  topMushrooms,
+}: {
+  width: number
+  height: number
+  surface: PlatformSurfaceKind
+  topFlowers?: PlatformTopFlower[]
+  topMushrooms?: PlatformTopMushroom[]
+}) {
+  const svgW = width
+  const svgH = MERGED_DECO_OVERHANG + height
+  const faceTransform = `translate(0, ${MERGED_DECO_OVERHANG}) scale(${width / PLATFORM_FACE_VB_W}, ${height / PLATFORM_FACE_VB_H})`
+  return (
+    <Svg
+      pointerEvents="none"
+      style={{ position: 'absolute', left: 0, top: -MERGED_DECO_OVERHANG, width: svgW, height: svgH }}
+      width={svgW}
+      height={svgH}
+      viewBox={`0 0 ${svgW} ${svgH}`}
+      preserveAspectRatio="none"
+    >
+      <G transform={faceTransform}>{renderPlatformFaceShapes(surface)}</G>
+      {topMushrooms?.map((m, i) => {
+        const vbW = m.kind === 'single' ? MUSHROOM_SINGLE_VB_W : MUSHROOM_GROUP_VB_W
+        const vbH = m.kind === 'single' ? MUSHROOM_SINGLE_VB_H : MUSHROOM_GROUP_VB_H
+        const pxW = m.kind === 'single' ? MUSHROOM_SINGLE_PX_W : MUSHROOM_GROUP_PX_W
+        const pxH = m.kind === 'single' ? MUSHROOM_SINGLE_PX_H : MUSHROOM_GROUP_PX_H
+        // Mirror the original `xMidYMax meet` placement: uniform scale, centered
+        // horizontally on offsetX, bottom-anchored 5px into the grass cap.
+        const s = Math.min(pxW / vbW, pxH / vbH)
+        const contentW = vbW * s
+        const contentH = vbH * s
+        const tx = m.offsetX - contentW / 2
+        const ty = MERGED_DECO_OVERHANG + 5 - contentH
+        return (
+          <G key={`m-${i}`} transform={`translate(${tx}, ${ty}) scale(${s})`}>
+            {m.kind === 'single' ? renderMushroomSingleShapes() : renderMushroomGroupShapes()}
+          </G>
+        )
+      })}
+      {topFlowers?.map((f, i) => {
+        // Flowers use exact 16×22 viewBox = 16×22 pixel footprint, so scale = 1.
+        const tx = f.offsetX - FLOWER_PX_W / 2
+        const ty = MERGED_DECO_OVERHANG + 5 + f.offsetY - FLOWER_PX_H
+        return (
+          <G key={`f-${i}`} transform={`translate(${tx}, ${ty})`}>
+            {renderFlowerShapes(f.kind)}
+          </G>
+        )
+      })}
+    </Svg>
   )
 })
 
@@ -1797,6 +1900,7 @@ const JumpPlatformRow = memo(function JumpPlatformRow({
   topPalmTree?: PlatformTopPalmTree
   topFlowers?: PlatformTopFlower[]
 }) {
+  const isBreakable = graphicKind === 'breakable'
   return (
     <View
       style={[
@@ -1806,11 +1910,28 @@ const JumpPlatformRow = memo(function JumpPlatformRow({
       ]}
       collapsable={false}
     >
-      <GrasslandPlatformGraphic width={width} height={shellHeight} kind={graphicKind} surface={surface} />
-      {topMushrooms?.length ? <PlatformTopMushroomsLayer mushrooms={topMushrooms} /> : null}
+      {isBreakable ? (
+        <>
+          <GrasslandPlatformGraphic width={width} height={shellHeight} kind={graphicKind} surface={surface} />
+          {topMushrooms?.length ? <PlatformTopMushroomsLayer mushrooms={topMushrooms} /> : null}
+          {topFlowers?.length ? <PlatformTopFlowersLayer flowers={topFlowers} /> : null}
+        </>
+      ) : (
+        <>
+          <MergedPlatformFace
+            width={width}
+            height={shellHeight}
+            surface={surface}
+            topFlowers={topFlowers}
+            topMushrooms={topMushrooms}
+          />
+          {graphicKind === 'moving' ? <View style={styles.platformTintMoving} /> : null}
+        </>
+      )}
       {topPalmTree ? (
-        <View
-          pointerEvents="none"
+        <Image
+          source={PALM_TREE_IMAGE}
+          resizeMode="contain"
           style={{
             position: 'absolute',
             left: topPalmTree.offsetX - PALM_TREE_W / 2,
@@ -1818,44 +1939,9 @@ const JumpPlatformRow = memo(function JumpPlatformRow({
             width: PALM_TREE_W,
             height: PALM_TREE_H,
           }}
-        >
-          <Image
-            source={PALM_TREE_IMAGE}
-            style={{ width: '100%', height: '100%' }}
-            resizeMode="contain"
-          />
-        </View>
+        />
       ) : null}
-      {topFlowers?.length ? <PlatformTopFlowersLayer flowers={topFlowers} /> : null}
       {isBouncy ? <DoodleSpringPad platformWidth={width} /> : null}
-    </View>
-  )
-})
-
-const CoinView = memo(function CoinView({
-  left,
-  top,
-  diameter,
-}: {
-  left: number
-  top: number
-  diameter: number
-}) {
-  const r = diameter / 2
-  return (
-    <View
-      style={[
-        styles.coin,
-        {
-          left,
-          top,
-          width: diameter,
-          height: diameter,
-          borderRadius: r,
-        },
-      ]}
-    >
-      <View style={styles.coinInner} />
     </View>
   )
 })
@@ -2140,7 +2226,50 @@ const WonderSkyBackdrop = memo(function WonderSkyBackdrop({
   )
 })
 
-export function WonderJump({ navigation, route }: any) {
+type WonderJumpSceneColors = {
+  screenBg: string
+  tileBg: string
+  sunCore: string
+  hillFar: string
+  hillNear: string
+}
+
+/** Sky + sun + hills: isolated so React can skip the whole block when blend/colors are unchanged between ticks. */
+const WonderJumpAmbientDecor = memo(function WonderJumpAmbientDecor({
+  playWidth,
+  playHeight,
+  mushroomBlend,
+  tropicalBlend,
+  sceneColors,
+}: {
+  playWidth: number
+  playHeight: number
+  mushroomBlend: number
+  tropicalBlend: number
+  sceneColors: WonderJumpSceneColors
+}) {
+  return (
+    <>
+      <WonderSkyBackdrop width={playWidth} height={playHeight} mushroomBlend={mushroomBlend} tropicalBlend={tropicalBlend} />
+      <View style={[styles.sunGlow, { backgroundColor: sceneColors.sunCore }]} />
+      <View style={[styles.horizonLayerFar, { backgroundColor: sceneColors.hillFar }]} />
+      <View style={[styles.horizonLayerNear, { backgroundColor: sceneColors.hillNear }]} />
+    </>
+  )
+})
+
+const DEFAULT_WONDER_JUMP_UNLOCKED: WonderJumpStartBiome[] = ['grassland', 'mushroom', 'tropical']
+
+export function WonderJump({
+  navigation,
+  route,
+  sessionToken,
+}: {
+  navigation: any
+  route: any
+  sessionToken?: string
+}) {
+  const isFocused = useIsFocused()
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
   const insets = useSafeAreaInsets()
   const fallbackWindow = Dimensions.get('screen')
@@ -2151,6 +2280,13 @@ export function WonderJump({ navigation, route }: any) {
   const tileBottomSpace = insets.bottom + 88
   const playHeight = Math.max(430, resolvedHeight - insets.top - insets.bottom - 170)
   const panelTop = Math.max(70, playHeight * 0.24)
+  const gameOverPanelDockStyle = useMemo(
+    () => ({
+      bottom: Math.max(8, insets.bottom + 6),
+      maxHeight: Math.min(playHeight * 0.92, playHeight - 20),
+    }),
+    [insets.bottom, playHeight]
+  )
 
   const routeSeedBiome: WonderJumpStartBiome =
     route?.params?.startBiome === 'mushroom'
@@ -2163,6 +2299,8 @@ export function WonderJump({ navigation, route }: any) {
   const [controlScheme, setControlScheme] = useState<ControlScheme>('touchSplit')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [bestScore, setBestScore] = useState(0)
+  /** Server-backed (or default); used when syncing progress and for future biome gating. */
+  const [unlockedBiomes, setUnlockedBiomes] = useState<WonderJumpStartBiome[]>([...DEFAULT_WONDER_JUMP_UNLOCKED])
   const menuWorldCacheRef = useRef<
     Partial<Record<WonderJumpStartBiome, ReturnType<typeof createInitialWorld>>>
   >({})
@@ -2180,19 +2318,17 @@ export function WonderJump({ navigation, route }: any) {
       player: { ...world.player },
       platforms: world.platforms.map((p) => ({ ...p })),
       spikes: world.spikes.map((s) => ({ ...s })),
-      coins: world.coins.map((c) => ({ ...c })),
       jetpacks: world.jetpacks.map((j) => ({ ...j })),
       crabs: world.crabs.map((c) => ({ ...c })),
       cameraY: 0,
       heightScore: 0,
-      coinScore: 0,
-      lastCoinHostY: world.lastCoinHostY,
-      lastCoinWorldX: world.lastCoinWorldX,
       lastJetpackY: world.lastJetpackY,
       jetpackFuelMs: 0,
       jetpackEndGraceMs: 0,
       jetpackAnimTick: 0,
       uiAnimTick: 0,
+      jetpacksUsedThisRun: 0,
+      deathCause: null,
       startBiome: biome,
     }
   }
@@ -2202,6 +2338,50 @@ export function WonderJump({ navigation, route }: any) {
     leftPressed: false,
     rightPressed: false,
   })
+  /** Authoritative playing snapshot between React renders (throttled setState while running). */
+  const playingSimSnapRef = useRef<GameState | null>(null)
+  const prevRunModeForProgressSyncRef = useRef<RunMode>(gameState.mode)
+
+  useEffect(() => {
+    if (!sessionToken) {
+      setUnlockedBiomes([...DEFAULT_WONDER_JUMP_UNLOCKED])
+      return
+    }
+    let cancelled = false
+    void fetchWonderJumpProgress(sessionToken)
+      .then((p) => {
+        if (cancelled) return
+        setBestScore((b) => Math.max(b, p.highScore))
+        const next = p.unlockedBiomes.filter((x): x is WonderJumpStartBiome =>
+          x === 'grassland' || x === 'mushroom' || x === 'tropical'
+        )
+        setUnlockedBiomes(next.length > 0 ? next : [...DEFAULT_WONDER_JUMP_UNLOCKED])
+      })
+      .catch(() => {
+        /* offline / old server — keep local gameplay */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [sessionToken])
+
+  useEffect(() => {
+    const prev = prevRunModeForProgressSyncRef.current
+    prevRunModeForProgressSyncRef.current = gameState.mode
+    if (prev !== 'playing' || gameState.mode !== 'gameOver' || !sessionToken) return
+    const runScore = displayRunScore(gameState.heightScore)
+    const biomeSet = new Set<WonderJumpStartBiome>([...unlockedBiomes, gameState.startBiome])
+    const merged = Array.from(biomeSet)
+    void saveWonderJumpProgress(sessionToken, { highScore: runScore, unlockedBiomes: merged })
+      .then((p) => {
+        setBestScore((b) => Math.max(b, p.highScore))
+        const next = p.unlockedBiomes.filter((x): x is WonderJumpStartBiome =>
+          x === 'grassland' || x === 'mushroom' || x === 'tropical'
+        )
+        if (next.length > 0) setUnlockedBiomes(next)
+      })
+      .catch(() => {})
+  }, [gameState.mode, gameState.heightScore, gameState.startBiome, sessionToken, unlockedBiomes])
 
   useEffect(() => {
     const p = route?.params?.startBiome
@@ -2226,7 +2406,11 @@ export function WonderJump({ navigation, route }: any) {
       if (key === 'arrowleft' || key === 'a') inputRef.current.leftPressed = false
       if (key === 'arrowright' || key === 'd') inputRef.current.rightPressed = false
     }
-    if (typeof window !== 'undefined') {
+    if (
+      Platform.OS === 'web' &&
+      typeof window !== 'undefined' &&
+      typeof window.addEventListener === 'function'
+    ) {
       window.addEventListener('keydown', onKeyDown)
       window.addEventListener('keyup', onKeyUp)
       return () => {
@@ -2236,12 +2420,8 @@ export function WonderJump({ navigation, route }: any) {
     }
   }, [])
 
-  useEffect(() => {
-    if (gameState.mode !== 'playing') return
-
-    const intervalId = setInterval(() => {
-      setGameState((previous) => {
-        if (previous.mode !== 'playing') return previous
+  const tickPlayingState = useCallback((previous: GameState): GameState => {
+    if (previous.mode !== 'playing') return previous
 
         const difficulty = Math.min(1, previous.heightScore / 2200)
         const mushroomBlendTick = getMushroomBlend(previous.heightScore, previous.startBiome)
@@ -2427,17 +2607,6 @@ export function WonderJump({ navigation, route }: any) {
           mutatedPlatforms
         )
 
-        const currentCoins = previous.coins
-          .filter((coin) => !coin.collected && coin.y - previous.cameraY < playHeight + 150)
-          .flatMap((coin) => {
-            if (!coin.hostPlatformId) return [coin]
-            const host = platformById.get(coin.hostPlatformId)
-            /* Host culled from simulation → drop coin; keeping it caused frozen world coords + vertical “trails” */
-            if (!host) return []
-            const ox = Number.isFinite(coin.offsetX) ? coin.offsetX : host.width * 0.5
-            return [{ ...coin, offsetX: ox, x: host.x + ox, y: host.y - 20 }]
-          })
-
         const currentJetpacks = previous.jetpacks
           .filter((jetpack) => !jetpack.collected)
           .filter((jetpack) => {
@@ -2445,21 +2614,7 @@ export function WonderJump({ navigation, route }: any) {
             return y > -playHeight - 170 && y < playHeight + 220
           })
 
-        let coinScoreGain = 0
-        const resolvedCoins = currentCoins.map((coin) => {
-          if (coin.collected) return coin
-          const hit =
-            player.x < coin.x + coin.radius &&
-            player.x + player.width > coin.x - coin.radius &&
-            player.y < coin.y + coin.radius &&
-            player.y + player.height > coin.y - coin.radius
-          if (hit) {
-            coinScoreGain += 1
-            return { ...coin, collected: true }
-          }
-          return coin
-        })
-
+        let jetpacksUsedThisRun = previous.jetpacksUsedThisRun
         const resolvedJetpacks = currentJetpacks.map((jetpack) => {
           const hit =
             player.x < jetpack.x + jetpack.width &&
@@ -2467,6 +2622,7 @@ export function WonderJump({ navigation, route }: any) {
             player.y < jetpack.y + jetpack.height &&
             player.y + player.height > jetpack.y
           if (hit) {
+            if (!jetpack.collected) jetpacksUsedThisRun += 1
             jetpackFuelMs = Math.max(jetpackFuelMs, JETPACK_DURATION_MS)
             if (jetpackAnimTick === 0) jetpackAnimTick = 1
             return { ...jetpack, collected: true }
@@ -2486,11 +2642,8 @@ export function WonderJump({ navigation, route }: any) {
 
         let platforms = [...mutatedPlatforms]
         let spikes = [...currentSpikes]
-        let coins = [...resolvedCoins]
         let jetpacks = [...resolvedJetpacks]
         let crabs = [...previous.crabs]
-        let lastCoinHostY = previous.lastCoinHostY
-        let lastCoinWorldX = previous.lastCoinWorldX
         let lastJetpackY = previous.lastJetpackY
         const hostById = platformById
         const tickMs = SIM_TICK_MS
@@ -2501,13 +2654,12 @@ export function WonderJump({ navigation, route }: any) {
               return {
                 ...crab,
                 deathMs: crab.deathMs + tickMs,
-                plus2Ms: Math.max(0, crab.plus2Ms - tickMs),
               }
             }
             const host = hostById.get(crab.hostPlatformId)
             if (!host) return crab
             if (host.kind === 'moving') {
-              return { ...crab, plus2Ms: Math.max(0, crab.plus2Ms - tickMs) }
+              return crab
             }
             let localX = crab.localX + crab.speed * crab.dir
             let dir = crab.dir
@@ -2518,15 +2670,18 @@ export function WonderJump({ navigation, route }: any) {
               localX = crab.maxLocalX
               dir = -1
             }
-            return { ...crab, localX, dir, plus2Ms: Math.max(0, crab.plus2Ms - tickMs) }
+            return { ...crab, localX, dir }
           })
           .filter((crab) => crab.alive || crab.deathMs < CRAB_DEATH_MS + 240)
-        const countCoinsAlive = (list: Coin[]) => list.filter((c) => !c.collected).length
         const countJetpacksAlive = (list: JetpackPickup[]) => list.filter((j) => !j.collected).length
-        let highestY = Math.min(...platforms.map((platform) => platform.y))
+        let chainPlatform = platforms[0]
+        for (let pi = 1; pi < platforms.length; pi++) {
+          const p = platforms[pi]
+          if (p.y < chainPlatform.y) chainPlatform = p
+        }
+        let highestY = chainPlatform.y
         let seed = platforms.length + 1
-        let chainPlatform = platforms.reduce((top, p) => (p.y < top.y ? p : top), platforms[0])
-        let coinsMintedThisTick = 0
+        let jetpacksAliveSpawn = countJetpacksAlive(jetpacks)
         while (highestY > cameraY - playHeight * 2.55) {
           let gapMin = 42 + difficulty * 8
           let gapMax = 62 + difficulty * 24
@@ -2584,29 +2739,9 @@ export function WonderJump({ navigation, route }: any) {
             newSpikes.length > 0
           )
           chainPlatform = platforms[platforms.length - 1]
-          let chainGotCoin = false
-          if (coinsMintedThisTick < MAX_COINS_MINTED_PER_TICK) {
-            const added = spawnCoin(
-              platform,
-              newSpikes.length > 0,
-              countCoinsAlive(coins),
-              lastCoinHostY,
-              lastCoinWorldX,
-              mushroomBlendTick,
-              tropicalBlendTick,
-              previous.startBiome
-            )
-            if (added.length) {
-              coins.push(...added)
-              coinsMintedThisTick += 1
-              lastCoinHostY = platform.y
-              lastCoinWorldX = added[0].x
-              chainGotCoin = true
-            }
-          }
           const jetpackAdded = spawnJetpack(
             platform,
-            countJetpacksAlive(jetpacks),
+            jetpacksAliveSpawn,
             lastJetpackY,
             mushroomBlendTick,
             tropicalBlendTick,
@@ -2614,6 +2749,7 @@ export function WonderJump({ navigation, route }: any) {
           )
           if (jetpackAdded.length) {
             jetpacks.push(...jetpackAdded)
+            jetpacksAliveSpawn += jetpackAdded.length
             lastJetpackY = jetpackAdded[0].y
           }
           crabs.push(...spawnCrabOnPlatform(chainPlatform, newSpikes.length > 0, tropicalBlendTick, previous.startBiome, seed))
@@ -2648,7 +2784,7 @@ export function WonderJump({ navigation, route }: any) {
             )
             const jetpackSibling = spawnJetpack(
               sibling,
-              countJetpacksAlive(jetpacks),
+              jetpacksAliveSpawn,
               lastJetpackY,
               mushroomBlendTick,
               tropicalBlendTick,
@@ -2656,28 +2792,8 @@ export function WonderJump({ navigation, route }: any) {
             )
             if (jetpackSibling.length) {
               jetpacks.push(...jetpackSibling)
+              jetpacksAliveSpawn += jetpackSibling.length
               lastJetpackY = jetpackSibling[0].y
-            }
-            if (
-              !chainGotCoin &&
-              coinsMintedThisTick < MAX_COINS_MINTED_PER_TICK
-            ) {
-              const addedS = spawnCoin(
-                sibling,
-                sSpikes.length > 0,
-                countCoinsAlive(coins),
-                lastCoinHostY,
-                lastCoinWorldX,
-                mushroomBlendTick,
-                tropicalBlendTick,
-                previous.startBiome
-              )
-              if (addedS.length) {
-                coins.push(...addedS)
-                coinsMintedThisTick += 1
-                lastCoinHostY = sibling.y
-                lastCoinWorldX = addedS[0].x
-              }
             }
           }
           seed += 1
@@ -2687,7 +2803,6 @@ export function WonderJump({ navigation, route }: any) {
           const screenY = platform.y - cameraY
           return screenY > -220 && screenY < playHeight + 220
         })
-        const alivePlatformIds = new Set(platforms.map((p) => p.id))
         const livePlatformById = new Map(platforms.map((p) => [p.id, p]))
         spikes = filterUnfairSpikes(spikes, platforms)
         spikes = spikes.filter((spike) => {
@@ -2697,13 +2812,6 @@ export function WonderJump({ navigation, route }: any) {
            * If we cull them at -80, newly generated hazards are deleted before they ever scroll into view.
            */
           return screenY > -playHeight - 140 && screenY < playHeight + 180
-        })
-        coins = coins.filter((coin) => {
-          if (coin.collected) return false
-          if (coin.hostPlatformId && !alivePlatformIds.has(coin.hostPlatformId)) return false
-          const screenY = coin.y - cameraY
-          /* ~1 screen above camera: enough lead time to jump, without hoarding hundreds off-screen */
-          return screenY > -playHeight - 100 && screenY < playHeight + 220
         })
         crabs = crabs.filter((crab) => {
           const host = livePlatformById.get(crab.hostPlatformId)
@@ -2717,93 +2825,63 @@ export function WonderJump({ navigation, route }: any) {
           return screenY > -playHeight - 170 && screenY < playHeight + 250
         })
 
-        // Crab collisions + stomps.
-        let crabsKilledThisTick = 0
+        // Crab collisions + stomps (stomp works with jetpack; touch damage only without jetpack).
         let touchedCrab = false
-        if (jetpackFuelMs <= 0) {
-          const prevBottom2 = prevBottom
-          const newBottom2 = player.y + player.height
-          for (const crab of crabs) {
-            if (!crab.alive) continue
-            const host = livePlatformById.get(crab.hostPlatformId)
-            if (!host) continue
-            const crabX = host.x + crab.localX
-            const crabY = host.y - crab.height + 2
-            const overlaps =
-              player.x < crabX + crab.width &&
-              player.x + player.width > crabX &&
-              player.y < crabY + crab.height &&
-              player.y + player.height > crabY
-            const stompHorizontal =
-              player.x + player.width >= crabX - 8 &&
-              player.x <= crabX + crab.width + 8
-            const stompTop = crabY + 6
-            const stomping =
-              player.velocityY > 0 &&
-              stompHorizontal &&
-              prevBottom2 <= stompTop &&
-              newBottom2 >= crabY - 2
-            if (stomping) {
-              crabsKilledThisTick += 1
-              // Tiny bounce on kill.
-              player.velocityY = Math.min(player.velocityY, -6.4)
-              crab.alive = false
-              crab.deathMs = 0
-              crab.plus2Ms = CRAB_PLUS2_MS
-              const dropY = crabY - 10
-              coins.push(
-                {
-                  id: `coin-drop-${crab.id}-a-${previous.uiAnimTick}`,
-                  x: crabX + crab.width * 0.35,
-                  y: dropY,
-                  radius: 6,
-                  collected: false,
-                  offsetX: 0,
-                  hostPlatformId: null,
-                },
-                {
-                  id: `coin-drop-${crab.id}-b-${previous.uiAnimTick}`,
-                  x: crabX + crab.width * 0.65,
-                  y: dropY,
-                  radius: 6,
-                  collected: false,
-                  offsetX: 0,
-                  hostPlatformId: null,
-                }
-              )
-            } else if (overlaps) {
-              touchedCrab = true
-            }
+        const prevBottom2 = prevBottom
+        const newBottom2 = player.y + player.height
+        for (const crab of crabs) {
+          if (!crab.alive) continue
+          const host = livePlatformById.get(crab.hostPlatformId)
+          if (!host) continue
+          const crabX = host.x + crab.localX
+          const crabY = host.y - crab.height + 2
+          const overlaps =
+            player.x < crabX + crab.width &&
+            player.x + player.width > crabX &&
+            player.y < crabY + crab.height &&
+            player.y + player.height > crabY
+          const stompHorizontal =
+            player.x + player.width >= crabX - 8 &&
+            player.x <= crabX + crab.width + 8
+          const stompTop = crabY + 6
+          const stomping =
+            player.velocityY > 0 &&
+            stompHorizontal &&
+            prevBottom2 <= stompTop &&
+            newBottom2 >= crabY - 2
+          if (stomping) {
+            // Tiny bounce on kill.
+            player.velocityY = Math.min(player.velocityY, -6.4)
+            crab.alive = false
+            crab.deathMs = 0
+          } else if (overlaps && jetpackFuelMs <= 0) {
+            touchedCrab = true
           }
         }
 
         const heightScore = Math.max(previous.heightScore, Math.floor(-cameraY))
-        const coinScore = previous.coinScore + coinScoreGain + crabsKilledThisTick * 2
         const fallenOut = player.y - cameraY > playHeight + 120
         const shouldEnd = fallenOut || hitSpike || touchedCrab
 
         if (shouldEnd) {
-          const finalScore = coinScore
-          setBestScore((current) => Math.max(current, finalScore))
+          const deathCause: WonderJumpDeathCause = fallenOut ? 'fall' : hitSpike ? 'spike' : 'crab'
           return {
             ...previous,
             mode: 'gameOver',
             player,
             platforms,
             spikes,
-            coins,
             jetpacks,
             crabs,
             cameraY,
             heightScore,
-            coinScore,
-            lastCoinHostY,
-            lastCoinWorldX,
             lastJetpackY,
             jetpackFuelMs,
             jetpackEndGraceMs,
             jetpackAnimTick,
             uiAnimTick,
+            jetpacksUsedThisRun,
+            deathCause,
             startBiome: previous.startBiome,
           }
         }
@@ -2813,26 +2891,68 @@ export function WonderJump({ navigation, route }: any) {
           player,
           platforms,
           spikes,
-          coins,
           jetpacks,
           crabs,
           cameraY,
           heightScore,
-          coinScore,
-          lastCoinHostY,
-          lastCoinWorldX,
           lastJetpackY,
           jetpackFuelMs,
           jetpackEndGraceMs,
           jetpackAnimTick,
           uiAnimTick,
+          jetpacksUsedThisRun,
+          deathCause: null,
           startBiome: previous.startBiome,
         }
-      })
-    }, SIM_TICK_MS)
+  }, [playWidth, playHeight])
 
-    return () => clearInterval(intervalId)
-  }, [gameState.mode, playHeight, playWidth])
+  useEffect(() => {
+    if (gameState.mode !== 'playing' || !isFocused) return
+    if (playingSimSnapRef.current?.mode !== 'playing') {
+      playingSimSnapRef.current = gameState
+    }
+
+    let rafId = 0
+    const timeNow = () => globalThis.performance?.now?.() ?? Date.now()
+    /** Pretend one tick already elapsed so the first rAF frame runs a sim step (avoids a visible stall). */
+    let lastTs = timeNow() - SIM_TICK_MS
+    let acc = 0
+
+    const tickLoop = () => {
+      const prevSnap = playingSimSnapRef.current
+      if (!prevSnap || prevSnap.mode !== 'playing') return
+
+      const now = timeNow()
+      /** 64ms cap: catch up without unbounded spiral if the JS thread stalls (tab blur, etc.). */
+      const dt = Math.min(Math.max(0, now - lastTs), 64)
+      lastTs = now
+      acc += dt
+
+      let next = prevSnap
+      let stepped = false
+      while (acc >= SIM_TICK_MS) {
+        acc -= SIM_TICK_MS
+        next = tickPlayingState(next)
+        playingSimSnapRef.current = next
+        stepped = true
+        if (next.mode !== 'playing') break
+      }
+
+      if (stepped || next.mode !== 'playing') {
+        if (next.mode === 'gameOver') {
+          setBestScore((current) => Math.max(current, displayRunScore(next.heightScore)))
+        }
+        setGameState(next)
+      }
+
+      if (playingSimSnapRef.current?.mode === 'playing') {
+        rafId = requestAnimationFrame(tickLoop)
+      }
+    }
+
+    rafId = requestAnimationFrame(tickLoop)
+    return () => cancelAnimationFrame(rafId)
+  }, [gameState.mode, playHeight, playWidth, isFocused, tickPlayingState])
 
   const clouds = useMemo(
     () => [
@@ -2845,45 +2965,74 @@ export function WonderJump({ navigation, route }: any) {
     [playWidth]
   )
 
+  /** Coarser height steps so sky + scene colors don’t recompute every sim tick (big SVG + style churn). */
+  const skyHeightScoreStep =
+    gameState.mode === 'menu' ? 0 : Math.floor(gameState.heightScore / 88) * 88
+  const skyBlendCacheRef = useRef({ mushroom: NaN, tropical: NaN, obj: { mushroom: 0, tropical: 0 } })
   const skyBlend = useMemo(() => {
-    if (gameState.mode !== 'menu') {
-      return {
-        mushroom: getMushroomBlend(gameState.heightScore, gameState.startBiome),
-        tropical: getTropicalBlend(gameState.heightScore, gameState.startBiome),
-      }
-    }
-    return {
-      mushroom: getMushroomBlend(0, menuStartBiome),
-      tropical: getTropicalBlend(0, menuStartBiome),
-    }
-  }, [gameState.mode, gameState.heightScore, gameState.startBiome, menuStartBiome])
+    const mushroom =
+      gameState.mode !== 'menu'
+        ? getMushroomBlend(skyHeightScoreStep, gameState.startBiome)
+        : getMushroomBlend(0, menuStartBiome)
+    const tropical =
+      gameState.mode !== 'menu'
+        ? getTropicalBlend(skyHeightScoreStep, gameState.startBiome)
+        : getTropicalBlend(0, menuStartBiome)
+    const c = skyBlendCacheRef.current
+    if (c.mushroom === mushroom && c.tropical === tropical) return c.obj
+    const obj = { mushroom, tropical }
+    skyBlendCacheRef.current = { mushroom, tropical, obj }
+    return obj
+  }, [gameState.mode, skyHeightScoreStep, gameState.startBiome, menuStartBiome])
 
+  const sceneColorsCacheRef = useRef({ key: '', obj: null as unknown as WonderJumpSceneColors })
   const sceneColors = useMemo(() => {
-    return {
+    const next: WonderJumpSceneColors = {
       screenBg: lerp3Color(GRASSLAND_THEME.screenBg, MUSHROOM_THEME.screenBg, TROPICAL_THEME.screenBg, skyBlend.mushroom, skyBlend.tropical),
       tileBg: lerp3Color(GRASSLAND_THEME.tileBg, MUSHROOM_THEME.tileBg, TROPICAL_THEME.tileBg, skyBlend.mushroom, skyBlend.tropical),
       sunCore: lerp3Color('#fff8d2', '#e8dcf8', '#fff0cf', skyBlend.mushroom, skyBlend.tropical),
       hillFar: lerp3Color(GRASSLAND_THEME.hillFar, MUSHROOM_THEME.hillFar, TROPICAL_THEME.hillFar, skyBlend.mushroom, skyBlend.tropical),
       hillNear: lerp3Color(GRASSLAND_THEME.hillNear, MUSHROOM_THEME.hillNear, TROPICAL_THEME.hillNear, skyBlend.mushroom, skyBlend.tropical),
     }
+    const key = `${next.screenBg}|${next.tileBg}|${next.sunCore}|${next.hillFar}|${next.hillNear}`
+    const c = sceneColorsCacheRef.current
+    if (c.key === key) return c.obj
+    sceneColorsCacheRef.current = { key, obj: next }
+    return next
   }, [skyBlend])
+
+  /** Update shake every 2 sim ticks — parent still renders each frame, but fewer child style churns. */
+  const jetpackShakePhase = Math.floor(gameState.uiAnimTick / 2)
+  const jetpackShakeCacheRef = useRef(JETPACK_SHAKE_NONE)
   const jetpackShake = useMemo(() => {
-    if (gameState.mode !== 'playing' || gameState.jetpackFuelMs <= 0) return { x: 0, y: 0 }
-    const t = gameState.uiAnimTick
-    // Snap to integer pixels to avoid sub-pixel shimmer/glitching.
-    return {
+    if (gameState.mode !== 'playing' || gameState.jetpackFuelMs <= 0) {
+      jetpackShakeCacheRef.current = JETPACK_SHAKE_NONE
+      return JETPACK_SHAKE_NONE
+    }
+    const t = jetpackShakePhase * 2
+    const next = {
       x: Math.round(Math.sin(t * 0.85) * 0.8),
       y: Math.round(Math.cos(t * 0.9) * 0.6),
     }
-  }, [gameState.mode, gameState.jetpackFuelMs, gameState.uiAnimTick])
+    const prev = jetpackShakeCacheRef.current
+    if (prev !== JETPACK_SHAKE_NONE && prev.x === next.x && prev.y === next.y) return prev
+    jetpackShakeCacheRef.current = next
+    return next
+  }, [gameState.mode, gameState.jetpackFuelMs, jetpackShakePhase])
 
+  /** Match sky coarsening so biome HUD text isn’t recomputed on every height pixel. */
   const hudBiomeLabel = useMemo(() => {
-    const m = getMushroomBlend(gameState.heightScore, gameState.startBiome)
-    const t = getTropicalBlend(gameState.heightScore, gameState.startBiome)
+    const m = getMushroomBlend(skyHeightScoreStep, gameState.startBiome)
+    const t = getTropicalBlend(skyHeightScoreStep, gameState.startBiome)
     return biomeHudLabel(m, t, gameState.startBiome)
-  }, [gameState.heightScore, gameState.startBiome])
+  }, [skyHeightScoreStep, gameState.startBiome, gameState.mode])
+  const gameOverBiomeAccent = hudBiomeLabelToAccentBiome(hudBiomeLabel)
   const activePanelBiome: WonderJumpStartBiome =
-    gameState.mode === 'menu' ? menuStartBiome : gameState.startBiome
+    gameState.mode === 'menu'
+      ? menuStartBiome
+      : gameState.mode === 'gameOver'
+        ? gameOverBiomeAccent
+        : gameState.startBiome
   const panelAccent = BIOME_UI_ACCENTS[activePanelBiome]
   const primaryButtonTone = {
     backgroundColor: panelAccent.accent,
@@ -2894,16 +3043,15 @@ export function WonderJump({ navigation, route }: any) {
     shadowColor: panelAccent.accent,
   }
   const panelBiomeLabel = panelAccent.label
+  const isHubPanel = gameState.mode === 'menu' || gameState.mode === 'gameOver'
   const activeOverlay =
     settingsOpen
       ? 'settings'
-      : gameState.mode === 'menu'
-        ? 'menu'
+      : isHubPanel
+        ? 'hub'
         : gameState.mode === 'paused'
           ? 'paused'
-          : gameState.mode === 'gameOver'
-            ? 'gameOver'
-            : null
+          : null
   const panelEntryStyle = {
     opacity: panelEntryAnim,
     transform: [
@@ -2915,6 +3063,10 @@ export function WonderJump({ navigation, route }: any) {
       },
     ],
   }
+
+  const gameOverRunScore = displayRunScore(gameState.heightScore)
+  const gameOverHighScore = Math.max(bestScore, gameOverRunScore)
+  const gameOverNewBest = gameState.mode === 'gameOver' && gameOverRunScore > bestScore
 
   useEffect(() => {
     if (!activeOverlay) return
@@ -2933,18 +3085,27 @@ export function WonderJump({ navigation, route }: any) {
     setSettingsOpen(false)
     inputRef.current.leftPressed = false
     inputRef.current.rightPressed = false
+    playingSimSnapRef.current = null
     setGameState(createInitialState('playing', playWidth, playHeight, menuStartBiome))
   }
   const restartRun = () => {
     setSettingsOpen(false)
     inputRef.current.leftPressed = false
     inputRef.current.rightPressed = false
+    playingSimSnapRef.current = null
     setGameState(createInitialState('playing', playWidth, playHeight, menuStartBiome))
   }
   const pauseGame = () => {
     setSettingsOpen(false)
     inputRef.current.leftPressed = false
     inputRef.current.rightPressed = false
+    const live = playingSimSnapRef.current
+    if (live?.mode === 'playing') {
+      const paused = { ...live, mode: 'paused' as const }
+      playingSimSnapRef.current = paused
+      setGameState(paused)
+      return
+    }
     setGameState((prev) => (prev.mode === 'playing' ? { ...prev, mode: 'paused' } : prev))
   }
   const resumeGame = () => {
@@ -2957,6 +3118,7 @@ export function WonderJump({ navigation, route }: any) {
     setSettingsOpen(false)
     inputRef.current.leftPressed = false
     inputRef.current.rightPressed = false
+    playingSimSnapRef.current = null
     setGameState(createMenuPreviewState(menuStartBiome))
   }
   const goHome = () => {
@@ -2970,36 +3132,98 @@ export function WonderJump({ navigation, route }: any) {
     setGameState((prev) => (prev.mode === 'menu' ? createMenuPreviewState(biome) : prev))
   }
 
-  const platformByIdForRender = new Map(gameState.platforms.map((p) => [p.id, p]))
+  const cam = gameState.cameraY
+  /** Platforms near the viewport — avoids mapping hundreds of rows per frame as the run climbs. */
+  const visiblePlatforms = useMemo(() => {
+    const lo = cam - 120
+    const hi = cam + playHeight + 120
+    const standId = gameState.player.groundPlatformId
+    return gameState.platforms.filter(
+      (p) => (p.y > lo && p.y < hi) || (standId != null && p.id === standId)
+    )
+  }, [gameState.platforms, cam, playHeight, gameState.player.groundPlatformId])
+  const visibleSpikes = useMemo(() => {
+    const lo = cam - 28
+    const hi = cam + playHeight + 32
+    return gameState.spikes.filter((s) => s.y > lo && s.y < hi)
+  }, [gameState.spikes, cam, playHeight])
+  const hudDisplayScore = useMemo(() => displayRunScore(gameState.heightScore), [gameState.heightScore])
+  const visibleJetpacks = useMemo(() => {
+    const lo = cam - playHeight - 200
+    const hi = cam + playHeight + 260
+    return gameState.jetpacks.filter((j) => !j.collected && j.y > lo && j.y < hi)
+  }, [gameState.jetpacks, cam, playHeight])
+  const platformByIdNear = useMemo(() => {
+    const lo = cam - 420
+    const hi = cam + playHeight + 420
+    const m = new Map<string, PlatformItem>()
+    for (const p of gameState.platforms) {
+      if (p.y >= lo && p.y <= hi) m.set(p.id, p)
+    }
+    return m
+  }, [gameState.platforms, cam, playHeight])
+  const visibleCrabs = useMemo(() => {
+    return (gameState.crabs ?? []).filter((crab) => {
+      const host = platformByIdNear.get(crab.hostPlatformId)
+      if (!host) return false
+      const y = host.y - crab.height + 2
+      return y > cam - 55 && y < cam + playHeight + 60
+    })
+  }, [gameState.crabs, platformByIdNear, cam, playHeight])
+
+  /** Integer world X; Y scroll is one parent `translateY` (smoother than per-sprite screen math). */
+  const snapX = (x: number) => Math.round(x)
+  /** No `renderToHardwareTextureAndroid` here: world `translateY` updates every frame and the HW layer would re-rasterize constantly (often worse than default). */
+  const worldRollStyle = useMemo(
+    () =>
+      ({
+        position: 'absolute' as const,
+        left: 0,
+        top: 0,
+        width: playWidth,
+        bottom: 0,
+        transform: [{ translateY: Math.round(-cam) }],
+      }) as const,
+    [playWidth, cam]
+  )
+
+  const screenShellStyle = useMemo(
+    () => [styles.screen, { backgroundColor: sceneColors.screenBg }],
+    [sceneColors.screenBg]
+  )
+  const gameTileShellStyle = useMemo(
+    () => [
+      styles.gameTile,
+      {
+        marginBottom: tileBottomSpace,
+        height: playHeight,
+        backgroundColor: sceneColors.tileBg,
+      },
+    ],
+    [tileBottomSpace, playHeight, sceneColors.tileBg]
+  )
 
   return (
-    <View style={[styles.screen, { backgroundColor: sceneColors.screenBg }]}>
-      <View
-        style={[
-          styles.gameTile,
-          {
-            marginBottom: tileBottomSpace,
-            height: playHeight,
-            backgroundColor: sceneColors.tileBg,
-            transform: [{ translateX: jetpackShake.x }, { translateY: jetpackShake.y }],
-          },
-        ]}
-      >
-        <WonderSkyBackdrop width={playWidth} height={playHeight} mushroomBlend={skyBlend.mushroom} tropicalBlend={skyBlend.tropical} />
-        <View style={[styles.sunGlow, { backgroundColor: sceneColors.sunCore }]} />
-        <View style={[styles.horizonLayerFar, { backgroundColor: sceneColors.hillFar }]} />
-        <View style={[styles.horizonLayerNear, { backgroundColor: sceneColors.hillNear }]} />
+    <View style={screenShellStyle}>
+      <View style={gameTileShellStyle}>
+        <WonderJumpAmbientDecor
+          playWidth={playWidth}
+          playHeight={playHeight}
+          mushroomBlend={skyBlend.mushroom}
+          tropicalBlend={skyBlend.tropical}
+          sceneColors={sceneColors}
+        />
 
+        <View pointerEvents="box-none" style={worldRollStyle}>
         {clouds.map((cloud) => {
-          const screenY = cloud.y - gameState.cameraY
           if (gameState.heightScore <= 320) return null
-          if (screenY < -90 || screenY > playHeight + 50) return null
-          return <GrasslandCloud key={cloud.id} left={cloud.x} top={screenY} width={cloud.width} />
+          if (cloud.y < cam - 90 || cloud.y > cam + playHeight + 50) return null
+          return (
+            <GrasslandCloud key={cloud.id} left={snapX(cloud.x)} top={Math.round(cloud.y)} width={cloud.width} />
+          )
         })}
 
-        {gameState.platforms.map((platform) => {
-          const screenY = platform.y - gameState.cameraY
-          if (screenY < -36 || screenY > playHeight + 32) return null
+        {visiblePlatforms.map((platform) => {
           const isBouncy = platform.kind === 'bouncy'
           const visualH = PLATFORM_HEIGHT + PLATFORM_VISUAL_OVERHANG
           const graphicKind: GrasslandPlatformKind =
@@ -3011,8 +3235,8 @@ export function WonderJump({ navigation, route }: any) {
           return (
             <JumpPlatformRow
               key={platform.id}
-              left={platform.x}
-              top={screenY}
+              left={snapX(platform.x)}
+              top={Math.round(platform.y)}
               width={platform.width}
               shellHeight={visualH}
               graphicKind={graphicKind}
@@ -3026,144 +3250,88 @@ export function WonderJump({ navigation, route }: any) {
           )
         })}
 
-        {gameState.spikes.map((spike) => {
-          const screenY = spike.y - gameState.cameraY
-          if (screenY < -16 || screenY > playHeight + 18) return null
-          return (
-            <SpikeGraphic
-              key={spike.id}
-              left={spike.x}
-              top={screenY}
-              width={spike.width}
-              height={spike.height}
-            />
-          )
-        })}
+        {visibleSpikes.map((spike) => (
+          <SpikeGraphic
+            key={spike.id}
+            left={snapX(spike.x)}
+            top={Math.round(spike.y)}
+            width={spike.width}
+            height={spike.height}
+          />
+        ))}
 
-        {gameState.coins.map((coin) => {
-          const screenY = coin.y - gameState.cameraY
-          if (screenY < -20 || screenY > playHeight + 20) return null
-          const d = coin.radius * 2
-          return (
-            <CoinView
-              key={coin.id}
-              left={coin.x - coin.radius}
-              top={screenY - coin.radius}
-              diameter={d}
-            />
-          )
-        })}
-
-        {gameState.jetpacks.map((jetpack) => {
-          // Slightly faster, smoother floating using stable per-spawn phase.
+        {visibleJetpacks.map((jetpack) => {
           const t = gameState.uiAnimTick * 0.1 + jetpack.hoverPhase
           const bob = Math.sin(t) * 1.35 + Math.sin(t * 0.5) * 0.35
-          const screenY = jetpack.y - gameState.cameraY + bob
-          if (screenY < -30 || screenY > playHeight + 30) return null
           return (
             <JetpackPickupView
               key={jetpack.id}
-              left={jetpack.x}
-              top={screenY}
+              left={snapX(jetpack.x)}
+              top={Math.round(jetpack.y + bob)}
               width={jetpack.width}
               height={jetpack.height}
             />
           )
         })}
 
-        {(gameState.crabs ?? []).map((crab) => {
-          const host = platformByIdForRender.get(crab.hostPlatformId)
+        {visibleCrabs.map((crab) => {
+          const host = platformByIdNear.get(crab.hostPlatformId)
           if (!host) return null
           const x = host.x + crab.localX
           const y = host.y - crab.height + 2
-          const screenY = y - gameState.cameraY
-          if (screenY < -30 || screenY > playHeight + 40) return null
           const deadProgress = crab.alive ? 0 : clamp(crab.deathMs / CRAB_DEATH_MS, 0, 1)
           const legFrame: 0 | 1 = Math.floor(gameState.uiAnimTick / 7) % 2 === 0 ? 0 : 1
-          const plus2Progress = clamp(1 - crab.plus2Ms / CRAB_PLUS2_MS, 0, 1)
-          const plus2Scale = 1 + Math.sin(plus2Progress * Math.PI) * 0.24
           return (
             <View key={crab.id} pointerEvents="none">
               <CrabView
-                left={x}
-                top={screenY}
+                left={snapX(x)}
+                top={Math.round(y)}
                 width={crab.width}
                 height={crab.height}
                 deadProgress={deadProgress}
                 legFrame={legFrame}
               />
-              {crab.plus2Ms > 0 ? (
-                <View
-                  style={{
-                    position: 'absolute',
-                    left: x + crab.width / 2 - 20,
-                    top: screenY - 20 - plus2Progress * 14,
-                    paddingHorizontal: 8,
-                    paddingVertical: 2,
-                    borderRadius: 14,
-                    borderWidth: 2,
-                    borderColor: '#2d47c8',
-                    backgroundColor: 'rgba(232, 243, 255, 0.96)',
-                    transform: [{ scale: plus2Scale }],
-                    shadowColor: '#1d2f8e',
-                    shadowOpacity: 0.45,
-                    shadowRadius: 3,
-                    shadowOffset: { width: 0, height: 1 },
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: '#1f3fc7',
-                      fontFamily: CLASSIC_GAME_FONT_BOLD,
-                      fontSize: 18,
-                      lineHeight: 18,
-                      letterSpacing: 0.35,
-                      textShadowColor: 'rgba(255,255,255,0.75)',
-                      textShadowOffset: { width: 0, height: 1 },
-                      textShadowRadius: 1,
-                    }}
-                  >
-                    +2
-                  </Text>
-                </View>
-              ) : null}
             </View>
           )
         })}
 
-        <View
-          style={[
-            styles.playerShadow,
-            {
-              left: gameState.player.x + 2,
-              top: gameState.player.y - gameState.cameraY + gameState.player.height - 3,
-            },
-          ]}
-        />
-        <View
-          style={[
-            styles.player,
-            {
-              left: gameState.player.x,
-              top: gameState.player.y - gameState.cameraY,
-              width: gameState.player.width,
-              height: gameState.player.height,
-            },
-          ]}
-        >
-          <View style={styles.playerEyeLeft} />
-          <View style={styles.playerEyeRight} />
-        </View>
-        {gameState.jetpackFuelMs > 0 ? (
-          <PlayerJetpackFx
-            left={gameState.player.x - 12}
-            top={gameState.player.y - gameState.cameraY - 10}
-            frame={gameState.jetpackAnimTick}
+        <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+          <View
+            style={[
+              styles.playerShadow,
+              {
+                left: snapX(gameState.player.x + 2 + jetpackShake.x),
+                top: Math.round(gameState.player.y + gameState.player.height - 3 + jetpackShake.y),
+              },
+            ]}
           />
-        ) : null}
+          <View
+            style={[
+              styles.player,
+              {
+                left: snapX(gameState.player.x + jetpackShake.x),
+                top: Math.round(gameState.player.y + jetpackShake.y),
+                width: gameState.player.width,
+                height: gameState.player.height,
+              },
+            ]}
+          >
+            <View style={styles.playerEyeLeft} />
+            <View style={styles.playerEyeRight} />
+          </View>
+          {gameState.jetpackFuelMs > 0 ? (
+            <PlayerJetpackFx
+              left={snapX(gameState.player.x - 12 + jetpackShake.x)}
+              top={Math.round(gameState.player.y - 10 + jetpackShake.y)}
+              frame={gameState.jetpackAnimTick}
+            />
+          ) : null}
+        </View>
+        </View>
 
         <View style={styles.hud}>
-          <Text style={styles.hudCoinCount}>{gameState.coinScore}</Text>
+          <Text style={styles.hudScoreLabel}>Score</Text>
+          <Text style={styles.hudScoreValue}>{hudDisplayScore}</Text>
           {gameState.mode === 'playing' ? (
             <Text style={styles.hudBiomeHint}>{hudBiomeLabel}</Text>
           ) : null}
@@ -3224,83 +3392,6 @@ export function WonderJump({ navigation, route }: any) {
           </Animated.View>
         ) : null}
 
-        {gameState.mode === 'menu' && !settingsOpen ? (
-          <Animated.View
-            style={[styles.panel, styles.panelDarkGlass, panelAccentGlow, panelEntryStyle, { top: panelTop }]}
-          >
-            <Text style={styles.panelTitle}>WonderJump</Text>
-            <Text style={styles.panelBiome}>{panelBiomeLabel}</Text>
-            <Text style={styles.panelSubtitleSmall}>Starting biome</Text>
-            <View style={styles.panelBiomeRow}>
-              <Pressable
-                onPress={() => selectMenuBiome('grassland')}
-                style={[
-                  styles.panelBiomeChip,
-                  styles.panelBiomeChipGrass,
-                  menuStartBiome === 'grassland' ? styles.panelBiomeChipGrassActive : null,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.panelBiomeChipText,
-                    menuStartBiome === 'grassland' ? styles.panelBiomeChipTextActive : null,
-                  ]}
-                >
-                  Grasslands
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => selectMenuBiome('mushroom')}
-                style={[
-                  styles.panelBiomeChip,
-                  styles.panelBiomeChipMushroom,
-                  menuStartBiome === 'mushroom' ? styles.panelBiomeChipMushroomActive : null,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.panelBiomeChipText,
-                    menuStartBiome === 'mushroom' ? styles.panelBiomeChipTextActive : null,
-                  ]}
-                >
-                  Mushroom Isles
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => selectMenuBiome('tropical')}
-                style={[
-                  styles.panelBiomeChip,
-                  styles.panelBiomeChipTropical,
-                  menuStartBiome === 'tropical' ? styles.panelBiomeChipTropicalActive : null,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.panelBiomeChipText,
-                    menuStartBiome === 'tropical' ? styles.panelBiomeChipTextActive : null,
-                  ]}
-                >
-                  Sunset Keys
-                </Text>
-              </Pressable>
-            </View>
-            <Text style={styles.panelSubtitle}>
-              Bounce up, grab coins, and keep climbing to discover the next biome!
-            </Text>
-            <Pressable onPress={startGame} style={[styles.primaryButton, primaryButtonTone]}>
-              <Text style={styles.primaryButtonText}>
-                {bestScore > 0 ? 'Restart Run' : 'Start Run'}
-              </Text>
-            </Pressable>
-            <Pressable onPress={() => setSettingsOpen(true)} style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Settings</Text>
-            </Pressable>
-            <Pressable onPress={goHome} style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Home</Text>
-            </Pressable>
-          </Animated.View>
-        ) : null}
-
         {gameState.mode === 'paused' && !settingsOpen ? (
           <Animated.View
             style={[styles.panel, styles.panelDarkGlass, panelAccentGlow, panelEntryStyle, { top: panelTop }]}
@@ -3323,26 +3414,159 @@ export function WonderJump({ navigation, route }: any) {
           </Animated.View>
         ) : null}
 
-        {gameState.mode === 'gameOver' && !settingsOpen ? (
+        {isHubPanel && !settingsOpen ? (
           <Animated.View
-            style={[styles.panel, styles.panelDarkGlass, panelAccentGlow, panelEntryStyle, { top: panelTop }]}
+            style={[
+              styles.panel,
+              styles.panelDarkGlass,
+              panelAccentGlow,
+              panelEntryStyle,
+              styles.gameOverPanelDock,
+              gameOverPanelDockStyle,
+            ]}
           >
-            <Text style={styles.panelTitle}>Game Over</Text>
-            <Text style={styles.panelBiome}>{panelBiomeLabel}</Text>
-            <Text style={styles.panelSubtitle}>Coins collected: {gameState.coinScore}</Text>
-            <Text style={styles.panelSubtitle}>Best run: {Math.max(bestScore, gameState.coinScore)}</Text>
-            <Pressable onPress={restartRun} style={[styles.primaryButton, primaryButtonTone]}>
-              <Text style={styles.primaryButtonText}>Restart Run</Text>
-            </Pressable>
-            <Pressable onPress={backToMenu} style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Main Menu</Text>
-            </Pressable>
-            <Pressable onPress={() => setSettingsOpen(true)} style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Settings</Text>
-            </Pressable>
-            <Pressable onPress={goHome} style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Home</Text>
-            </Pressable>
+            <View style={styles.gameOverTop}>
+              <Text style={styles.gameOverTitle}>
+                {gameState.mode === 'gameOver' ? 'Game Over :(' : 'WonderJump'}
+              </Text>
+              {gameState.mode === 'gameOver' && gameState.deathCause ? (
+                <Text style={styles.gameOverDeathBlurb}>{deathBlurb(gameState.deathCause)}</Text>
+              ) : gameState.mode === 'menu' ? (
+                <Text style={styles.gameOverDeathBlurb}>
+                  Bounce up and keep climbing — your score rises with how high you get!
+                </Text>
+              ) : null}
+              <Text
+                style={[
+                  styles.gameOverDeadBiome,
+                  {
+                    color: GAME_OVER_DEAD_BIOME_TEXT[
+                      gameState.mode === 'gameOver' ? gameOverBiomeAccent : menuStartBiome
+                    ],
+                  },
+                ]}
+              >
+                {gameState.mode === 'gameOver' ? hudBiomeLabel : BIOME_UI_ACCENTS[menuStartBiome].label}
+              </Text>
+              <View style={styles.gameOverHeroCard}>
+                {gameState.mode === 'gameOver' ? (
+                  <>
+                    <Text style={styles.gameOverHeroLabel}>Your score</Text>
+                    <Text style={styles.gameOverHeroValue}>{gameOverRunScore}</Text>
+                    <View style={styles.gameOverSubStack}>
+                      <View style={styles.gameOverSubRow}>
+                        <Text style={styles.gameOverSubLabel}>All-time best</Text>
+                        <Text style={styles.gameOverSubValue}>{gameOverHighScore}</Text>
+                      </View>
+                      <View style={styles.gameOverSubRow}>
+                        <Text style={styles.gameOverSubLabel}>Jetpacks used</Text>
+                        <Text style={styles.gameOverSubValue}>{gameState.jetpacksUsedThisRun}</Text>
+                      </View>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.gameOverHeroLabel}>Best score</Text>
+                    <Text style={styles.gameOverHeroValue}>{bestScore}</Text>
+                    <View style={styles.gameOverSubStack}>
+                      <View style={styles.gameOverSubRow}>
+                        <Text style={styles.gameOverSubLabel}>Controls</Text>
+                        <Text style={styles.gameOverSubValue}>
+                          {controlScheme === 'touchSplit' ? 'Split touch' : 'D-pad'}
+                        </Text>
+                      </View>
+                    </View>
+                  </>
+                )}
+              </View>
+              {gameOverNewBest ? <Text style={styles.gameOverNewBest}>New high score!</Text> : null}
+            </View>
+
+            <View style={styles.gameOverFooter}>
+              <Text style={styles.gameOverFooterHint}>
+                {gameState.mode === 'gameOver' ? 'Next run · starting biome' : 'Starting biome for next run'}
+              </Text>
+              <View style={styles.panelBiomeRow}>
+                <Pressable
+                  onPress={() => selectMenuBiome('grassland')}
+                  style={[
+                    styles.panelBiomeChip,
+                    styles.panelBiomeChipGrass,
+                    menuStartBiome === 'grassland' ? styles.panelBiomeChipGrassActive : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.gameOverBiomeChipText,
+                      menuStartBiome === 'grassland' ? styles.gameOverBiomeChipTextActive : null,
+                    ]}
+                  >
+                    Grasslands
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => selectMenuBiome('mushroom')}
+                  style={[
+                    styles.panelBiomeChip,
+                    styles.panelBiomeChipMushroom,
+                    menuStartBiome === 'mushroom' ? styles.panelBiomeChipMushroomActive : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.gameOverBiomeChipText,
+                      menuStartBiome === 'mushroom' ? styles.gameOverBiomeChipTextActive : null,
+                    ]}
+                  >
+                    Mushroom Isles
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => selectMenuBiome('tropical')}
+                  style={[
+                    styles.panelBiomeChip,
+                    styles.panelBiomeChipTropical,
+                    menuStartBiome === 'tropical' ? styles.panelBiomeChipTropicalActive : null,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.gameOverBiomeChipText,
+                      menuStartBiome === 'tropical' ? styles.gameOverBiomeChipTextActive : null,
+                    ]}
+                  >
+                    Sunset Keys
+                  </Text>
+                </Pressable>
+              </View>
+
+              <Pressable
+                onPress={gameState.mode === 'gameOver' ? restartRun : startGame}
+                style={[styles.primaryButton, primaryButtonTone]}
+              >
+                <Text style={[styles.primaryButtonText, styles.gameOverMontserratButton]}>
+                  {gameState.mode === 'gameOver'
+                    ? 'Restart Run'
+                    : bestScore > 0
+                      ? 'Restart Run'
+                      : 'Start Run'}
+                </Text>
+              </Pressable>
+
+              <View style={styles.gameOverFooterActions}>
+                {gameState.mode === 'gameOver' ? (
+                  <Pressable onPress={backToMenu} style={styles.gameOverFooterButton}>
+                    <Text style={styles.gameOverFooterButtonText}>Menu</Text>
+                  </Pressable>
+                ) : null}
+                <Pressable onPress={() => setSettingsOpen(true)} style={styles.gameOverFooterButton}>
+                  <Text style={styles.gameOverFooterButtonText}>Settings</Text>
+                </Pressable>
+                <Pressable onPress={goHome} style={styles.gameOverFooterButton}>
+                  <Text style={styles.gameOverFooterButtonText}>Home</Text>
+                </Pressable>
+              </View>
+            </View>
           </Animated.View>
         ) : null}
 
@@ -3508,22 +3732,6 @@ const styles = StyleSheet.create({
   breakableCrackSvg: {
     position: 'absolute',
   },
-  coin: {
-    position: 'absolute',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#c07c00',
-    backgroundColor: '#ffbe2a',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  coinInner: {
-    width: 5,
-    height: 5,
-    borderRadius: 4,
-    backgroundColor: '#ffe48b',
-  },
   playerShadow: {
     position: 'absolute',
     width: 18,
@@ -3567,12 +3775,20 @@ const styles = StyleSheet.create({
     gap: 2,
     maxWidth: '72%',
   },
-  hudCoinCount: {
-    color: '#ffffff',
-    fontSize: 18,
+  hudScoreLabel: {
+    color: 'rgba(255, 255, 255, 0.72)',
+    fontSize: 10,
     fontFamily: CLASSIC_GAME_FONT_BOLD,
-    letterSpacing: 0.2,
-    lineHeight: 20,
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+    lineHeight: 12,
+  },
+  hudScoreValue: {
+    color: '#ffffff',
+    fontSize: 22,
+    fontFamily: CLASSIC_GAME_FONT_BOLD,
+    letterSpacing: 0.15,
+    lineHeight: 24,
   },
   hudBiomeHint: {
     color: '#b8e8d4',
@@ -3621,6 +3837,158 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.45,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
+  },
+  gameOverPanelDock: {
+    gap: 0,
+    paddingVertical: 14,
+    paddingBottom: 12,
+  },
+  gameOverTop: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  gameOverTitle: {
+    color: '#f6fbff',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 24,
+    letterSpacing: 0.2,
+  },
+  gameOverDeathBlurb: {
+    color: '#b8cce4',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: 0.15,
+    textAlign: 'center',
+    paddingHorizontal: 8,
+    marginTop: -2,
+    marginBottom: 2,
+  },
+  gameOverDeadBiome: {
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 17,
+    letterSpacing: 0.25,
+    textAlign: 'center',
+  },
+  gameOverHeroCard: {
+    width: '100%',
+    marginTop: 6,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(18, 32, 58, 0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(150, 190, 235, 0.28)',
+    alignItems: 'center',
+  },
+  gameOverHeroLabel: {
+    color: '#e8f2fc',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 15,
+    letterSpacing: 0.35,
+    marginBottom: 4,
+  },
+  gameOverHeroValue: {
+    color: '#ffffff',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 52,
+    letterSpacing: -1,
+    lineHeight: 56,
+    marginBottom: 12,
+  },
+  gameOverSubStack: {
+    width: '100%',
+    gap: 6,
+    paddingHorizontal: 4,
+  },
+  gameOverSubRow: {
+    flexDirection: 'row',
+    width: '100%',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    columnGap: 12,
+  },
+  gameOverSubLabel: {
+    flex: 1,
+    flexShrink: 1,
+    color: '#d5e6f7',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 15,
+    letterSpacing: 0.15,
+    lineHeight: 20,
+  },
+  gameOverSubValue: {
+    minWidth: 52,
+    color: '#ffffff',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 15,
+    letterSpacing: 0.15,
+    lineHeight: 20,
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+  },
+  gameOverNewBest: {
+    marginTop: 6,
+    color: '#ffd769',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 15,
+    letterSpacing: 0.25,
+  },
+  gameOverMontserratButton: {
+    fontFamily: WONDER_JUMP_UI_BOLD,
+  },
+  gameOverFooter: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(140, 170, 210, 0.22)',
+  },
+  gameOverFooterHint: {
+    color: '#e8f2fc',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 13,
+    letterSpacing: 0.25,
+    marginBottom: -2,
+    width: '100%',
+    textAlign: 'center',
+  },
+  gameOverBiomeChipText: {
+    color: '#dfebf7',
+    fontSize: 11,
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    textAlign: 'center',
+    letterSpacing: 0.2,
+  },
+  gameOverBiomeChipTextActive: {
+    color: '#ffffff',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+  },
+  gameOverFooterActions: {
+    flexDirection: 'row',
+    gap: 8,
+    width: '100%',
+    marginTop: 2,
+  },
+  gameOverFooterButton: {
+    flex: 1,
+    backgroundColor: 'rgba(38, 53, 92, 0.62)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(200, 230, 255, 0.25)',
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gameOverFooterButtonText: {
+    color: '#f0f6fc',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 12,
+    letterSpacing: 0.2,
+    textAlign: 'center',
   },
   panelTitle: {
     color: '#f6fbff',

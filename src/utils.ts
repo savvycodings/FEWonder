@@ -8,6 +8,7 @@ import {
   Model,
   ShopifyProduct,
   User,
+  WonderJumpProgress,
 } from '../types'
 
 /** Client cache so Daily Rewards streak UI can render immediately; refreshed on each fetch. */
@@ -402,6 +403,64 @@ export async function claimDailyReward(sessionToken: string): Promise<DailyRewar
   }
   await writeDailyRewardsCache(status)
   return status
+}
+
+export async function fetchWonderJumpProgress(sessionToken: string): Promise<WonderJumpProgress> {
+  const response = await fetch(`${DOMAIN}/auth/wonder-jump-progress`, {
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+    },
+  })
+
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { raw }
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to load WonderJump progress')
+  }
+
+  const highScore = typeof data.highScore === 'number' && Number.isFinite(data.highScore) ? data.highScore : 0
+  const unlockedBiomes = Array.isArray(data.unlockedBiomes)
+    ? data.unlockedBiomes.filter((x: unknown) => typeof x === 'string')
+    : []
+  return { highScore, unlockedBiomes }
+}
+
+export async function saveWonderJumpProgress(
+  sessionToken: string,
+  payload: { highScore?: number; unlockedBiomes?: string[] }
+): Promise<WonderJumpProgress> {
+  const response = await fetch(`${DOMAIN}/auth/wonder-jump-progress`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${sessionToken}`,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { raw }
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to save WonderJump progress')
+  }
+
+  const highScore = typeof data.highScore === 'number' && Number.isFinite(data.highScore) ? data.highScore : 0
+  const unlockedBiomes = Array.isArray(data.unlockedBiomes)
+    ? data.unlockedBiomes.filter((x: unknown) => typeof x === 'string')
+    : []
+  return { highScore, unlockedBiomes }
 }
 
 export async function purchaseWonderStoreItem(

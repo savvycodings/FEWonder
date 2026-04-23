@@ -38,6 +38,19 @@ const vaultPopProduct = {
   productType: 'Collectible',
 }
 
+/** Finds a parent navigator that registers the tab (Home stack nests under tabs). */
+function navigateToMainTab(navigation: any, tabScreenName: string) {
+  let nav: any = navigation
+  for (let depth = 0; depth < 6 && nav; depth += 1) {
+    const names: string[] | undefined = nav.getState?.()?.routeNames
+    if (names?.includes(tabScreenName)) {
+      nav.navigate(tabScreenName as never)
+      return
+    }
+    nav = nav.getParent?.()
+  }
+}
+
 function SwipeNotificationRow({
   item,
   theme,
@@ -253,13 +266,11 @@ export function NotificationsModal({
       onClose()
       setTimeout(() => {
         if (item.route === 'WonderJump') {
-          const tabNav = navigation.getParent?.()
-          const rootNav = tabNav?.getParent?.()
-          ;(rootNav ?? tabNav ?? navigation).navigate('WonderJump' as never)
+          navigateToMainTab(navigation, 'WonderJump')
           return
         }
         if (item.route === 'Chat') {
-          navigation.getParent?.()?.navigate('Chat' as never)
+          navigateToMainTab(navigation, 'Chat')
           return
         }
         if (item.route === 'DailyRewards') {

@@ -71,6 +71,12 @@ export interface DailyRewardStatus {
   rewards: DailyRewardItem[]
 }
 
+/** WonderJump progress from GET/PUT /auth/wonder-jump-progress (display score + biome ids). */
+export interface WonderJumpProgress {
+  highScore: number
+  unlockedBiomes: string[]
+}
+
 export interface ShopifyMoney {
   amount: string
   currencyCode: string

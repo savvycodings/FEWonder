@@ -32,6 +32,7 @@ import { WonderJump } from './screens/wonderJump'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemeContext } from './context'
+import { WonderJumpControllerIcon } from './components'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AuthPayload, User } from '../types'
 import { logoutUser } from './utils'
@@ -372,6 +373,14 @@ function Tabs({
     [user, sessionToken]
   )
 
+  const WonderJumpTabScreen = useMemo(
+    () =>
+      function WonderJumpTabScreen(props: { navigation: any; route: any }) {
+        return <WonderJump {...props} sessionToken={sessionToken} />
+      },
+    [sessionToken]
+  )
+
   return (
     <View style={styles.container}>
       <Tab.Navigator
@@ -435,6 +444,17 @@ function Tabs({
                 color={color}
                 size={size}
               />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="WonderJump"
+          component={WonderJumpTabScreen}
+          options={{
+            headerShown: false,
+            tabBarLabel: 'Jump',
+            tabBarIcon: ({ color, size }) => (
+              <WonderJumpControllerIcon color={color} size={size} />
             ),
           }}
         />
@@ -560,7 +580,6 @@ export function Main() {
           headerTitle: 'Member',
         }}
       />
-      <Stack.Screen name="WonderJump" component={WonderJump} />
     </Stack.Navigator>
   )
 }
