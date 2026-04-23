@@ -1,6 +1,7 @@
-import { useContext, useMemo } from 'react'
+import { useContext, useMemo, type ReactNode } from 'react'
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
+import { useRoute } from '@react-navigation/native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppContext, ThemeContext } from '../context'
 import { formatMoney, parseMoneyToNumber } from '../money'
@@ -12,6 +13,9 @@ const HEADING_FONT = 'Montserrat_700Bold' as const
 export function Cart({ navigation }: any) {
   const { theme } = useContext(ThemeContext)
   const styles = useMemo(() => getStyles(theme), [theme])
+  const route = useRoute()
+  /** `Tabs` shell already applies top/horizontal safe insets; root `Stack` `Cart` does not. */
+  const isProfileCart = route.name === 'ProfileCart'
   const insets = useSafeAreaInsets()
   const { cartItems, updateCartItemQuantity, removeFromCart, clearCart } = useContext(AppContext)
   const iconColor = theme.textColor || '#ffffff'
@@ -25,7 +29,11 @@ export function Cart({ navigation }: any) {
 
   const scrollBottomPad = 120 + insets.bottom
 
-  function goBackToProfile() {
+  function goBackToPrevious() {
+    if (navigation.canGoBack()) {
+      navigation.goBack()
+      return
+    }
     navigation.navigate('ProfileHome')
   }
 
@@ -37,13 +45,22 @@ export function Cart({ navigation }: any) {
     return null
   }
 
-  if (!cartItems.length) {
-    return (
+  const screenShell = (children: ReactNode) =>
+    isProfileCart ? (
+      <View style={[styles.container, styles.screenFill]}>{children}</View>
+    ) : (
       <SafeAreaView style={[styles.container, styles.screenFill]} edges={['top', 'left', 'right']}>
+        {children}
+      </SafeAreaView>
+    )
+
+  if (!cartItems.length) {
+    return screenShell(
+      <>
         <View style={styles.topNavRow}>
           <Pressable
             style={styles.backButton}
-            onPress={goBackToProfile}
+            onPress={goBackToPrevious}
             accessibilityRole="button"
             accessibilityLabel="Go back"
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -58,18 +75,18 @@ export function Cart({ navigation }: any) {
           <Text style={styles.emptyTitle}>Your cart is empty</Text>
           <Text style={styles.emptySub}>Add products from Home, Search, or Product page.</Text>
         </View>
-      </SafeAreaView>
+      </>,
     )
   }
 
-  return (
-    <SafeAreaView style={[styles.container, styles.screenFill]} edges={['top', 'left', 'right']}>
+  return screenShell(
+    <>
       <View style={styles.topNavRow}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
             <Pressable
               style={styles.backButton}
-              onPress={goBackToProfile}
+              onPress={goBackToPrevious}
               accessibilityRole="button"
               accessibilityLabel="Go back"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -150,7 +167,7 @@ export function Cart({ navigation }: any) {
           </Pressable>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </>,
   )
 }
 

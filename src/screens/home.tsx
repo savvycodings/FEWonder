@@ -169,7 +169,6 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
 
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Hot Items</Text>
-          <Text style={styles.sectionHint}>See all</Text>
         </View>
 
         {loadingProducts ? (
@@ -361,11 +360,6 @@ const getStyles = (theme: any) =>
       color: theme.textColor,
       fontFamily: theme.boldFont,
       fontSize: 18,
-    },
-    sectionHint: {
-      color: theme.textColor,
-      fontFamily: theme.mediumFont,
-      fontSize: 12,
     },
     grid: {
       flexDirection: 'row',

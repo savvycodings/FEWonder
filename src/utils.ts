@@ -638,3 +638,16 @@ export async function listDbProducts(params?: {
   }
   return (data.products || []) as ShopifyProduct[]
 }
+
+export async function getDbProductByHandle(handle: string): Promise<ShopifyProduct> {
+  if (!DOMAIN) {
+    throw new Error('API domain is not configured. Set EXPO_PUBLIC_DEV_API_URL.')
+  }
+  const safe = String(handle || '').trim()
+  const response = await fetch(`${DOMAIN}/products/${encodeURIComponent(safe)}`)
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to load product')
+  }
+  return data.product as ShopifyProduct
+}

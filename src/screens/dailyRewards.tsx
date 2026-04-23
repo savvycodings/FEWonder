@@ -1,5 +1,5 @@
-import { useCallback, useContext, useEffect, useMemo, useState, type ReactElement } from 'react'
-import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { SvgUri } from 'react-native-svg'
 import { useFocusEffect } from '@react-navigation/native'
@@ -8,7 +8,6 @@ import { DailyRewardItem, DailyRewardStatus, User } from '../../types'
 import {
   claimDailyReward,
   getDailyRewardStatus,
-  purchaseWonderStoreItem,
   readDailyRewardsCache,
   syncEquippedAvatarFrame,
 } from '../utils'
@@ -28,20 +27,18 @@ import {
   saveProfileHeroPreferences,
   type ProfileHeroBadgeSlots,
 } from '../profileHeroPreferences'
-import { WONDER_BADGE_CATALOG, WONDER_BADGE_IDS, type WonderBadgeId } from '../wonderBadgesCatalog'
+import { WONDER_BADGE_IDS, type WonderBadgeId } from '../wonderBadgesCatalog'
 
 const weekDays = ['1', '2', '3', '4', '5', '6', '7']
 const weekRewards = [1, 2, 3, 4, 5, 6, 7]
 const DAILY_ACCENT = '#CBFF00'
 const DAILY_FILL = '#000000'
-const storeThemes = [
-  { id: 'midnight', name: 'Midnight', cost: 6, image: require('../../public/homepageimgs/dailyrewards/theme1.png') },
-  { id: 'sunset', name: 'Sunset', cost: 7, image: require('../../public/homepageimgs/dailyrewards/theme2.png') },
-  { id: 'mint', name: 'Mint', cost: 5, image: require('../../public/homepageimgs/dailyrewards/theme3.png') },
-  { id: 'royal', name: 'Royal', cost: 8, image: require('../../public/homepageimgs/dailyrewards/theme4.png') },
-  { id: 'peach', name: 'Peach', cost: 4, image: require('../../public/homepageimgs/dailyrewards/theme5.png') },
-  { id: 'forest', name: 'Forest', cost: 6, image: require('../../public/homepageimgs/dailyrewards/theme6.png') },
-]
+/** Horizontal gap between reward cards (must match `rewardCarousel` `gap`). */
+const REWARD_CAROUSEL_GAP = 10
+/** Matches `rewardCarousel` `paddingRight`. */
+const REWARD_CAROUSEL_PAD_RIGHT = 16
+/** Matches outer `content` `paddingHorizontal` × 2 — carousel viewport width. */
+const REWARD_CONTENT_H_PAD = 32
 /** Isolated so Wonder Store doesn’t re-render on every spin frame. */
 function RewardCarouselSpinningCoin({ color }: { color: string }): ReactElement {
   return <WonderSpinningCoin size={72} fallbackColor={color} />
@@ -61,7 +58,6 @@ export function DailyRewards({ navigation, route }: any) {
   const [claimingReward, setClaimingReward] = useState(false)
   const [rewardsError, setRewardsError] = useState('')
   const [storeMessage, setStoreMessage] = useState('')
-  const [purchasingThemeId, setPurchasingThemeId] = useState<string | null>(null)
   const [equippedAvatarFrame, setEquippedAvatarFrame] = useState<AvatarFrameId>('none')
   const [framePreviewUser, setFramePreviewUser] = useState<{
     uri: string | null
@@ -77,9 +73,35 @@ export function DailyRewards({ navigation, route }: any) {
   const claimedCount = rewardStatus?.claimedCount || 0
   const currentStreak = rewardStatus?.currentStreakDays || claimedCount
   const walletBalance = rewardStatus?.walletBalance || 0
-  const ownedThemeIds = rewardStatus?.ownedStoreItemIds ?? []
   const availableCoins = walletBalance
-  const rewardCardWidth = useMemo(() => Math.floor((screenWidth - 32 - 20 - 10) / 2), [screenWidth])
+  const rewardCarouselViewportW = screenWidth - REWARD_CONTENT_H_PAD
+  /** Two cards + one gap fill the viewport so only ~2 cards show at once. */
+  const rewardCardWidth = useMemo(
+    () => Math.max(140, Math.floor((rewardCarouselViewportW - REWARD_CAROUSEL_GAP) / 2)),
+    [rewardCarouselViewportW],
+  )
+  const rewardCarouselRef = useRef<ScrollView>(null)
+  const scrollXRef = useRef(0)
+  const [carouselScrollX, setCarouselScrollX] = useState(0)
+
+  const rewardCarouselStep = rewardCardWidth + REWARD_CAROUSEL_GAP
+  const rewardCarouselContentW = useMemo(() => {
+    const n = rewards.length
+    if (n <= 0) return 0
+    return n * rewardCardWidth + Math.max(0, n - 1) * REWARD_CAROUSEL_GAP + REWARD_CAROUSEL_PAD_RIGHT
+  }, [rewards.length, rewardCardWidth])
+  const rewardCarouselMaxX = Math.max(0, rewardCarouselContentW - rewardCarouselViewportW)
+
+  const carouselCanGoBack = carouselScrollX > 2
+  const carouselCanGoForward = carouselScrollX < rewardCarouselMaxX - 2
+
+  function scrollRewardCarousel(dir: -1 | 1) {
+    const step = rewardCarouselStep
+    const aligned = Math.round(scrollXRef.current / step) * step
+    const base = Math.min(rewardCarouselMaxX, Math.max(0, aligned))
+    const next = Math.min(rewardCarouselMaxX, Math.max(0, base + dir * step))
+    rewardCarouselRef.current?.scrollTo({ x: next, animated: true })
+  }
   /** Two-column badge shop: fixed width avoids `%` + `space-between` layout glitches on web/native. */
   const badgeStoreCardWidth = useMemo(
     () => Math.max(148, Math.floor((screenWidth - 32 - 11) / 2)),
@@ -253,38 +275,9 @@ export function DailyRewards({ navigation, route }: any) {
     }
   }
 
-  async function handleBuyTheme(themeId: string) {
-    if (!sessionToken || ownedThemeIds.includes(themeId) || purchasingThemeId) return
-    const theme = storeThemes.find((t) => t.id === themeId)
-    if (!theme) return
-    if (availableCoins < theme.cost) {
-      setStoreMessage('Not enough coins for this theme yet.')
-      return
-    }
-    try {
-      setPurchasingThemeId(themeId)
-      setRewardsError('')
-      setStoreMessage('')
-      const next = await purchaseWonderStoreItem(sessionToken, themeId)
-      setRewardStatus(next)
-      setStoreMessage('Theme purchased.')
-    } catch (error: any) {
-      try {
-        const refreshed = await getDailyRewardStatus(sessionToken)
-        setRewardStatus(refreshed)
-      } catch {
-        /* ignore */
-      }
-      setStoreMessage('')
-      setRewardsError(error?.message || 'Could not complete purchase.')
-    } finally {
-      setPurchasingThemeId(null)
-    }
-  }
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.headerRow}>
+      <View style={styles.heroTitleRow}>
         <Pressable
           style={styles.backButton}
           onPress={() => {
@@ -297,11 +290,10 @@ export function DailyRewards({ navigation, route }: any) {
         >
           <FeatherIcon name="chevron-left" size={20} color={DAILY_ACCENT} />
         </Pressable>
-        <View style={styles.headerCenterFill} />
-        <View style={styles.headerSpacer} />
+        <Text style={styles.mainScreenHeading} numberOfLines={2}>
+          Daily Rewards
+        </Text>
       </View>
-
-      <Text style={styles.sectionHeading}>Daily Rewards</Text>
 
       <View style={styles.bannerCard}>
           <View style={styles.bannerTopRow}>
@@ -341,11 +333,50 @@ export function DailyRewards({ navigation, route }: any) {
           </View>
       </View>
 
+      <View style={styles.carouselNavRow}>
+        <Pressable
+          style={styles.carouselNavButton}
+          onPress={() => scrollRewardCarousel(-1)}
+          disabled={!carouselCanGoBack}
+          accessibilityRole="button"
+          accessibilityLabel="Previous rewards"
+        >
+          <FeatherIcon
+            name="chevron-left"
+            size={24}
+            color={carouselCanGoBack ? '#ffffff' : 'rgba(255,255,255,0.28)'}
+          />
+        </Pressable>
+        <Pressable
+          style={styles.carouselNavButton}
+          onPress={() => scrollRewardCarousel(1)}
+          disabled={!carouselCanGoForward}
+          accessibilityRole="button"
+          accessibilityLabel="Next rewards"
+        >
+          <FeatherIcon
+            name="chevron-right"
+            size={24}
+            color={carouselCanGoForward ? '#ffffff' : 'rgba(255,255,255,0.28)'}
+          />
+        </Pressable>
+      </View>
+
       <ScrollView
+        ref={rewardCarouselRef}
         horizontal
         style={styles.rewardCarouselWrap}
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.rewardCarousel}
+        contentContainerStyle={[styles.rewardCarousel, { gap: REWARD_CAROUSEL_GAP }]}
+        onScroll={(e) => {
+          scrollXRef.current = e.nativeEvent.contentOffset.x
+          setCarouselScrollX(e.nativeEvent.contentOffset.x)
+        }}
+        scrollEventThrottle={16}
+        onMomentumScrollEnd={(e) => {
+          scrollXRef.current = e.nativeEvent.contentOffset.x
+          setCarouselScrollX(e.nativeEvent.contentOffset.x)
+        }}
       >
           {rewards.map((reward, index) => {
             const isClaimed = reward.status === 'claimed'
@@ -395,53 +426,19 @@ export function DailyRewards({ navigation, route }: any) {
       {rewardsError ? <Text style={styles.errorText}>{rewardsError}</Text> : null}
 
       <View style={styles.storeSection}>
-        <Text style={styles.sectionHeading}>Wonder Store</Text>
-        <View style={styles.storeBalanceBadge}>
-          <RewardStaticCoin size={22} />
-          <Text style={styles.storeBalanceBadgeValue}>{availableCoins}</Text>
+        <View style={styles.wonderStoreTitleRow}>
+          <Text style={[styles.mainScreenHeading, styles.wonderStoreHeading]} numberOfLines={2}>
+            Wonder Store
+          </Text>
+          <View style={styles.storeBalanceBadge}>
+            <RewardStaticCoin size={22} />
+            <Text style={styles.storeBalanceBadgeValue}>{availableCoins}</Text>
+          </View>
         </View>
 
-        <View style={styles.storeGrid}>
-          {storeThemes.map((storeTheme) => {
-            const isOwned = ownedThemeIds.includes(storeTheme.id)
-            const canBuy = availableCoins >= storeTheme.cost
-            return (
-              <View key={storeTheme.id} style={styles.storeCard}>
-                <Image source={storeTheme.image} style={styles.storeThemeSwatch} resizeMode="cover" />
-                <Text style={styles.storeThemeName}>{storeTheme.name}</Text>
-                <View style={styles.storeThemeCostBadge}>
-                  <RewardStaticCoin size={14} />
-                  <Text style={styles.storeThemeCostValue}>{storeTheme.cost}</Text>
-                </View>
-                  <Pressable
-                    style={[
-                      styles.storeBuyButton,
-                      isOwned ? styles.storeBuyButtonOwned : null,
-                      !isOwned && !canBuy ? styles.storeBuyButtonDisabled : null,
-                      purchasingThemeId === storeTheme.id ? styles.storeBuyButtonDisabled : null,
-                    ]}
-                    disabled={Boolean(isOwned || purchasingThemeId)}
-                    onPress={() => handleBuyTheme(storeTheme.id)}
-                  >
-                    <Text style={styles.storeBuyButtonText}>
-                      {isOwned ? 'Owned' : purchasingThemeId === storeTheme.id ? 'Buying…' : 'Buy'}
-                    </Text>
-                  </Pressable>
-              </View>
-            )
-          })}
-        </View>
-        {storeMessage ? <Text style={styles.infoText}>{storeMessage}</Text> : null}
-      </View>
-
-      <View style={styles.badgesSection}>
         <Text style={styles.badgesHeading}>Badges</Text>
-        <Text style={styles.badgesSub}>
-          Equip up to three badges to your profile showcase. Saves on this device only.
-        </Text>
         <View style={styles.badgesGrid}>
           {WONDER_BADGE_IDS.map((id) => {
-            const meta = WONDER_BADGE_CATALOG[id]
             const equipped = heroBadgeSlots.some((s) => s === id)
             return (
               <View
@@ -455,8 +452,6 @@ export function DailyRewards({ navigation, route }: any) {
                 <View style={[styles.badgePreviewPlate, equipped ? styles.badgePreviewPlateEquipped : null]}>
                   <WonderBadgeImage badgeId={id} size={64} fallbackColor={DAILY_ACCENT} />
                 </View>
-                <Text style={styles.badgeStoreTitle}>{meta.label}</Text>
-                <Text style={styles.badgeAcquireText}>{meta.acquire}</Text>
                 <Pressable
                   style={[styles.badgeEquipButton, equipped ? styles.badgeEquipButtonEquipped : null]}
                   disabled={equipped}
@@ -472,13 +467,11 @@ export function DailyRewards({ navigation, route }: any) {
             )
           })}
         </View>
+        {storeMessage ? <Text style={styles.infoText}>{storeMessage}</Text> : null}
       </View>
 
       <View style={styles.framesSection}>
         <Text style={styles.sectionHeading}>Avatar Frames</Text>
-        <Text style={styles.framesSub}>
-          preview uses your profile photo. FREE FOR TESTING PURPOSES
-        </Text>
         <View style={styles.framesGrid}>
           {AVATAR_FRAME_SHOP.map((frame) => (
             <AvatarFramePreviewTile
@@ -522,12 +515,13 @@ const getStyles = (theme: any) => StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 120,
   },
-  headerRow: {
+  heroTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
+    gap: 10,
+    marginBottom: 16,
   },
+  /** Same footprint as `backButton` so “Wonder Store” lines up with “Daily Rewards” text. */
   backButton: {
     width: 36,
     height: 36,
@@ -538,12 +532,28 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerCenterFill: {
+  mainScreenHeading: {
     flex: 1,
+    minWidth: 0,
+    color: '#ffffff',
+    fontFamily: 'Montserrat_800ExtraBold',
+    fontSize: 34,
+    lineHeight: 38,
+    letterSpacing: -0.6,
   },
-  headerSpacer: {
-    width: 36,
-    height: 36,
+  wonderStoreTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+    alignSelf: 'stretch',
+    justifyContent: 'space-between',
+  },
+  wonderStoreHeading: {
+    textAlign: 'left',
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
   },
   /** In-page section titles (matches Wonder Store / home chip weight) */
   sectionHeading: {
@@ -624,11 +634,23 @@ const getStyles = (theme: any) => StyleSheet.create({
     fontSize: 32,
   },
   rewardCarousel: {
-    gap: 10,
-    paddingRight: 16,
+    paddingRight: REWARD_CAROUSEL_PAD_RIGHT,
   },
   rewardCarouselWrap: {
     marginBottom: 14,
+  },
+  carouselNavRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    paddingHorizontal: 2,
+  },
+  carouselNavButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   rewardCard: {
     minHeight: 320,
@@ -713,29 +735,11 @@ const getStyles = (theme: any) => StyleSheet.create({
   storeSection: {
     marginTop: 18,
   },
-  storeMainTitle: {
-    color: '#ffffff',
-    fontFamily: 'Montserrat_800ExtraBold',
-    fontSize: 28,
-    lineHeight: 32,
-    letterSpacing: -0.4,
-    marginBottom: 10,
-  },
-  badgesSection: {
-    marginTop: 22,
-  },
   badgesHeading: {
     color: '#ffffff',
     fontFamily: 'Montserrat_800ExtraBold',
     fontSize: 20,
-    marginBottom: 6,
-  },
-  badgesSub: {
-    color: 'rgba(255,255,255,0.72)',
-    fontFamily: 'Geist-Regular',
-    fontSize: 12,
-    lineHeight: 17,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   badgesGrid: {
     flexDirection: 'row',
@@ -771,21 +775,8 @@ const getStyles = (theme: any) => StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     borderColor: 'rgba(203,255,0,0.38)',
   },
-  badgeStoreTitle: {
-    color: '#ffffff',
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  badgeAcquireText: {
-    color: 'rgba(255,255,255,0.65)',
-    fontFamily: 'Geist-Regular',
-    fontSize: 11,
-    lineHeight: 15,
-    marginBottom: 10,
-    minHeight: 48,
-  },
   badgeEquipButton: {
+    marginTop: 8,
     minHeight: 32,
     borderRadius: 8,
     backgroundColor: DAILY_ACCENT,
@@ -808,13 +799,6 @@ const getStyles = (theme: any) => StyleSheet.create({
   framesSection: {
     marginTop: 22,
   },
-  framesSub: {
-    color: 'rgba(255,255,255,0.74)',
-    fontFamily: 'Geist-Regular',
-    fontSize: 12,
-    lineHeight: 17,
-    marginBottom: 10,
-  },
   framesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -835,9 +819,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     fontFamily: 'Geist-SemiBold',
   },
   storeBalanceBadge: {
-    marginTop: 8,
-    marginBottom: 10,
-    alignSelf: 'flex-start',
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -852,69 +834,5 @@ const getStyles = (theme: any) => StyleSheet.create({
     color: DAILY_ACCENT,
     fontFamily: 'Geist-SemiBold',
     fontSize: 16,
-  },
-  storeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    rowGap: 10,
-  },
-  storeCard: {
-    width: '31.5%',
-    backgroundColor: DAILY_FILL,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.28)',
-    padding: 10,
-    alignItems: 'center',
-  },
-  storeThemeSwatch: {
-    width: '100%',
-    height: 72,
-    borderRadius: 10,
-    marginBottom: 8,
-  },
-  storeThemeName: {
-    color: '#ffffff',
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  storeThemeCostBadge: {
-    marginTop: 4,
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    borderRadius: 999,
-    backgroundColor: DAILY_ACCENT,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  storeThemeCostValue: {
-    color: '#050505',
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 11,
-  },
-  storeBuyButton: {
-    width: '100%',
-    minHeight: 30,
-    borderRadius: 8,
-    backgroundColor: DAILY_ACCENT,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  storeBuyButtonDisabled: {
-    backgroundColor: DAILY_ACCENT,
-    opacity: 0.65,
-  },
-  storeBuyButtonOwned: {
-    backgroundColor: DAILY_ACCENT,
-  },
-  storeBuyButtonText: {
-    color: '#050505',
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 11,
   },
 })

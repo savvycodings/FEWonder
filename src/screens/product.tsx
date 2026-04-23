@@ -29,6 +29,8 @@ import {
   uploadEftProof,
 } from '../ordersApi'
 import { fetchSessionUser } from '../utils'
+import { getDbProductByHandle } from '../utils'
+import type { ShopifyMoney, ShopifyProduct } from '../../types'
 
 const CHECKOUT_ACCENT = '#CBFF00'
 const CHECKOUT_FILL = '#000000'
@@ -68,31 +70,60 @@ export function Product({ route, navigation }: any) {
   const insets = useSafeAreaInsets()
   const { width } = useWindowDimensions()
   const styles = getStyles(theme)
-  const product = route?.params?.product || {}
+  const initialProduct = (route?.params?.product || {}) as ShopifyProduct
+  const [product, setProduct] = useState<ShopifyProduct>(initialProduct)
   const [packaging, setPackaging] = useState<'single' | 'set'>('single')
   const [quantity, setQuantity] = useState(1)
   const liked = savedItems.some(item => item.title === product.title)
+  useEffect(() => {
+    setProduct((route?.params?.product || {}) as ShopifyProduct)
+    setPackaging('single')
+  }, [route?.params?.product])
+
+  useEffect(() => {
+    const handle = String(route?.params?.product?.handle || '').trim()
+    if (!handle) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const fullProduct = await getDbProductByHandle(handle)
+        if (!cancelled) setProduct(fullProduct)
+      } catch {
+        /* keep route param payload if fetch fails */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [route?.params?.product?.handle])
+
+  const selectedUnitPrice = useMemo<ShopifyMoney | null>(() => {
+    if (packaging === 'set') return product?.packagePrices?.set ?? product?.price ?? null
+    return product?.packagePrices?.single ?? product?.price ?? null
+  }, [packaging, product])
+
   const heroImageSource = useMemo(() => {
     if (product?.featuredImageUrl) return { uri: product.featuredImageUrl }
     return product?.image
   }, [product])
   const priceText = useMemo(() => {
-    if (product?.price?.amount != null && product.price.amount !== '') {
-      return formatMoney(product.price)
+    if (selectedUnitPrice?.amount != null && selectedUnitPrice.amount !== '') {
+      return formatMoney(selectedUnitPrice)
     }
     return 'Price on request'
-  }, [product])
+  }, [selectedUnitPrice])
   const compareText = useMemo(() => {
+    if (packaging === 'set') return null
     const c = product?.compareAtPrice
-    if (c?.amount != null && c.amount !== '' && product?.price?.amount) {
-      const sale = parseFloat(String(product.price.amount))
+    if (c?.amount != null && c.amount !== '' && selectedUnitPrice?.amount) {
+      const sale = parseFloat(String(selectedUnitPrice.amount))
       const was = parseFloat(String(c.amount))
       if (Number.isFinite(sale) && Number.isFinite(was) && was > sale) {
         return formatMoney(c)
       }
     }
     return null
-  }, [product])
+  }, [packaging, product?.compareAtPrice, selectedUnitPrice])
   const detailText = useMemo(
     () =>
       plainTextFromHtml(product?.descriptionHtml, 800) ||
@@ -195,7 +226,7 @@ export function Product({ route, navigation }: any) {
     try {
       const created = await createOrder({
         paymentMethod: method,
-        items: [{ productId: String(product.id), quantity }],
+        items: [{ productId: String(product.id), quantity, packaging }],
         deliveryMethod,
         contactPhone: contactPhone.trim(),
         contactEmail: contactEmail.trim().toLowerCase(),
@@ -250,7 +281,7 @@ export function Product({ route, navigation }: any) {
       Alert.alert('Price', 'This item has no fixed price online. Contact support.')
       return
     }
-    const cur = String(product?.price?.currencyCode || '').trim().toUpperCase()
+    const cur = String(selectedUnitPrice?.currencyCode || '').trim().toUpperCase()
     if (cur !== 'ZAR') {
       Alert.alert(
         'Checkout',
@@ -424,13 +455,17 @@ export function Product({ route, navigation }: any) {
             style={styles.addButton}
             activeOpacity={0.9}
             onPress={() => {
-              addToCart(product, quantity)
-              navigation.navigate('Tabs', {
-                screen: 'Profile',
-                params: {
-                  screen: 'ProfileCart',
-                },
-              })
+              const packagedItem = {
+                ...product,
+                price: selectedUnitPrice,
+                selectedPackaging: packaging,
+                title:
+                  packaging === 'set'
+                    ? `${String(product?.title || 'Product')} (Whole set)`
+                    : String(product?.title || 'Product'),
+              }
+              addToCart(packagedItem, quantity)
+              navigation.navigate('Cart')
             }}
           >
             <Text style={styles.addButtonText}>Add to cart</Text>

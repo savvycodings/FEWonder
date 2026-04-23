@@ -95,7 +95,7 @@ export async function fetchEftInstructions() {
 
 export type CreateOrderPayload = {
   paymentMethod: 'peach' | 'eft'
-  items: { productId: string; quantity: number }[]
+  items: { productId: string; quantity: number; packaging?: 'single' | 'set' }[]
   deliveryMethod: 'pudo' | 'standard'
   contactPhone: string
   contactEmail?: string

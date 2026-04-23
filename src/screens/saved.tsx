@@ -1,7 +1,7 @@
 import { useContext, useMemo } from 'react'
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppContext, ThemeContext } from '../context'
 import { formatMoney } from '../money'
 
@@ -29,7 +29,7 @@ export function Saved({ navigation }: any) {
 
   if (!savedItems.length) {
     return (
-      <SafeAreaView style={[styles.container, styles.screenFill]} edges={['top', 'left', 'right']}>
+      <View style={[styles.container, styles.screenFill]}>
         <View style={styles.topNavRow}>
           <View style={styles.header}>
             <View style={styles.headerLeft}>
@@ -49,12 +49,12 @@ export function Saved({ navigation }: any) {
           <Text style={styles.emptyTitle}>No saved items yet</Text>
           <Text style={styles.emptySub}>Tap the heart on a product page to save it here.</Text>
         </View>
-      </SafeAreaView>
+      </View>
     )
   }
 
   return (
-    <SafeAreaView style={[styles.container, styles.screenFill]} edges={['top', 'left', 'right']}>
+    <View style={[styles.container, styles.screenFill]}>
       <View style={styles.topNavRow}>
         <View style={styles.header}>
           <View style={styles.headerLeft}>
@@ -104,7 +104,7 @@ export function Saved({ navigation }: any) {
           )
         })}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   )
 }
 

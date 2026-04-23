@@ -87,6 +87,10 @@ export interface ShopifyProduct {
   featuredImageUrl?: string | null
   price?: ShopifyMoney | null
   compareAtPrice?: ShopifyMoney | null
+  packagePrices?: {
+    single?: ShopifyMoney | null
+    set?: ShopifyMoney | null
+  }
 }
 
 export interface IAppContext {

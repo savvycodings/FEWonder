@@ -549,6 +549,7 @@ export function Main() {
           )}
         </Stack.Screen>
       )}
+      <Stack.Screen name="Cart" component={Cart} />
       <Stack.Screen name="Product" component={Product} />
       <Stack.Screen
         name="CommunityUserProfile"

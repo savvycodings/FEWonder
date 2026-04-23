@@ -338,9 +338,6 @@ export function Profile({
 
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>My orders</Text>
-        <Pressable onPress={() => navigation.navigate('ProfileMyOrders')}>
-          <Text style={styles.link}>View all</Text>
-        </Pressable>
       </View>
       <View style={styles.groupCard}>
         {ordersPreview.length === 0 ? (
@@ -614,11 +611,6 @@ const getStyles = (theme: any) => StyleSheet.create({
     fontFamily: 'Montserrat_800ExtraBold',
     fontSize: 20,
     marginBottom: 4,
-  },
-  link: {
-    color: PROFILE_ACCENT,
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 12,
   },
   sectionCard: {
     width: '100%',
