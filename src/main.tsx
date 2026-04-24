@@ -158,7 +158,12 @@ function ProfileStackScreen({
         }}
       >
         {({ navigation }) => (
-          <ProfileHeroEdit navigation={navigation} user={user} sessionToken={sessionToken} />
+          <ProfileHeroEdit
+            navigation={navigation}
+            user={user}
+            sessionToken={sessionToken}
+            onUserUpdated={onUserUpdated}
+          />
         )}
       </ProfileStack.Screen>
       <ProfileStack.Screen name="Saved" component={Saved} />

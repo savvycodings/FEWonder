@@ -8,6 +8,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   useWindowDimensions,
@@ -16,12 +17,13 @@ import {
 import { useIsFocused } from '@react-navigation/native'
 import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, Rect, Stop, SvgXml } from 'react-native-svg'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { User } from '../../types'
-import { GiftboxAnimationPreview } from '../components/GiftboxAnimationPreview'
+import type { User, WonderJumpLeaderboardEntry } from '../../types'
+import { DailyRewardsMysteryGiftVisual } from '../components/DailyRewardsMysteryGiftVisual'
 import { WonderSpinningCoin } from '../components/WonderCoin'
 import {
   claimWonderJumpChest,
   fetchSessionUser,
+  fetchWonderJumpLeaderboard,
   fetchWonderJumpProgress,
   pickupWonderJumpChest,
   saveWonderJumpProgress,
@@ -222,12 +224,6 @@ const WONDER_JUMP_CHEST_DEBUG_FIXED_THIRD_PLATFORM = true
  */
 const WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX = 0
 
-/** Human-readable rarity for hub copy (reflects debug vs production). */
-const WONDER_JUMP_CHEST_RARITY_TEXT_PRODUCTION =
-  'Very rare in normal play: about a 1-in-80 roll each time a new main-chain platform appears in the tropical stretch, plus at most one chest per run.'
-const WONDER_JUMP_CHEST_RARITY_DISPLAY = WONDER_JUMP_CHEST_DEBUG_FIXED_THIRD_PLATFORM
-  ? `Debug: fixed chest on main-chain step ${WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX + 1} (index ${WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX}); instant open on server debug flag.`
-  : WONDER_JUMP_CHEST_RARITY_TEXT_PRODUCTION
 const CRAB_W = 26
 const CRAB_H = 20
 /** Base chance when tropical gameplay first applies (climbing from grass/mushroom). */
@@ -331,12 +327,16 @@ function formatWonderJumpChestRemaining(unlockIso: string): string {
   const t = new Date(unlockIso).getTime() - Date.now()
   if (!Number.isFinite(t) || t <= 0) return 'Ready!'
   const totalSec = Math.ceil(t / 1000)
-  const h = Math.floor(totalSec / 3600)
+  const d = Math.floor(totalSec / 86400)
+  const h = Math.floor((totalSec % 86400) / 3600)
   const m = Math.floor((totalSec % 3600) / 60)
   const s = totalSec % 60
-  if (h > 0) return `${h}h ${m}m`
-  if (m > 0) return `${m}m ${s}s`
-  return `${s}s`
+  const parts: string[] = []
+  if (d > 0) parts.push(`${d}d`)
+  if (h > 0) parts.push(`${h}h`)
+  if (m > 0) parts.push(`${m}m`)
+  parts.push(`${s}s`)
+  return parts.join(' ')
 }
 
 /** Extra vertical gap range for main-chain spawns in mushroom (still clamped jump-safe). */
@@ -2135,8 +2135,10 @@ const WonderJumpGiftboxFromAsset = memo(function WonderJumpGiftboxFromAsset({
   return <SvgXml xml={xml} width={width} height={height} pointerEvents="none" preserveAspectRatio="xMidYMid meet" />
 })
 
-/** Dock tile gift size — matches static hub gift before “ready” animation. */
-const WJ_DOCK_GIFT_BOX_PX = 46
+/** Gift art in-world / modal (square slot). */
+const WJ_DOCK_GIFT_BOX_PX = 58
+/** Hub dock: Daily Rewards stage is 236px; scale to fit `wjChestDockTile`. */
+const WJ_DOCK_GIFT_STAGE_PX = 82
 
 const JetpackPickupView = memo(function JetpackPickupView({
   left,
@@ -2492,12 +2494,22 @@ export function WonderJump({
   const tileBottomSpace = insets.bottom + 88
   const playHeight = Math.max(430, resolvedHeight - insets.top - insets.bottom - 170)
   const panelTop = Math.max(70, playHeight * 0.24)
+  /** Hub / game-over panel: fixed max height + inner scroll so footer actions stay inside the glass card. */
+  const hubPanelOuterMaxHeight = useMemo(
+    () => Math.min(playHeight * 0.94, playHeight - 12),
+    [playHeight]
+  )
+  const hubPanelScrollMaxHeight = useMemo(() => {
+    const dockPaddingV = 14 + 12
+    return Math.max(200, hubPanelOuterMaxHeight - dockPaddingV)
+  }, [hubPanelOuterMaxHeight])
   const gameOverPanelDockStyle = useMemo(
     () => ({
       bottom: Math.max(8, insets.bottom + 6),
-      maxHeight: Math.min(playHeight * 0.92, playHeight - 20),
+      maxHeight: hubPanelOuterMaxHeight,
+      overflow: 'hidden' as const,
     }),
-    [insets.bottom, playHeight]
+    [hubPanelOuterMaxHeight, insets.bottom]
   )
 
   const routeSeedBiome: WonderJumpStartBiome =
@@ -2510,6 +2522,9 @@ export function WonderJump({
   const [menuStartBiome, setMenuStartBiome] = useState<WonderJumpStartBiome>(routeSeedBiome)
   const [controlScheme, setControlScheme] = useState<ControlScheme>('touchSplit')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false)
+  const [leaderboardEntries, setLeaderboardEntries] = useState<WonderJumpLeaderboardEntry[]>([])
+  const [leaderboardFetchState, setLeaderboardFetchState] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
   const [bestScore, setBestScore] = useState(0)
   /** Server-backed (or default); used when syncing progress and for future biome gating. */
   const [unlockedBiomes, setUnlockedBiomes] = useState<WonderJumpStartBiome[]>([...DEFAULT_WONDER_JUMP_UNLOCKED])
@@ -3404,6 +3419,45 @@ export function WonderJump({
   const panelBiomeLabel = panelAccent.label
   const isHubPanel = gameState.mode === 'menu' || gameState.mode === 'gameOver'
 
+  const giftDockEmptyTile = useMemo(
+    () => (
+      <View style={[styles.wjChestDockTile, styles.wjChestDockTileEmptySlot]}>
+        <View style={styles.wjDockEmptyComposer} pointerEvents="none">
+          <View style={styles.wjDockEmptyOrbit} />
+          <View style={styles.wjDockEmptyPad}>
+            <Text style={styles.wjDockEmptyGlyph}>✦</Text>
+          </View>
+        </View>
+      </View>
+    ),
+    [],
+  )
+
+  const leaderboardScrollMaxH = useMemo(
+    () => Math.min(resolvedHeight * 0.58, 420),
+    [resolvedHeight],
+  )
+
+  useEffect(() => {
+    if (!leaderboardOpen) return
+    let cancelled = false
+    setLeaderboardFetchState('loading')
+    void fetchWonderJumpLeaderboard(50)
+      .then((entries) => {
+        if (cancelled) return
+        setLeaderboardEntries(entries)
+        setLeaderboardFetchState('ok')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setLeaderboardEntries([])
+        setLeaderboardFetchState('error')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [leaderboardOpen])
+
   useEffect(() => {
     if (!isHubPanel || !serverChestUnlocksAt) return
     const id = setInterval(() => setChestHubTick((n) => n + 1), 1000)
@@ -3867,6 +3921,14 @@ export function WonderJump({
             <Text style={styles.panelTitle}>Paused</Text>
             <Text style={styles.panelBiome}>{panelBiomeLabel}</Text>
             <Text style={styles.panelSubtitle}>Take a breath, then jump back in.</Text>
+            <Pressable
+              onPress={() => setLeaderboardOpen(true)}
+              style={[styles.leaderboardPausedButton, { borderColor: panelAccent.accentSoft }]}
+              accessibilityRole="button"
+              accessibilityLabel="Open leaderboard"
+            >
+              <Text style={[styles.leaderboardPausedButtonText, { color: panelAccent.accent }]}>Leaderboard</Text>
+            </Pressable>
             <Pressable onPress={resumeGame} style={[styles.primaryButton, primaryButtonTone]}>
               <Text style={styles.primaryButtonText}>Resume</Text>
             </Pressable>
@@ -3893,6 +3955,13 @@ export function WonderJump({
               gameOverPanelDockStyle,
             ]}
           >
+            <ScrollView
+              style={[styles.hubPanelScroll, { maxHeight: hubPanelScrollMaxHeight }]}
+              contentContainerStyle={styles.hubPanelScrollContent}
+              showsVerticalScrollIndicator={false}
+              bounces={false}
+              keyboardShouldPersistTaps="handled"
+            >
             <View style={styles.gameOverTop}>
               <Text style={styles.gameOverTitle}>
                 {gameState.mode === 'gameOver' ? 'Game Over :(' : 'WonderJump'}
@@ -3900,9 +3969,7 @@ export function WonderJump({
               {gameState.mode === 'gameOver' && gameState.deathCause ? (
                 <Text style={styles.gameOverDeathBlurb}>{deathBlurb(gameState.deathCause)}</Text>
               ) : gameState.mode === 'menu' ? (
-                <Text style={styles.gameOverDeathBlurb}>
-                  Bounce up and keep climbing — your score rises with how high you get!
-                </Text>
+                <Text style={styles.gameOverDeathBlurb}>Up only. Break your best.</Text>
               ) : null}
               <Text
                 style={[
@@ -3931,19 +3998,31 @@ export function WonderJump({
                         <Text style={styles.gameOverSubValue}>{gameState.jetpacksUsedThisRun}</Text>
                       </View>
                     </View>
+                    <Pressable
+                      onPress={() => setLeaderboardOpen(true)}
+                      style={[styles.leaderboardHeroTile, { borderColor: panelAccent.accentSoft }]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Open leaderboard"
+                    >
+                      <Text style={[styles.leaderboardHeroTileText, { color: panelAccent.accent }]}>
+                        Leaderboard
+                      </Text>
+                    </Pressable>
                   </>
                 ) : (
                   <>
                     <Text style={styles.gameOverHeroLabel}>Best score</Text>
                     <Text style={styles.gameOverHeroValue}>{bestScore}</Text>
-                    <View style={styles.gameOverSubStack}>
-                      <View style={styles.gameOverSubRow}>
-                        <Text style={styles.gameOverSubLabel}>Controls</Text>
-                        <Text style={styles.gameOverSubValue}>
-                          {controlScheme === 'touchSplit' ? 'Split touch' : 'D-pad'}
-                        </Text>
-                      </View>
-                    </View>
+                    <Pressable
+                      onPress={() => setLeaderboardOpen(true)}
+                      style={[styles.leaderboardHeroTile, { borderColor: panelAccent.accentSoft }]}
+                      accessibilityRole="button"
+                      accessibilityLabel="Open leaderboard"
+                    >
+                      <Text style={[styles.leaderboardHeroTileText, { color: panelAccent.accent }]}>
+                        Leaderboard
+                      </Text>
+                    </Pressable>
                   </>
                 )}
               </View>
@@ -3953,9 +4032,7 @@ export function WonderJump({
             <View style={styles.wjChestHubCard}>
               <View style={styles.wjChestHubRow}>
                 {!sessionToken ? (
-                  <View style={styles.wjChestDockTile}>
-                    <View style={styles.wjChestDockTileInnerEmpty} />
-                  </View>
+                  giftDockEmptyTile
                 ) : serverChestUnlocksAt ? (
                   wjChestReadyToOpen ? (
                     <Pressable
@@ -3963,46 +4040,36 @@ export function WonderJump({
                       disabled={chestClaimBusy || hubChestRevealPhase !== null}
                       style={[styles.wjChestDockTile, styles.wjChestDockTileReady]}
                     >
-                      <GiftboxAnimationPreview size={WJ_DOCK_GIFT_BOX_PX} active />
+                      <DailyRewardsMysteryGiftVisual maxStageSize={WJ_DOCK_GIFT_STAGE_PX} ready />
                     </Pressable>
                   ) : (
-                    <View style={[styles.wjChestDockTile, styles.wjChestDockTileCollected]}>
-                      <View style={styles.wjChestDockCollectedGiftDim}>
-                        <WonderJumpGiftboxFromAsset width={34} height={34} />
-                      </View>
-                      <Text style={styles.wjChestDockCollectedLabel}>Collected gift</Text>
+                    <View style={styles.wjChestDockTile}>
+                      <DailyRewardsMysteryGiftVisual maxStageSize={WJ_DOCK_GIFT_STAGE_PX} ready={false} />
                     </View>
                   )
                 ) : (
-                  <View style={styles.wjChestDockTile}>
-                    <View style={styles.wjChestDockTileInnerEmpty} />
-                  </View>
+                  giftDockEmptyTile
                 )}
                 <View style={styles.wjChestHubCopy}>
-                  <Text style={styles.wjChestHubTitle}>Tropical gift dock</Text>
-                  <Text style={styles.wjChestHubRarity}>{WONDER_JUMP_CHEST_RARITY_DISPLAY}</Text>
+                  <Text style={styles.wjChestHubTitle}>Gift dock</Text>
                   {!sessionToken ? (
-                    <Text style={styles.wjChestHubMeta}>Sign in to save gifts from Sunset Keys climbs.</Text>
+                    <Text style={styles.wjChestHubMeta}>Sign in to stash Keys gifts.</Text>
                   ) : serverChestUnlocksAt ? (
                     wjChestReadyToOpen ? (
-                      <Text style={styles.wjChestHubMeta}>Tap the gift to open it and claim your Wonder coins.</Text>
+                      <Text style={styles.wjChestHubMeta}>Tap to open.</Text>
                     ) : (
-                      <Text style={styles.wjChestHubMeta}>Opens in {wjChestCountdownText}</Text>
+                      <Text style={styles.wjChestHubMeta}>
+                        Opens <Text style={styles.wjChestHubCountdown}>{wjChestCountdownText}</Text>
+                      </Text>
                     )
                   ) : (
-                    <Text style={styles.wjChestHubMeta}>
-                      Your dock is empty. Rare gift boxes can appear on platforms during tropical runs — touch one to
-                      stash it here, then open it when the timer finishes.
-                    </Text>
+                    <Text style={styles.wjChestHubMeta}>Empty. Run Keys for drops.</Text>
                   )}
                 </View>
               </View>
             </View>
 
             <View style={styles.gameOverFooter}>
-              <Text style={styles.gameOverFooterHint}>
-                {gameState.mode === 'gameOver' ? 'Next run · starting biome' : 'Starting biome for next run'}
-              </Text>
               <View style={styles.panelBiomeRow}>
                 <Pressable
                   onPress={() => selectMenuBiome('grassland')}
@@ -4061,12 +4128,14 @@ export function WonderJump({
                 onPress={gameState.mode === 'gameOver' ? restartRun : startGame}
                 style={[styles.primaryButton, primaryButtonTone]}
               >
-                <Text style={[styles.primaryButtonText, styles.gameOverMontserratButton]}>
-                  {gameState.mode === 'gameOver'
-                    ? 'Restart Run'
-                    : bestScore > 0
-                      ? 'Restart Run'
-                      : 'Start Run'}
+                <Text
+                  style={[
+                    styles.primaryButtonText,
+                    styles.gameOverMontserratButton,
+                    gameState.mode === 'menu' ? styles.hubPanelPrimaryRunText : null,
+                  ]}
+                >
+                  {gameState.mode === 'gameOver' ? 'RESTART RUN' : 'START RUN'}
                 </Text>
               </Pressable>
 
@@ -4084,6 +4153,7 @@ export function WonderJump({
                 </Pressable>
               </View>
             </View>
+            </ScrollView>
           </Animated.View>
         ) : null}
 
@@ -4205,6 +4275,98 @@ export function WonderJump({
             )}
           </Pressable>
         </Pressable>
+      </Modal>
+
+      <Modal
+        visible={leaderboardOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLeaderboardOpen(false)}
+      >
+        <View style={styles.leaderboardModalBackdrop}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setLeaderboardOpen(false)} />
+          <View
+            style={[styles.leaderboardModalCard, { maxHeight: Math.min(resolvedHeight * 0.88, 640) }]}
+            pointerEvents="box-none"
+          >
+            <View style={styles.leaderboardModalHeader}>
+              <Text style={styles.leaderboardModalTitle}>WonderJump leaderboard</Text>
+              <Text style={styles.leaderboardModalHint}>
+                {leaderboardFetchState === 'error'
+                  ? 'Could not load scores. Try again later.'
+                  : leaderboardFetchState === 'loading'
+                    ? 'Loading…'
+                    : 'Best saved runs · everyone sees the same board'}
+              </Text>
+            </View>
+            <View style={styles.leaderboardTableHead}>
+              <Text style={styles.leaderboardThRank}>#</Text>
+              <Text style={styles.leaderboardThPlayer}>Player</Text>
+              <Text style={styles.leaderboardThScore}>Score</Text>
+            </View>
+            {leaderboardFetchState === 'loading' ? (
+              <View style={[styles.leaderboardScroll, styles.leaderboardLoadingBox, { minHeight: 160 }]}>
+                <ActivityIndicator size="large" color={panelAccent.accent} />
+              </View>
+            ) : (
+              <ScrollView
+                style={[styles.leaderboardScroll, { maxHeight: leaderboardScrollMaxH }]}
+                contentContainerStyle={styles.leaderboardScrollContent}
+                showsVerticalScrollIndicator
+                nestedScrollEnabled
+                keyboardShouldPersistTaps="handled"
+                bounces
+              >
+                {leaderboardEntries.length === 0 ? (
+                  <Text style={styles.leaderboardEmptyText}>
+                    {leaderboardFetchState === 'error'
+                      ? 'Could not load the leaderboard.'
+                      : 'No saved scores yet. Be the first on the board.'}
+                  </Text>
+                ) : (
+                  leaderboardEntries.map((row, index) => {
+                    const rank = index + 1
+                    return (
+                      <View
+                        key={row.userId}
+                        style={[
+                          styles.leaderboardRow,
+                          rank % 2 === 0 ? styles.leaderboardRowAlt : null,
+                          rank <= 3 ? styles.leaderboardRowSpotlit : null,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.leaderboardCellRank,
+                            rank === 1
+                              ? styles.leaderboardRankGold
+                              : rank === 2
+                                ? styles.leaderboardRankSilver
+                                : rank === 3
+                                  ? styles.leaderboardRankBronze
+                                  : null,
+                          ]}
+                        >
+                          {rank}
+                        </Text>
+                        <Text style={styles.leaderboardCellPlayer} numberOfLines={1}>
+                          {row.username}
+                        </Text>
+                        <Text style={styles.leaderboardCellScore}>{row.score.toLocaleString()}</Text>
+                      </View>
+                    )
+                  })
+                )}
+              </ScrollView>
+            )}
+            <Pressable
+              onPress={() => setLeaderboardOpen(false)}
+              style={[styles.leaderboardModalClose, primaryButtonTone]}
+            >
+              <Text style={styles.wjChestModalButtonText}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
       </Modal>
     </View>
   )
@@ -4430,17 +4592,62 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingBottom: 12,
   },
+  hubPanelScroll: {
+    width: '100%',
+  },
+  hubPanelScrollContent: {
+    alignItems: 'center',
+    gap: 10,
+    paddingBottom: 6,
+  },
   gameOverTop: {
     width: '100%',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 10,
+    gap: 6,
+    marginBottom: 8,
   },
   gameOverTitle: {
+    width: '100%',
+    textAlign: 'center',
     color: '#f6fbff',
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 24,
     letterSpacing: 0.2,
+  },
+  /** Leaderboard entry inside hero score card (menu + game over). */
+  leaderboardHeroTile: {
+    alignSelf: 'stretch',
+    width: '100%',
+    marginTop: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 11,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leaderboardHeroTileText: {
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 12,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  leaderboardPausedButton: {
+    width: '100%',
+    marginBottom: 4,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1,
+    backgroundColor: 'rgba(32, 48, 88, 0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leaderboardPausedButtonText: {
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 13,
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
   },
   gameOverDeathBlurb: {
     color: '#b8cce4',
@@ -4462,8 +4669,8 @@ const styles = StyleSheet.create({
   gameOverHeroCard: {
     width: '100%',
     marginTop: 6,
-    paddingVertical: 16,
-    paddingHorizontal: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     borderRadius: 14,
     backgroundColor: 'rgba(18, 32, 58, 0.72)',
     borderWidth: 1,
@@ -4483,7 +4690,7 @@ const styles = StyleSheet.create({
     fontSize: 52,
     letterSpacing: -1,
     lineHeight: 56,
-    marginBottom: 12,
+    marginBottom: 6,
   },
   gameOverSubStack: {
     width: '100%',
@@ -4526,102 +4733,290 @@ const styles = StyleSheet.create({
   gameOverMontserratButton: {
     fontFamily: WONDER_JUMP_UI_BOLD,
   },
+  /** Main hub green tile — larger all-caps Montserrat (game over uses default primary size). */
+  hubPanelPrimaryRunText: {
+    fontSize: 17,
+    letterSpacing: 1.35,
+    textTransform: 'uppercase',
+    lineHeight: 22,
+  },
   gameOverFooter: {
     width: '100%',
     alignItems: 'center',
     gap: 8,
-    paddingTop: 12,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: 'rgba(140, 170, 210, 0.22)',
   },
-  gameOverFooterHint: {
-    color: '#e8f2fc',
-    fontFamily: WONDER_JUMP_UI_BOLD,
-    fontSize: 13,
-    letterSpacing: 0.25,
-    marginBottom: -2,
-    width: '100%',
-    textAlign: 'center',
-  },
   wjChestHubCard: {
     width: '100%',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(200, 230, 255, 0.22)',
-    backgroundColor: 'rgba(18, 32, 58, 0.55)',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 10,
+    borderColor: 'rgba(120, 200, 190, 0.22)',
+    backgroundColor: 'rgba(12, 28, 42, 0.72)',
+    paddingTop: 8,
+    paddingBottom: 9,
+    paddingHorizontal: 11,
+    marginBottom: 6,
+    overflow: 'visible',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 4,
   },
   wjChestHubRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
+    alignItems: 'center',
+    gap: 10,
   },
   wjChestDockTile: {
-    width: 96,
-    minHeight: 96,
+    width: 90,
+    minHeight: 90,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(200, 230, 255, 0.26)',
-    backgroundColor: 'rgba(10, 18, 40, 0.42)',
+    borderColor: 'rgba(160, 210, 230, 0.28)',
+    backgroundColor: 'rgba(8, 22, 38, 0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+    overflow: 'visible',
+  },
+  wjChestDockTileReady: {
+    borderColor: 'rgba(255, 210, 120, 0.9)',
+    backgroundColor: 'rgba(22, 40, 72, 0.75)',
+    shadowColor: '#ffb84d',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  /** Empty dock: “open slot” plate + spark (signed out or no gift stashed). */
+  wjChestDockTileEmptySlot: {
+    borderColor: 'rgba(42, 168, 155, 0.42)',
+    backgroundColor: 'rgba(3, 14, 26, 0.94)',
+  },
+  wjDockEmptyComposer: {
+    width: '100%',
+    minHeight: 72,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  wjChestDockTileReady: {
-    borderColor: 'rgba(255, 210, 120, 0.82)',
-    backgroundColor: 'rgba(28, 44, 82, 0.55)',
+  wjDockEmptyOrbit: {
+    position: 'absolute',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 2,
+    borderColor: 'rgba(55, 190, 175, 0.38)',
+    backgroundColor: 'rgba(29, 127, 117, 0.08)',
   },
-  wjChestDockTileCollected: {
-    justifyContent: 'center',
-    gap: 5,
-    paddingVertical: 8,
-  },
-  wjChestDockTileInnerEmpty: {
-    width: 46,
-    height: 46,
+  wjDockEmptyPad: {
+    width: 44,
+    height: 44,
     borderRadius: 11,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(150, 180, 220, 0.28)',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderColor: 'rgba(185, 238, 228, 0.32)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+    shadowColor: '#1d7f75',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  wjChestDockCollectedGiftDim: {
-    opacity: 0.58,
-  },
-  wjChestDockCollectedLabel: {
-    color: 'rgba(236, 244, 255, 0.96)',
+  wjDockEmptyGlyph: {
+    fontSize: 19,
+    color: 'rgba(130, 228, 210, 0.55)',
     fontFamily: WONDER_JUMP_UI_BOLD,
-    fontSize: 10,
-    letterSpacing: 0.14,
+    marginTop: -1,
+  },
+  leaderboardModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(4, 8, 18, 0.78)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+    position: 'relative',
+  },
+  leaderboardModalCard: {
+    width: '100%',
+    maxWidth: 380,
+    zIndex: 1,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(190, 220, 255, 0.28)',
+    backgroundColor: 'rgba(10, 16, 36, 0.97)',
+    paddingTop: 18,
+    paddingBottom: 16,
+    paddingHorizontal: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  leaderboardModalHeader: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 4,
+  },
+  leaderboardModalTitle: {
+    color: '#f6fbff',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 20,
+    letterSpacing: 0.2,
     textAlign: 'center',
-    lineHeight: 12,
-    paddingHorizontal: 4,
+  },
+  leaderboardModalHint: {
+    color: 'rgba(180, 206, 236, 0.85)',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 11,
+    letterSpacing: 0.2,
+    textAlign: 'center',
+  },
+  leaderboardTableHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(140, 170, 210, 0.25)',
+    marginBottom: 4,
+  },
+  leaderboardThRank: {
+    width: 36,
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 11,
+    color: 'rgba(200, 220, 245, 0.75)',
+    letterSpacing: 0.4,
+  },
+  leaderboardThPlayer: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 11,
+    color: 'rgba(200, 220, 245, 0.75)',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  leaderboardThScore: {
+    width: 72,
+    textAlign: 'right',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 11,
+    color: 'rgba(200, 220, 245, 0.75)',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  leaderboardScroll: {
+    width: '100%',
+  },
+  leaderboardLoadingBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+  },
+  leaderboardEmptyText: {
+    textAlign: 'center',
+    color: 'rgba(190, 214, 236, 0.9)',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 13,
+    letterSpacing: 0.15,
+    lineHeight: 18,
+    paddingVertical: 28,
+    paddingHorizontal: 12,
+  },
+  leaderboardScrollContent: {
+    paddingBottom: 8,
+  },
+  leaderboardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+  },
+  leaderboardRowAlt: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  leaderboardRowSpotlit: {
+    borderWidth: 1,
+    borderColor: 'rgba(255, 215, 120, 0.12)',
+  },
+  leaderboardCellRank: {
+    width: 36,
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 14,
+    color: 'rgba(220, 235, 255, 0.95)',
+    fontVariant: ['tabular-nums'],
+  },
+  leaderboardRankGold: {
+    color: '#ffd76a',
+  },
+  leaderboardRankSilver: {
+    color: '#d8e4f2',
+  },
+  leaderboardRankBronze: {
+    color: '#e4a574',
+  },
+  leaderboardCellPlayer: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 13,
+    color: '#eef6ff',
+    letterSpacing: 0.12,
+    paddingRight: 8,
+  },
+  leaderboardCellScore: {
+    width: 72,
+    textAlign: 'right',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 14,
+    color: '#ffffff',
+    letterSpacing: 0.08,
+    fontVariant: ['tabular-nums'],
+  },
+  leaderboardModalClose: {
+    marginTop: 12,
+    width: '100%',
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   wjChestHubCopy: {
     flex: 1,
     minWidth: 0,
+    gap: 4,
   },
   wjChestHubTitle: {
     color: '#f6fbff',
     fontFamily: WONDER_JUMP_UI_BOLD,
-    fontSize: 13,
-    letterSpacing: 0.2,
+    fontSize: 14,
+    letterSpacing: 0.12,
     marginBottom: 2,
   },
-  wjChestHubRarity: {
-    color: 'rgba(188, 214, 239, 0.92)',
-    fontFamily: WONDER_JUMP_UI_BOLD,
-    fontSize: 10,
-    letterSpacing: 0.12,
-    lineHeight: 14,
-    marginBottom: 6,
-  },
   wjChestHubMeta: {
-    color: '#bcd6ef',
+    color: 'rgba(190, 214, 236, 0.95)',
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 11,
-    letterSpacing: 0.15,
-    lineHeight: 15,
+    letterSpacing: 0.08,
+    lineHeight: 14,
+  },
+  wjChestHubCountdown: {
+    color: '#ffffff',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 11,
+    letterSpacing: 0.2,
   },
   wjChestModalBackdrop: {
     flex: 1,

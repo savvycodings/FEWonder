@@ -417,7 +417,17 @@ export function AvatarFrameWrapper({
   const inner = Math.max(14, size - 4)
   const ring = plainRingStyle()
   return (
-    <View style={[styles.holder, { width: size, height: size }]}>
+    <View
+      style={[
+        styles.holder,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          overflow: 'hidden',
+        },
+      ]}
+    >
       <View
         pointerEvents="none"
         style={[

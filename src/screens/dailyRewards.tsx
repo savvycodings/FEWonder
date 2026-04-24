@@ -12,7 +12,7 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import Svg, { Polygon, SvgUri, SvgXml } from 'react-native-svg'
+import { SvgUri, SvgXml } from 'react-native-svg'
 import { useFocusEffect } from '@react-navigation/native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { DailyRewardItem, DailyRewardStatus, User } from '../../types'
@@ -41,6 +41,11 @@ import {
   type ProfileHeroBadgeSlots,
 } from '../profileHeroPreferences'
 import { WONDER_BADGE_IDS, type WonderBadgeId } from '../wonderBadgesCatalog'
+import {
+  DailyRewardsGiftBoxRayBurst,
+  DAILY_REWARDS_GIFT_FLOAT_LOOP_MS,
+  DAILY_REWARDS_GIFT_RAY_SPIN_MS,
+} from '../components/DailyRewardsMysteryGiftVisual'
 
 const weekDays = ['1', '2', '3', '4', '5', '6', '7']
 const weekRewards = [1, 2, 3, 4, 5, 6, 7]
@@ -50,7 +55,6 @@ const GIFT_BOX_STORAGE_KEY = 'daily-reward-giftbox-ready-at'
 const GIFT_BOX_COOLDOWN_MS = 6 * 60 * 60 * 1000
 const GIFT_BOX_BONUS_COINS_KEY = 'daily-reward-giftbox-bonus-coins'
 const GIFT_BOX_REWARD_COINS = 2
-const GIFT_BOX_PREVIEW_RAY_ANGLES = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]
 /** Horizontal gap between reward cards (must match `rewardCarousel` `gap`). */
 const REWARD_CAROUSEL_GAP = 10
 /** Matches `rewardCarousel` `paddingRight`. */
@@ -75,39 +79,6 @@ function formatDuration(totalMs: number): string {
   const mm = String(minutes).padStart(2, '0')
   const ss = String(seconds).padStart(2, '0')
   return `${hh}:${mm}:${ss}`
-}
-
-function GiftBoxPrizeRays(): ReactElement {
-  const size = 236
-  const center = size / 2
-  const innerRadius = 28
-  const outerRadius = 116
-  const halfSpreadDeg = 7
-  const pointAt = (radius: number, deg: number) => {
-    const rad = (deg * Math.PI) / 180
-    return {
-      x: center + Math.cos(rad) * radius,
-      y: center + Math.sin(rad) * radius,
-    }
-  }
-
-  return (
-    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {GIFT_BOX_PREVIEW_RAY_ANGLES.map((angle, idx) => {
-        const tip = pointAt(outerRadius, angle)
-        const left = pointAt(innerRadius, angle - halfSpreadDeg)
-        const right = pointAt(innerRadius, angle + halfSpreadDeg)
-        const opacity = idx % 2 === 0 ? 0.52 : 0.34
-        return (
-          <Polygon
-            key={`ray-${angle}`}
-            points={`${tip.x},${tip.y} ${left.x},${left.y} ${right.x},${right.y}`}
-            fill={`rgba(255,223,120,${opacity})`}
-          />
-        )
-      })}
-    </Svg>
-  )
 }
 
 export function DailyRewards({ navigation, route }: any) {
@@ -306,7 +277,7 @@ export function DailyRewards({ navigation, route }: any) {
     const motionLoop = Animated.loop(
       Animated.timing(giftBoxPreviewPhase, {
         toValue: 1,
-        duration: 4200,
+        duration: DAILY_REWARDS_GIFT_FLOAT_LOOP_MS,
         easing: Easing.linear,
         useNativeDriver: true,
       }),
@@ -314,7 +285,7 @@ export function DailyRewards({ navigation, route }: any) {
     const glowSpinLoop = Animated.loop(
       Animated.timing(giftBoxGlowRotateAnim, {
         toValue: 1,
-        duration: 5000,
+        duration: DAILY_REWARDS_GIFT_RAY_SPIN_MS,
         easing: Easing.linear,
         useNativeDriver: true,
       }),
@@ -687,7 +658,7 @@ export function DailyRewards({ navigation, route }: any) {
                     },
                   ]}
                 >
-                  <GiftBoxPrizeRays />
+                  <DailyRewardsGiftBoxRayBurst size={236} />
                 </Animated.View>
               ) : null}
               <View style={styles.giftBoxAnimatedWrap}>
@@ -744,7 +715,7 @@ export function DailyRewards({ navigation, route }: any) {
                   },
                 ]}
               >
-                <GiftBoxPrizeRays />
+                <DailyRewardsGiftBoxRayBurst size={236} />
               </Animated.View>
               <View style={styles.giftBoxAnimatedWrap}>
                 {giftBoxSvgXml ? (

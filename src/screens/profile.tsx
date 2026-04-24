@@ -20,8 +20,7 @@ import {
 } from '../components'
 import { AppContext, ThemeContext } from '../context'
 import { User } from '../../types'
-import * as ImagePicker from 'expo-image-picker'
-import { getDailyRewardStatus, getProfileHero, uploadProfilePicture } from '../utils'
+import { getDailyRewardStatus, getProfileHero } from '../utils'
 import { fetchMyOrders } from '../ordersApi'
 import { ProfileHeroBadgeStrip } from '../profileHeroBadgeStrip'
 import {
@@ -53,9 +52,6 @@ export function Profile({
   const styles = getStyles(theme)
   const { cartItems, savedItems } = useContext(AppContext)
   const cartQuantityTotal = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0)
-  const [isUploading, setIsUploading] = useState(false)
-  const [localPreviewUri, setLocalPreviewUri] = useState<string | null>(null)
-  const [uploadError, setUploadError] = useState('')
   const [showWalletModal, setShowWalletModal] = useState(false)
   const [walletBalance, setWalletBalance] = useState(0)
   const [ordersPreview, setOrdersPreview] = useState<
@@ -116,44 +112,6 @@ export function Profile({
     }, [loadWalletBalance, refreshAvatarFrame, loadOrdersPreview, refreshHeroPrefs])
   )
 
-  async function handleChangePhoto() {
-    if (isUploading) return
-
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
-    if (!permission.granted) return
-
-    const picked = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      quality: 0.7,
-      base64: true,
-    })
-
-    if (picked.canceled || !picked.assets?.[0]?.base64) return
-
-    try {
-      setUploadError('')
-      setIsUploading(true)
-      const asset = picked.assets[0]
-      if (asset.uri) {
-        setLocalPreviewUri(asset.uri)
-      }
-      const updatedUser = await uploadProfilePicture({
-        sessionToken,
-        imageBase64: asset.base64 ?? '',
-        mimeType: asset.mimeType || 'image/jpeg',
-      })
-      await onUserUpdated(updatedUser)
-      setLocalPreviewUri(null)
-    } catch (error) {
-      console.log('Failed to upload profile photo', error)
-      setUploadError('Could not save photo to cloud. Please try again.')
-      setLocalPreviewUri(null)
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
   const accountShopping = [
     { label: 'Shopping Cart', key: 'cart', icon: 'shopping-bag' as const },
     { label: 'Saved Items', key: 'saved', icon: 'heart' as const },
@@ -201,26 +159,23 @@ export function Profile({
           <View style={styles.profileHeroRow}>
             <View style={styles.profileHeroAvatarOnlyRow}>
               <View style={styles.profileHeroAvatarColumn}>
-                <Pressable
+                <View
                   style={[
                     styles.profileHeroAvatarShell,
                     { width: PROFILE_HERO_PROFILE_AVATAR, height: PROFILE_HERO_PROFILE_AVATAR },
                   ]}
-                  onPress={handleChangePhoto}
-                  accessibilityRole="button"
-                  accessibilityLabel="Change profile photo"
+                  accessibilityRole="image"
+                  accessibilityLabel="Profile photo"
                 >
                   <AvatarFrameWrapper
                     frameId={avatarFrameId}
                     size={PROFILE_HERO_PROFILE_AVATAR}
                     fit="default"
-                    innerBackgroundColor={
-                      (localPreviewUri || user.profilePicture) ? 'transparent' : '#000000'
-                    }
+                    innerBackgroundColor={user.profilePicture ? 'transparent' : '#000000'}
                   >
-                    {(localPreviewUri || user.profilePicture) ? (
+                    {user.profilePicture ? (
                       <Image
-                        source={{ uri: localPreviewUri || user.profilePicture || '' }}
+                        source={{ uri: user.profilePicture }}
                         style={styles.profileHeroAvatarImage}
                         resizeMode="cover"
                       />
@@ -234,7 +189,7 @@ export function Profile({
                       </View>
                     )}
                   </AvatarFrameWrapper>
-                </Pressable>
+                </View>
               </View>
             </View>
             <View style={styles.profileHeroNameWalletRow}>
@@ -254,9 +209,6 @@ export function Profile({
               </View>
               <View style={styles.profileHeroNameWalletRowSpacer} />
               <View style={styles.profileHeroWalletCluster} pointerEvents="box-none">
-                {isUploading ? (
-                  <ActivityIndicator size="small" color={PROFILE_ACCENT} />
-                ) : null}
                 <Pressable style={styles.profileHeroWallet} onPress={() => setShowWalletModal(true)}>
                   <WonderSpinningCoin size={18} fallbackColor={PROFILE_ACCENT} />
                   <Text style={styles.profileHeroWalletValue}>{walletBalance}</Text>
@@ -277,8 +229,6 @@ export function Profile({
           </Pressable>
         </View>
       </View>
-      {uploadError ? <Text style={styles.errorText}>{uploadError}</Text> : null}
-
       <View style={styles.statsGroupCard}>
         <View style={styles.statsRow}>
           <Pressable style={styles.statCard} onPress={() => navigation.navigate('ProfileMyOrders')}>

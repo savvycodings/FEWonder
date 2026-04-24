@@ -13,7 +13,7 @@ import {
   type ProfileHeroBadgeSlots,
   type ProfileHeroPreferences,
 } from '../profileHeroPreferences'
-import { getProfileHero, updateProfileHero, uploadProfileBanner } from '../utils'
+import { getProfileHero, updateProfileHero, uploadProfileBanner, uploadProfilePicture } from '../utils'
 import {
   PROFILE_HERO_BANNER_H,
   PROFILE_HERO_PROFILE_AVATAR,
@@ -29,16 +29,20 @@ export function ProfileHeroEdit({
   navigation,
   user,
   sessionToken,
+  onUserUpdated,
 }: {
   navigation: any
   user: User
   sessionToken: string
+  onUserUpdated: (user: User) => Promise<void>
 }) {
   const { theme } = useContext(ThemeContext)
   const styles = useMemo(() => getStyles(theme), [theme])
   const { frameId: avatarFrameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
   const [prefs, setPrefs] = useState<ProfileHeroPreferences | null>(null)
   const [busy, setBusy] = useState(false)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoError, setPhotoError] = useState('')
 
   const reload = useCallback(async () => {
     const local = await loadProfileHeroPreferences()
@@ -101,6 +105,35 @@ export function ProfileHeroEdit({
     }
   }
 
+  async function pickProfilePhoto() {
+    if (photoBusy || !sessionToken) return
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (!permission.granted) return
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      quality: 0.7,
+      base64: true,
+    })
+    if (picked.canceled || !picked.assets?.[0]?.base64) return
+    try {
+      setPhotoError('')
+      setPhotoBusy(true)
+      const asset = picked.assets[0]
+      const updatedUser = await uploadProfilePicture({
+        sessionToken,
+        imageBase64: asset.base64 ?? '',
+        mimeType: asset.mimeType || 'image/jpeg',
+      })
+      await onUserUpdated(updatedUser)
+    } catch (e) {
+      console.log('Failed to upload profile photo', e)
+      setPhotoError('Could not save photo. Try again.')
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
   async function clearBanner() {
     const base = prefs ?? (await loadProfileHeroPreferences())
     const next: ProfileHeroPreferences = { ...base, bannerUri: null }
@@ -143,7 +176,7 @@ export function ProfileHeroEdit({
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
       <Text style={styles.lead}>
-        Banner, showcase badges, and photo. Use the link below for your account name and email.
+        Tap the banner or your profile photo to change them. Use the link below for your account name and email.
       </Text>
 
       <View style={styles.heroCard}>
@@ -177,8 +210,15 @@ export function ProfileHeroEdit({
           <View style={styles.heroInnerRow}>
             <View style={styles.heroAvatarRow}>
               <View style={styles.heroAvatarCol}>
-                <View
-                  style={[styles.avatarShell, { width: PROFILE_HERO_PROFILE_AVATAR, height: PROFILE_HERO_PROFILE_AVATAR }]}
+                <Pressable
+                  onPress={() => void pickProfilePhoto()}
+                  disabled={photoBusy || !sessionToken}
+                  style={[
+                    styles.avatarShell,
+                    { width: PROFILE_HERO_PROFILE_AVATAR, height: PROFILE_HERO_PROFILE_AVATAR },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Change profile photo"
                 >
                   <AvatarFrameWrapper
                     frameId={avatarFrameId}
@@ -198,7 +238,17 @@ export function ProfileHeroEdit({
                       </View>
                     )}
                   </AvatarFrameWrapper>
-                </View>
+                  <View style={styles.avatarPhotoHint} pointerEvents="none">
+                    {photoBusy ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <View style={styles.avatarPhotoHintRow}>
+                        <FeatherIcon name="camera" size={12} color="#ffffff" />
+                        <Text style={styles.avatarPhotoHintText}>Photo</Text>
+                      </View>
+                    )}
+                  </View>
+                </Pressable>
               </View>
             </View>
             <View style={styles.heroNameBadgesRow}>
@@ -220,6 +270,8 @@ export function ProfileHeroEdit({
           </View>
         </View>
       </View>
+
+      {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
 
       <Pressable
         style={styles.secondaryRow}
@@ -328,7 +380,39 @@ function getStyles(theme: any) {
     },
     avatarShell: {
       borderRadius: 999,
-      overflow: 'visible',
+      overflow: 'hidden',
+      position: 'relative',
+    },
+    avatarPhotoHint: {
+      position: 'absolute',
+      right: 0,
+      bottom: 0,
+      left: 0,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 4,
+      borderBottomLeftRadius: 999,
+      borderBottomRightRadius: 999,
+      backgroundColor: 'rgba(0,0,0,0.45)',
+    },
+    avatarPhotoHintRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    avatarPhotoHintText: {
+      color: '#ffffff',
+      fontFamily: 'Geist-SemiBold',
+      fontSize: 10,
+      letterSpacing: 0.3,
+      textTransform: 'uppercase',
+    },
+    photoError: {
+      color: '#f87171',
+      fontFamily: theme.mediumFont,
+      fontSize: 13,
+      marginBottom: 10,
+      textAlign: 'center',
     },
     avatarImage: {
       width: '100%',

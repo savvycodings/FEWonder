@@ -81,6 +81,13 @@ export interface WonderJumpProgress {
   chestUnlocksAt: string | null
 }
 
+/** Row from GET /auth/wonder-jump-leaderboard (public). */
+export interface WonderJumpLeaderboardEntry {
+  userId: string
+  username: string
+  score: number
+}
+
 /** Result of POST /auth/wonder-jump-chest/claim */
 export type WonderJumpChestClaimResult =
   | { ok: true; wonderCoins: number; chestUnlocksAt: null }

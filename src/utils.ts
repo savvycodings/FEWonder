@@ -9,6 +9,7 @@ import {
   ShopifyProduct,
   User,
   WonderJumpChestClaimResult,
+  WonderJumpLeaderboardEntry,
   WonderJumpProgress,
 } from '../types'
 
@@ -404,6 +405,33 @@ export async function claimDailyReward(sessionToken: string): Promise<DailyRewar
   }
   await writeDailyRewardsCache(status)
   return status
+}
+
+/** Public: no auth. Returns display high scores saved from WonderJump runs. */
+export async function fetchWonderJumpLeaderboard(limit = 50): Promise<WonderJumpLeaderboardEntry[]> {
+  const safe = Math.min(100, Math.max(1, Math.floor(limit)))
+  const response = await fetch(`${DOMAIN}/auth/wonder-jump-leaderboard?limit=${encodeURIComponent(String(safe))}`)
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = {}
+  }
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to load leaderboard')
+  }
+  const entries = Array.isArray(data.entries) ? data.entries : []
+  const out: WonderJumpLeaderboardEntry[] = []
+  for (const e of entries) {
+    if (!e || typeof e !== 'object') continue
+    const userId = typeof (e as any).userId === 'string' ? (e as any).userId : ''
+    const username = typeof (e as any).username === 'string' ? (e as any).username : 'Player'
+    const score = typeof (e as any).score === 'number' && Number.isFinite((e as any).score) ? (e as any).score : 0
+    if (!userId) continue
+    out.push({ userId, username, score })
+  }
+  return out
 }
 
 export async function fetchWonderJumpProgress(sessionToken: string): Promise<WonderJumpProgress> {

@@ -32,3 +32,11 @@ export { WonderSpinningCoin, WonderStaticCoin } from './WonderCoin'
 export { WonderBadgeImage } from './WonderBadgeImage'
 export { GiftboxAnimationPreview, GiftBoxPrizeRays, GIFT_BOX_PREVIEW_RAY_ANGLES } from './GiftboxAnimationPreview'
 export type { GiftboxAnimationPreviewProps } from './GiftboxAnimationPreview'
+export {
+  DailyRewardsMysteryGiftVisual,
+  DailyRewardsGiftBoxRayBurst,
+  DAILY_REWARDS_GIFT_RAY_ANGLES,
+  DAILY_REWARDS_GIFT_FLOAT_LOOP_MS,
+  DAILY_REWARDS_GIFT_RAY_SPIN_MS,
+} from './DailyRewardsMysteryGiftVisual'
+export type { DailyRewardsMysteryGiftVisualProps } from './DailyRewardsMysteryGiftVisual'
