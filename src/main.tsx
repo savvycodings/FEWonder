@@ -43,33 +43,69 @@ const TAB_SHELL_TOP_EXTRA = 6
 
 /** Matches `tabBarStyle.borderRadius` — clips blur + tint to the floating pill. */
 const TAB_BAR_RADIUS = 18
-/** Horizontal inset from screen edge; tab bar width = window width − 2×inset (narrower pill). */
-const TAB_BAR_SIDE_INSET_MIN = 48
-const TAB_BAR_SIDE_INSET_MAX = 80
-const TAB_BAR_SIDE_INSET_RATIO = 0.125
+/**
+ * Horizontal inset from screen edge (floating pill). Match Home scroll `paddingHorizontal: 16`.
+ * RN Navigation v7 tab bar uses `start`/`end: 0` on the outer bar; `left`/`right` do not override that,
+ * so we set `start` + `end` to these insets.
+ */
+const TAB_BAR_SIDE_INSET_MIN = 16
+const TAB_BAR_SIDE_INSET_MAX = 28
+const TAB_BAR_SIDE_INSET_RATIO = 0.045
 
 /**
- * Frosted charcoal glass behind the tab bar: native blur + grey/black wash (no green).
+ * Frosted “liquid glass” tab bar: native blur + stacked grey translucency (iOS-style material).
+ * Blur smears content behind; each layer tints without killing legibility of icons.
  */
 function FrostedTabBarBackground() {
-  /** Slightly stronger blur so content behind reads softer (platform caps differ). */
-  const blurIntensity = Platform.OS === 'ios' ? 92 : Platform.OS === 'android' ? 58 : 78
+  const blurIntensity = Platform.OS === 'ios' ? 100 : Platform.OS === 'android' ? 72 : 88
+  const shell = [StyleSheet.absoluteFill, { borderRadius: TAB_BAR_RADIUS, overflow: 'hidden' }]
   return (
-    <View
-      pointerEvents="none"
-      style={[StyleSheet.absoluteFill, { borderRadius: TAB_BAR_RADIUS, overflow: 'hidden' }]}
-    >
-      <BlurView
-        intensity={blurIntensity}
-        tint="dark"
-        style={StyleSheet.absoluteFill}
+    <View pointerEvents="none" style={shell}>
+      <BlurView intensity={blurIntensity} tint="dark" style={StyleSheet.absoluteFill} />
+      {/* Base sheet — neutral charcoal over blur */}
+      <View
+        pointerEvents="none"
+        style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(20, 20, 22, 0.48)' }]}
       />
+      {/* Vertical depth: lighter cap → mid grey → deeper base (read as thick glass) */}
       <LinearGradient
         pointerEvents="none"
-        colors={['rgba(24, 24, 26, 0.62)', 'rgba(12, 12, 14, 0.7)', 'rgba(4, 4, 6, 0.66)']}
-        locations={[0, 0.52, 1]}
-        start={{ x: 0.15, y: 0 }}
-        end={{ x: 0.85, y: 1 }}
+        colors={[
+          'rgba(56, 56, 60, 0.42)',
+          'rgba(34, 34, 38, 0.5)',
+          'rgba(18, 18, 22, 0.58)',
+          'rgba(10, 10, 12, 0.62)',
+        ]}
+        locations={[0, 0.35, 0.72, 1]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {/* Horizontal vignette — edges slightly darker than centre */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(0, 0, 0, 0.18)', 'transparent', 'rgba(0, 0, 0, 0.18)']}
+        locations={[0, 0.5, 1]}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {/* Top rim highlight — frosted edge catch-light */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(255, 255, 255, 0.16)', 'rgba(255, 255, 255, 0.05)', 'transparent']}
+        locations={[0, 0.18, 0.45]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {/* Bottom weight — subtle grounding shadow inside the pill */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={['transparent', 'rgba(0, 0, 0, 0.22)']}
+        locations={[0.55, 1]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
       <View
@@ -79,7 +115,7 @@ function FrostedTabBarBackground() {
           {
             borderRadius: TAB_BAR_RADIUS,
             borderWidth: StyleSheet.hairlineWidth,
-            borderColor: 'rgba(255, 255, 255, 0.1)',
+            borderColor: 'rgba(255, 255, 255, 0.14)',
           },
         ]}
       />
@@ -413,14 +449,20 @@ function Tabs({
             fontSize: 11,
             marginBottom: 2,
           },
+          tabBarContentContainerStyle: {
+            paddingHorizontal: 4,
+            columnGap: 0,
+          },
           tabBarItemStyle: {
             paddingVertical: 4,
+            paddingHorizontal: 2,
           },
           tabBarBackground: () => <FrostedTabBarBackground />,
           tabBarStyle: {
             position: 'absolute',
-            left: tabBarSideInset,
-            right: tabBarSideInset,
+            /** `start`/`end` override the library’s full-width `styles.bottom` (not `left`/`right`). */
+            start: tabBarSideInset,
+            end: tabBarSideInset,
             bottom: 8,
             height: 64,
             borderRadius: TAB_BAR_RADIUS,

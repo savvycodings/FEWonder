@@ -1,6 +1,7 @@
-import { memo, useEffect, useRef, useState } from 'react'
-import { Animated, Easing, Image, StyleSheet, View } from 'react-native'
-import Svg, { Path, SvgXml } from 'react-native-svg'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { Animated, Easing, StyleSheet, View } from 'react-native'
+import Svg, { Path, SvgUri, SvgXml } from 'react-native-svg'
+import { ensureGiftboxSvgXml, giftboxSvgAssetUri, peekGiftboxSvgXml } from '../giftboxSvgAsset'
 
 /** Static angle data for the rotating ray burst (Daily Rewards gift guide). */
 export const GIFT_BOX_PREVIEW_RAY_ANGLES = Array.from({ length: 18 }, (_, i) => i * 20)
@@ -21,7 +22,7 @@ function giftRayWedgePath(cx: number, cy: number, rInner: number, rOuter: number
   return `M ${x0} ${y0} L ${x1} ${y1} L ${x2} ${y2} L ${x3} ${y3} Z`
 }
 
-/** Sunburst / rays behind the gift box (`GiftBoxPrizeRays` from Daily Rewards gift guide). */
+/** Sunburst / rays behind the gift box (`GiftBoxPrizeRays` from Daily Rewards gift animation guide). */
 export const GiftBoxPrizeRays = memo(function GiftBoxPrizeRays({ size }: { size: number }) {
   const cx = size / 2
   const cy = size / 2
@@ -42,26 +43,6 @@ export const GiftBoxPrizeRays = memo(function GiftBoxPrizeRays({ size }: { size:
   )
 })
 
-let giftBoxSvgXmlCache: string | null = null
-let giftBoxSvgXmlInflight: Promise<string> | null = null
-
-async function loadGiftBoxSvgXml(): Promise<string> {
-  if (giftBoxSvgXmlCache) return giftBoxSvgXmlCache
-  if (!giftBoxSvgXmlInflight) {
-    giftBoxSvgXmlInflight = (async () => {
-      const resolved = Image.resolveAssetSource(require('../../assets/giftbox.svg'))
-      const uri = resolved?.uri
-      if (!uri) throw new Error('giftbox.svg has no uri')
-      const res = await fetch(uri)
-      if (!res.ok) throw new Error(`giftbox fetch ${res.status}`)
-      const xml = await res.text()
-      giftBoxSvgXmlCache = xml
-      return xml
-    })()
-  }
-  return giftBoxSvgXmlInflight
-}
-
 export type GiftboxAnimationPreviewProps = {
   /** Pixel width/height of the gift art (square slot). */
   size: number
@@ -75,19 +56,23 @@ export type GiftboxAnimationPreviewProps = {
 /**
  * Mystery gift “ready” animation: floating + tilt on the box layer, rotating rays behind.
  * Implements the structure described in the Daily Rewards gift animation guide.
+ *
+ * Note: `useNativeDriver: false` on transforms wrapping `SvgXml` — native-driver animation
+ * often leaves the SVG blank on Android inside `Animated.View`.
  */
 export const GiftboxAnimationPreview = memo(function GiftboxAnimationPreview({
   size,
   active = true,
 }: GiftboxAnimationPreviewProps) {
-  const [giftBoxSvgXml, setGiftBoxSvgXml] = useState<string | null>(() => giftBoxSvgXmlCache)
+  const giftUri = useMemo(() => giftboxSvgAssetUri(), [])
+  const [giftBoxSvgXml, setGiftBoxSvgXml] = useState<string | null>(() => peekGiftboxSvgXml())
   const giftBoxPreviewPhase = useRef(new Animated.Value(0)).current
   const giftBoxGlowRotateAnim = useRef(new Animated.Value(0)).current
 
   useEffect(() => {
     if (giftBoxSvgXml) return
     let cancelled = false
-    void loadGiftBoxSvgXml()
+    void ensureGiftboxSvgXml()
       .then((xml) => {
         if (!cancelled) setGiftBoxSvgXml(xml)
       })
@@ -113,13 +98,13 @@ export const GiftboxAnimationPreview = memo(function GiftboxAnimationPreview({
           toValue: 1,
           duration: 2200,
           easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(giftBoxPreviewPhase, {
           toValue: 0,
           duration: 2200,
           easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ])
     )
@@ -128,7 +113,7 @@ export const GiftboxAnimationPreview = memo(function GiftboxAnimationPreview({
         toValue: 1,
         duration: 14000,
         easing: Easing.linear,
-        useNativeDriver: true,
+        useNativeDriver: false,
       })
     )
     motionLoop.start()
@@ -155,6 +140,15 @@ export const GiftboxAnimationPreview = memo(function GiftboxAnimationPreview({
   })
 
   const raySize = Math.round(size * 1.28)
+
+  const giftArt =
+    giftBoxSvgXml != null && giftBoxSvgXml.length > 0 ? (
+      <SvgXml xml={giftBoxSvgXml} width={size} height={size} preserveAspectRatio="xMidYMid meet" />
+    ) : giftUri ? (
+      <SvgUri uri={giftUri} width={size} height={size} preserveAspectRatio="xMidYMid meet" />
+    ) : (
+      <View style={{ width: size, height: size }} />
+    )
 
   return (
     <View style={[styles.slot, { width: size, height: size }]}>
@@ -183,11 +177,7 @@ export const GiftboxAnimationPreview = memo(function GiftboxAnimationPreview({
           },
         ]}
       >
-        {giftBoxSvgXml ? (
-          <SvgXml xml={giftBoxSvgXml} width={size} height={size} preserveAspectRatio="xMidYMid meet" />
-        ) : (
-          <View style={{ width: size, height: size }} />
-        )}
+        {giftArt}
       </Animated.View>
     </View>
   )

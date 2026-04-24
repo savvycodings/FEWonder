@@ -15,10 +15,11 @@ import {
   View,
 } from 'react-native'
 import { useIsFocused } from '@react-navigation/native'
-import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, Rect, Stop, SvgXml } from 'react-native-svg'
+import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, Rect, Stop, SvgUri, SvgXml } from 'react-native-svg'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { User, WonderJumpLeaderboardEntry } from '../../types'
 import { DailyRewardsMysteryGiftVisual } from '../components/DailyRewardsMysteryGiftVisual'
+import { ensureGiftboxSvgXml, giftboxSvgAssetUri, peekGiftboxSvgXml } from '../giftboxSvgAsset'
 import { WonderSpinningCoin } from '../components/WonderCoin'
 import {
   claimWonderJumpChest,
@@ -396,6 +397,14 @@ const CLASSIC_GAME_FONT_BOLD = Platform.select({
 
 /** WonderJump modals — same face as home (`App.tsx` `useFonts`). */
 const WONDER_JUMP_UI_BOLD = 'Montserrat_700Bold' as const
+
+/** Match Home / Daily / Chat / Settings: black cards + lime accent. */
+const APP_UI_ACCENT = '#CBFF00'
+const APP_UI_ACCENT_SOFT = 'rgba(203, 255, 0, 0.4)'
+const APP_UI_SURFACE = '#0a0a0a'
+const APP_UI_TEXT = '#ffffff'
+const APP_UI_TEXT_MUTED = 'rgba(255, 255, 255, 0.72)'
+const APP_UI_TEXT_DIM = 'rgba(255, 255, 255, 0.58)'
 
 /** Game-over line: biome you died in (readable on dark panel). */
 const GAME_OVER_DEAD_BIOME_TEXT: Record<WonderJumpStartBiome, string> = {
@@ -2086,27 +2095,7 @@ const JumpPlatformRow = memo(function JumpPlatformRow({
   )
 })
 
-/** Same asset + fetch pattern as Daily Rewards’ gift (SvgXml); cached so hub + pickups share one load. */
-let wonderJumpGiftboxSvgXmlCache: string | null = null
-let wonderJumpGiftboxSvgXmlInflight: Promise<string> | null = null
-
-async function loadWonderJumpGiftboxSvgXml(): Promise<string> {
-  if (wonderJumpGiftboxSvgXmlCache) return wonderJumpGiftboxSvgXmlCache
-  if (!wonderJumpGiftboxSvgXmlInflight) {
-    wonderJumpGiftboxSvgXmlInflight = (async () => {
-      const resolved = Image.resolveAssetSource(require('../../assets/giftbox.svg'))
-      const uri = resolved?.uri
-      if (!uri) throw new Error('giftbox.svg has no uri')
-      const res = await fetch(uri)
-      if (!res.ok) throw new Error(`giftbox fetch ${res.status}`)
-      const xml = await res.text()
-      wonderJumpGiftboxSvgXmlCache = xml
-      return xml
-    })()
-  }
-  return wonderJumpGiftboxSvgXmlInflight
-}
-
+/** Gift art uses shared `giftboxSvgAsset` (same cache as `GiftboxAnimationPreview` / tropical dock). */
 const WonderJumpGiftboxFromAsset = memo(function WonderJumpGiftboxFromAsset({
   width,
   height,
@@ -2114,11 +2103,12 @@ const WonderJumpGiftboxFromAsset = memo(function WonderJumpGiftboxFromAsset({
   width: number
   height: number
 }) {
-  const [xml, setXml] = useState<string | null>(() => wonderJumpGiftboxSvgXmlCache)
+  const uri = useMemo(() => giftboxSvgAssetUri(), [])
+  const [xml, setXml] = useState<string | null>(() => peekGiftboxSvgXml())
   useEffect(() => {
     if (xml) return
     let cancelled = false
-    void loadWonderJumpGiftboxSvgXml()
+    void ensureGiftboxSvgXml()
       .then((s) => {
         if (!cancelled) setXml(s)
       })
@@ -2129,10 +2119,13 @@ const WonderJumpGiftboxFromAsset = memo(function WonderJumpGiftboxFromAsset({
       cancelled = true
     }
   }, [xml])
-  if (!xml) {
-    return <View style={{ width, height }} pointerEvents="none" />
+  if (xml) {
+    return <SvgXml xml={xml} width={width} height={height} pointerEvents="none" preserveAspectRatio="xMidYMid meet" />
   }
-  return <SvgXml xml={xml} width={width} height={height} pointerEvents="none" preserveAspectRatio="xMidYMid meet" />
+  if (uri) {
+    return <SvgUri uri={uri} width={width} height={height} pointerEvents="none" preserveAspectRatio="xMidYMid meet" />
+  }
+  return <View style={{ width, height }} pointerEvents="none" />
 })
 
 /** Gift art in-world / modal (square slot). */
@@ -2589,7 +2582,7 @@ export function WonderJump({
   }, [sessionToken])
 
   useEffect(() => {
-    void loadWonderJumpGiftboxSvgXml().catch(() => {})
+    void ensureGiftboxSvgXml().catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -3409,12 +3402,12 @@ export function WonderJump({
         : gameState.startBiome
   const panelAccent = BIOME_UI_ACCENTS[activePanelBiome]
   const primaryButtonTone = {
-    backgroundColor: panelAccent.accent,
-    borderColor: panelAccent.accent,
+    backgroundColor: APP_UI_ACCENT,
+    borderColor: APP_UI_ACCENT,
   }
   const panelAccentGlow = {
-    borderColor: panelAccent.accentSoft,
-    shadowColor: panelAccent.accent,
+    borderColor: APP_UI_ACCENT_SOFT,
+    shadowColor: APP_UI_ACCENT,
   }
   const panelBiomeLabel = panelAccent.label
   const isHubPanel = gameState.mode === 'menu' || gameState.mode === 'gameOver'
@@ -4234,8 +4227,8 @@ export function WonderJump({
               <>
                 <Text style={styles.wjChestModalTitle}>You earned {WONDER_JUMP_CHEST_REWARD_COINS} Wonder coins</Text>
                 <View style={styles.wjChestModalCoinsRow}>
-                  <WonderSpinningCoin size={56} fallbackColor={panelAccent.accent} />
-                  <WonderSpinningCoin size={56} fallbackColor={panelAccent.accent} />
+                  <WonderSpinningCoin size={56} fallbackColor={APP_UI_ACCENT} />
+                  <WonderSpinningCoin size={56} fallbackColor={APP_UI_ACCENT} />
                 </View>
                 <Text style={styles.wjChestModalSub}>They are already in your wallet.</Text>
                 <Pressable onPress={closeHubChestRevealModal} style={[styles.wjChestModalButton, primaryButtonTone]}>
@@ -4244,7 +4237,7 @@ export function WonderJump({
               </>
             ) : hubChestRevealPhase === 'claiming' ? (
               <View style={styles.wjChestModalClaiming}>
-                <ActivityIndicator size="large" color={panelAccent.accent} />
+                <ActivityIndicator size="large" color={APP_UI_ACCENT} />
                 <Text style={styles.wjChestModalClaimingText}>Adding coins…</Text>
               </View>
             ) : (
@@ -4517,15 +4510,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     top: 12,
-    backgroundColor: 'rgba(19, 41, 84, 0.62)',
+    backgroundColor: 'rgba(0, 0, 0, 0.88)',
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: APP_UI_ACCENT_SOFT,
     paddingHorizontal: 10,
     paddingVertical: 8,
     gap: 2,
     maxWidth: '72%',
   },
   hudScoreLabel: {
-    color: 'rgba(255, 255, 255, 0.72)',
+    color: APP_UI_TEXT_MUTED,
     fontSize: 10,
     fontFamily: CLASSIC_GAME_FONT_BOLD,
     letterSpacing: 1.1,
@@ -4533,14 +4528,14 @@ const styles = StyleSheet.create({
     lineHeight: 12,
   },
   hudScoreValue: {
-    color: '#ffffff',
+    color: APP_UI_ACCENT,
     fontSize: 22,
     fontFamily: CLASSIC_GAME_FONT_BOLD,
     letterSpacing: 0.15,
     lineHeight: 24,
   },
   hudBiomeHint: {
-    color: '#b8e8d4',
+    color: APP_UI_TEXT_DIM,
     fontSize: 11,
     fontFamily: CLASSIC_GAME_FONT,
     letterSpacing: 0.45,
@@ -4571,20 +4566,20 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 26,
     right: 26,
-    backgroundColor: 'rgba(16, 27, 60, 0.9)',
+    backgroundColor: APP_UI_SURFACE,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(210, 235, 255, 0.5)',
+    borderColor: APP_UI_ACCENT_SOFT,
     paddingVertical: 18,
     paddingHorizontal: 16,
     alignItems: 'center',
     gap: 10,
   },
   panelDarkGlass: {
-    backgroundColor: 'rgba(7, 10, 18, 0.88)',
-    borderColor: 'rgba(164, 188, 220, 0.22)',
-    shadowOpacity: 0.45,
-    shadowRadius: 14,
+    backgroundColor: 'rgba(0, 0, 0, 0.94)',
+    borderColor: APP_UI_ACCENT_SOFT,
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
   },
   gameOverPanelDock: {
@@ -4609,7 +4604,7 @@ const styles = StyleSheet.create({
   gameOverTitle: {
     width: '100%',
     textAlign: 'center',
-    color: '#f6fbff',
+    color: APP_UI_TEXT,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 24,
     letterSpacing: 0.2,
@@ -4650,7 +4645,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   gameOverDeathBlurb: {
-    color: '#b8cce4',
+    color: APP_UI_TEXT_MUTED,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 13,
     lineHeight: 18,
@@ -4672,20 +4667,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 14,
-    backgroundColor: 'rgba(18, 32, 58, 0.72)',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(150, 190, 235, 0.28)',
+    borderColor: APP_UI_ACCENT_SOFT,
     alignItems: 'center',
   },
   gameOverHeroLabel: {
-    color: '#e8f2fc',
+    color: APP_UI_TEXT_MUTED,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 15,
     letterSpacing: 0.35,
     marginBottom: 4,
   },
   gameOverHeroValue: {
-    color: '#ffffff',
+    color: APP_UI_ACCENT,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 52,
     letterSpacing: -1,
@@ -4707,7 +4702,7 @@ const styles = StyleSheet.create({
   gameOverSubLabel: {
     flex: 1,
     flexShrink: 1,
-    color: '#d5e6f7',
+    color: APP_UI_TEXT_MUTED,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 15,
     letterSpacing: 0.15,
@@ -4715,7 +4710,7 @@ const styles = StyleSheet.create({
   },
   gameOverSubValue: {
     minWidth: 52,
-    color: '#ffffff',
+    color: APP_UI_TEXT,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 15,
     letterSpacing: 0.15,
@@ -4725,7 +4720,7 @@ const styles = StyleSheet.create({
   },
   gameOverNewBest: {
     marginTop: 6,
-    color: '#ffd769',
+    color: APP_UI_ACCENT,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 15,
     letterSpacing: 0.25,
@@ -4746,14 +4741,14 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(140, 170, 210, 0.22)',
+    borderTopColor: 'rgba(203, 255, 0, 0.22)',
   },
   wjChestHubCard: {
     width: '100%',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(120, 200, 190, 0.22)',
-    backgroundColor: 'rgba(12, 28, 42, 0.72)',
+    borderColor: APP_UI_ACCENT_SOFT,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     paddingTop: 8,
     paddingBottom: 9,
     paddingHorizontal: 11,
@@ -4775,26 +4770,26 @@ const styles = StyleSheet.create({
     minHeight: 90,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(160, 210, 230, 0.28)',
-    backgroundColor: 'rgba(8, 22, 38, 0.65)',
+    borderColor: 'rgba(203, 255, 0, 0.28)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 4,
     overflow: 'visible',
   },
   wjChestDockTileReady: {
-    borderColor: 'rgba(255, 210, 120, 0.9)',
-    backgroundColor: 'rgba(22, 40, 72, 0.75)',
-    shadowColor: '#ffb84d',
+    borderColor: APP_UI_ACCENT,
+    backgroundColor: 'rgba(203, 255, 0, 0.12)',
+    shadowColor: APP_UI_ACCENT,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
+    shadowOpacity: 0.35,
     shadowRadius: 14,
     elevation: 8,
   },
-  /** Empty dock: “open slot” plate + spark (signed out or no gift stashed). */
+  /** Empty dock: “open slot” — same black + lime shell as the rest of the app. */
   wjChestDockTileEmptySlot: {
-    borderColor: 'rgba(42, 168, 155, 0.42)',
-    backgroundColor: 'rgba(3, 14, 26, 0.94)',
+    borderColor: APP_UI_ACCENT_SOFT,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
   },
   wjDockEmptyComposer: {
     width: '100%',
@@ -4808,8 +4803,8 @@ const styles = StyleSheet.create({
     height: 68,
     borderRadius: 34,
     borderWidth: 2,
-    borderColor: 'rgba(55, 190, 175, 0.38)',
-    backgroundColor: 'rgba(29, 127, 117, 0.08)',
+    borderColor: 'rgba(203, 255, 0, 0.28)',
+    backgroundColor: 'rgba(203, 255, 0, 0.06)',
   },
   wjDockEmptyPad: {
     width: 44,
@@ -4817,19 +4812,19 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(185, 238, 228, 0.32)',
+    borderColor: APP_UI_ACCENT_SOFT,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,
-    shadowColor: '#1d7f75',
+    shadowColor: APP_UI_ACCENT,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 2,
   },
   wjDockEmptyGlyph: {
     fontSize: 19,
-    color: 'rgba(130, 228, 210, 0.55)',
+    color: 'rgba(203, 255, 0, 0.65)',
     fontFamily: WONDER_JUMP_UI_BOLD,
     marginTop: -1,
   },
@@ -4999,14 +4994,14 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   wjChestHubTitle: {
-    color: '#f6fbff',
+    color: APP_UI_TEXT,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 14,
     letterSpacing: 0.12,
     marginBottom: 2,
   },
   wjChestHubMeta: {
-    color: 'rgba(190, 214, 236, 0.95)',
+    color: APP_UI_TEXT_DIM,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 11,
     letterSpacing: 0.08,
@@ -5020,7 +5015,7 @@ const styles = StyleSheet.create({
   },
   wjChestModalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(6, 10, 20, 0.62)',
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 22,
@@ -5030,8 +5025,8 @@ const styles = StyleSheet.create({
     maxWidth: 300,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(200, 230, 255, 0.32)',
-    backgroundColor: 'rgba(12, 20, 44, 0.97)',
+    borderColor: APP_UI_ACCENT_SOFT,
+    backgroundColor: APP_UI_SURFACE,
     paddingVertical: 22,
     paddingHorizontal: 18,
     alignItems: 'center',
@@ -5050,20 +5045,20 @@ const styles = StyleSheet.create({
     paddingVertical: 28,
   },
   wjChestModalClaimingText: {
-    color: '#c8daf4',
+    color: APP_UI_TEXT_MUTED,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 14,
     letterSpacing: 0.2,
   },
   wjChestModalTitle: {
-    color: '#f6fbff',
+    color: APP_UI_TEXT,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 18,
     letterSpacing: 0.2,
     textAlign: 'center',
   },
   wjChestModalBody: {
-    color: '#bcd6ef',
+    color: APP_UI_TEXT_MUTED,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 13,
     letterSpacing: 0.15,
@@ -5071,7 +5066,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   wjChestModalSub: {
-    color: 'rgba(188, 214, 239, 0.9)',
+    color: APP_UI_TEXT_DIM,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 12,
     letterSpacing: 0.12,
@@ -5096,20 +5091,20 @@ const styles = StyleSheet.create({
     minWidth: 140,
   },
   wjChestModalButtonText: {
-    color: '#ffffff',
+    color: '#000000',
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 14,
     letterSpacing: 0.28,
   },
   gameOverBiomeChipText: {
-    color: '#dfebf7',
+    color: APP_UI_TEXT_MUTED,
     fontSize: 11,
     fontFamily: WONDER_JUMP_UI_BOLD,
     textAlign: 'center',
     letterSpacing: 0.2,
   },
   gameOverBiomeChipTextActive: {
-    color: '#ffffff',
+    color: APP_UI_TEXT,
     fontFamily: WONDER_JUMP_UI_BOLD,
   },
   gameOverFooterActions: {
@@ -5120,36 +5115,36 @@ const styles = StyleSheet.create({
   },
   gameOverFooterButton: {
     flex: 1,
-    backgroundColor: 'rgba(38, 53, 92, 0.62)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(200, 230, 255, 0.25)',
+    borderColor: APP_UI_ACCENT_SOFT,
     paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   gameOverFooterButtonText: {
-    color: '#f0f6fc',
+    color: APP_UI_TEXT,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 12,
     letterSpacing: 0.2,
     textAlign: 'center',
   },
   panelTitle: {
-    color: '#f6fbff',
+    color: APP_UI_TEXT,
     fontFamily: CLASSIC_GAME_FONT_BOLD,
     fontSize: 25,
     letterSpacing: 0.6,
   },
   panelBiome: {
-    color: '#bcd6ef',
+    color: APP_UI_ACCENT,
     fontFamily: CLASSIC_GAME_FONT_BOLD,
     fontSize: 12,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
   panelSubtitleSmall: {
-    color: '#9ec5e7',
+    color: APP_UI_TEXT_DIM,
     fontSize: 12,
     fontFamily: CLASSIC_GAME_FONT_BOLD,
     marginBottom: -4,
@@ -5168,8 +5163,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(200, 230, 255, 0.2)',
-    backgroundColor: 'rgba(25, 38, 72, 0.45)',
+    borderColor: 'rgba(203, 255, 0, 0.2)',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
     alignItems: 'center',
   },
   panelBiomeChipGrass: {
@@ -5182,19 +5177,19 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(29, 127, 117, 0.42)',
   },
   panelBiomeChipGrassActive: {
-    borderColor: '#2d6a3a',
-    backgroundColor: 'rgba(45, 106, 58, 0.3)',
+    borderColor: APP_UI_ACCENT,
+    backgroundColor: 'rgba(45, 106, 58, 0.22)',
   },
   panelBiomeChipMushroomActive: {
-    borderColor: '#6b3d55',
-    backgroundColor: 'rgba(107, 61, 85, 0.3)',
+    borderColor: APP_UI_ACCENT,
+    backgroundColor: 'rgba(107, 61, 85, 0.22)',
   },
   panelBiomeChipTropicalActive: {
-    borderColor: '#1d7f75',
-    backgroundColor: 'rgba(29, 127, 117, 0.3)',
+    borderColor: APP_UI_ACCENT,
+    backgroundColor: 'rgba(29, 127, 117, 0.22)',
   },
   panelBiomeChipText: {
-    color: '#dfebf7',
+    color: APP_UI_TEXT_MUTED,
     fontSize: 12,
     fontFamily: CLASSIC_GAME_FONT_BOLD,
     textAlign: 'center',
@@ -5205,7 +5200,7 @@ const styles = StyleSheet.create({
     fontFamily: CLASSIC_GAME_FONT_BOLD,
   },
   panelSubtitle: {
-    color: '#d5e3f1',
+    color: APP_UI_TEXT_MUTED,
     fontSize: 14,
     fontFamily: CLASSIC_GAME_FONT,
     textAlign: 'center',
@@ -5224,51 +5219,51 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(200, 230, 255, 0.35)',
-    backgroundColor: 'rgba(40, 60, 110, 0.45)',
+    borderColor: 'rgba(203, 255, 0, 0.28)',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
     alignItems: 'center',
   },
   settingsOptionChipActive: {
-    borderColor: '#7ff0e7',
-    backgroundColor: 'rgba(79, 209, 199, 0.28)',
+    borderColor: APP_UI_ACCENT,
+    backgroundColor: 'rgba(203, 255, 0, 0.14)',
   },
   settingsOptionText: {
-    color: '#d4e4f7',
+    color: APP_UI_TEXT_MUTED,
     fontSize: 12,
     fontFamily: CLASSIC_GAME_FONT_BOLD,
     textAlign: 'center',
     letterSpacing: 0.25,
   },
   settingsOptionTextActive: {
-    color: '#ffffff',
+    color: APP_UI_TEXT,
     fontFamily: CLASSIC_GAME_FONT_BOLD,
   },
   primaryButton: {
     width: '100%',
-    backgroundColor: '#4fd1c7',
+    backgroundColor: APP_UI_ACCENT,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#7ff0e7',
+    borderColor: APP_UI_ACCENT,
     paddingVertical: 11,
     alignItems: 'center',
   },
   primaryButtonText: {
-    color: '#ffffff',
+    color: '#000000',
     fontFamily: CLASSIC_GAME_FONT_BOLD,
     fontSize: 13,
     letterSpacing: 0.35,
   },
   secondaryButton: {
     width: '100%',
-    backgroundColor: 'rgba(38, 53, 92, 0.62)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(171, 197, 225, 0.34)',
+    borderColor: APP_UI_ACCENT_SOFT,
     paddingVertical: 11,
     alignItems: 'center',
   },
   secondaryButtonText: {
-    color: '#e7f1fb',
+    color: APP_UI_TEXT,
     fontFamily: CLASSIC_GAME_FONT_BOLD,
     fontSize: 13,
     letterSpacing: 0.35,
