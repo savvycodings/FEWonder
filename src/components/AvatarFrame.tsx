@@ -9,7 +9,14 @@ import {
   View,
   ViewStyle,
 } from 'react-native'
-import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg'
+import Svg, {
+  Circle,
+  Defs,
+  LinearGradient,
+  Path,
+  RadialGradient,
+  Stop,
+} from 'react-native-svg'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useContext } from 'react'
 import { ThemeContext } from '../context'
@@ -17,17 +24,35 @@ import { ThemeContext } from '../context'
 const STORAGE_KEY = 'wonderport-avatar-frame-id'
 
 /** Supported avatar border styles (all vector-based for scalable rendering). */
-export type BorderFrameId = 'neon' | 'gold' | 'rainbow' | 'prism'
+export type BorderFrameId =
+  | 'neon'
+  | 'gold'
+  | 'rainbow'
+  | 'prism'
+  | 'meridian'
+  | 'hex'
+  | 'shard'
 
 export type AvatarFrameId = 'none' | BorderFrameId
 
-const BORDER_FRAME_IDS: BorderFrameId[] = ['neon', 'gold', 'rainbow', 'prism']
+const BORDER_FRAME_IDS: BorderFrameId[] = [
+  'neon',
+  'gold',
+  'rainbow',
+  'prism',
+  'meridian',
+  'hex',
+  'shard',
+]
 
 export const AVATAR_FRAME_SHOP: { id: BorderFrameId; name: string; tagline: string }[] = [
   { id: 'neon', name: 'Neon glow', tagline: 'Cyan to violet glass ring' },
   { id: 'gold', name: 'Gold band', tagline: 'Polished gold halo' },
   { id: 'rainbow', name: 'Rainbow pop', tagline: 'Full spectrum ring' },
   { id: 'prism', name: 'Crimson split', tagline: 'Red-black ring with racing stripe' },
+  { id: 'meridian', name: 'Meridian flare', tagline: 'Sunset ring with a wide violet band' },
+  { id: 'hex', name: 'Hex forge', tagline: 'Faceted metal halo' },
+  { id: 'shard', name: 'Crystal crown', tagline: 'Five glass peaks' },
 ]
 
 /** Old shop / tab ids that are not avatar frames (never map to `gold` frame). */
@@ -36,6 +61,8 @@ const LEGACY_REMOVED = new Set(['ticket', 'field', 'ice', 'fire'])
 /** Old keys that are not valid anymore (e.g. removed vine asset). */
 const LEGACY_TO_FRAME: Record<string, BorderFrameId | 'none'> = {
   floral: 'none',
+  aurora: 'none',
+  void: 'none',
 }
 
 function isBorderFrameId(value: string): value is BorderFrameId {
@@ -113,6 +140,9 @@ const FRAME_HOLE_ASSET_FRAC: Record<BorderFrameId, number> = {
   gold: 0.7277,
   rainbow: 0.7277,
   prism: 0.7277,
+  meridian: 0.7277,
+  hex: 0.7277,
+  shard: 0.7277,
 }
 
 const NEON_HOLE_ASSET_FRAC = FRAME_HOLE_ASSET_FRAC.neon
@@ -330,6 +360,235 @@ function PrismVectorFrame({ side, photoDiameter }: { side: number; photoDiameter
   )
 }
 
+function MeridianVectorFrame({ side, photoDiameter }: { side: number; photoDiameter: number }) {
+  const uid = useId().replace(/[:]/g, '')
+  const gradId = `meridianGrad_${uid}`
+  const c = side / 2
+  const stroke = Math.max(3.7, side * 0.078)
+  const r = Math.max(2, Math.min(c - stroke / 2 - 0.5, photoDiameter / 2 + stroke / 2 - 0.6))
+  const glowStroke = stroke * 1.56
+
+  return (
+    <Svg width={side} height={side} viewBox={`0 0 ${side} ${side}`}>
+      <Defs>
+        <LinearGradient id={gradId} x1="0%" y1="50%" x2="100%" y2="50%">
+          <Stop offset="0%" stopColor="#FF8A3D" />
+          <Stop offset="20%" stopColor="#FF4A9A" />
+          <Stop offset="42%" stopColor="#D946EF" />
+          <Stop offset="68%" stopColor="#8B5CF6" />
+          <Stop offset="88%" stopColor="#6D28D9" />
+          <Stop offset="100%" stopColor="#5B21B6" />
+        </LinearGradient>
+      </Defs>
+      <Circle cx={c} cy={c} r={r} fill="none" stroke="#6D28D9" strokeOpacity={0.26} strokeWidth={glowStroke * 1.12} />
+      <Circle cx={c} cy={c} r={r} fill="none" stroke="#A78BFA" strokeOpacity={0.32} strokeWidth={glowStroke} />
+      <Circle cx={c} cy={c} r={r} fill="none" stroke="#FF6A9A" strokeOpacity={0.18} strokeWidth={glowStroke * 0.72} />
+      <Circle cx={c} cy={c} r={r} fill="none" stroke={`url(#${gradId})`} strokeWidth={stroke} />
+    </Svg>
+  )
+}
+
+function HexVectorFrame({ side, photoDiameter }: { side: number; photoDiameter: number }) {
+  const uid = useId().replace(/[:]/g, '')
+  const gradId = `hexGrad_${uid}`
+  const shineId = `hexShine_${uid}`
+  const c = side / 2
+  const stroke = Math.max(4.1, side * 0.086)
+  const pr = photoDiameter / 2
+  // Hex circumscribed on the photo circle (flat sides tangent) + hairline clearance — minimizes vertex scallops.
+  const Rtan = pr / Math.cos(Math.PI / 6)
+  const R = Math.min(c - stroke * 0.32, Rtan + Math.max(0.25, stroke * 0.035))
+  let d = ''
+  for (let i = 0; i < 6; i += 1) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 3
+    const x = c + R * Math.cos(a)
+    const y = c + R * Math.sin(a)
+    d += i === 0 ? `M${x} ${y}` : `L${x} ${y}`
+  }
+  d += 'Z'
+  const glowStroke = stroke * 1.55
+  const scallopR = pr + stroke * 0.1
+
+  return (
+    <Svg width={side} height={side} viewBox={`0 0 ${side} ${side}`}>
+      <Defs>
+        <LinearGradient id={gradId} x1="12%" y1="0%" x2="88%" y2="100%">
+          <Stop offset="0%" stopColor="#C4D4E8" />
+          <Stop offset="40%" stopColor="#6B8AB8" />
+          <Stop offset="72%" stopColor="#2E4A6E" />
+          <Stop offset="100%" stopColor="#E8F0FF" />
+        </LinearGradient>
+        <LinearGradient id={shineId} x1="20%" y1="15%" x2="80%" y2="85%">
+          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={0.55} />
+          <Stop offset="50%" stopColor="#FFFFFF" stopOpacity={0.12} />
+          <Stop offset="100%" stopColor="#FFFFFF" stopOpacity={0.35} />
+        </LinearGradient>
+      </Defs>
+      <Circle
+        cx={c}
+        cy={c}
+        r={scallopR}
+        fill="none"
+        stroke="#5A7CA8"
+        strokeOpacity={0.38}
+        strokeWidth={stroke * 1.35}
+      />
+      <Circle
+        cx={c}
+        cy={c}
+        r={scallopR}
+        fill="none"
+        stroke="#8FA8C8"
+        strokeOpacity={0.22}
+        strokeWidth={stroke * 0.55}
+      />
+      <Path
+        d={d}
+        fill="none"
+        stroke="#4A6FA8"
+        strokeOpacity={0.35}
+        strokeWidth={glowStroke}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <Path
+        d={d}
+        fill="none"
+        stroke={`url(#${gradId})`}
+        strokeWidth={stroke}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <Path
+        d={d}
+        fill="none"
+        stroke={`url(#${shineId})`}
+        strokeWidth={Math.max(1, stroke * 0.22)}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </Svg>
+  )
+}
+
+function ShardVectorFrame({ side, photoDiameter }: { side: number; photoDiameter: number }) {
+  const uid = useId().replace(/[:]/g, '')
+  const gradId = `shardGrad_${uid}`
+  const c = side / 2
+  const stroke = Math.max(3.7, side * 0.078)
+  const r = Math.max(2, Math.min(c - stroke / 2 - 0.5, photoDiameter / 2 + stroke / 2 - 0.6))
+  const rTip = Math.min(c - 1.5, r + stroke * 1.28)
+  const rBase = Math.max(photoDiameter / 2 + stroke * 0.55, r - stroke * 0.38)
+  const dt = 0.11
+  const count = 5
+
+  const shards: string[] = []
+  for (let i = 0; i < count; i += 1) {
+    const t = -Math.PI / 2 + (i * 2 * Math.PI) / count
+    const tx = c + rTip * Math.cos(t)
+    const ty = c + rTip * Math.sin(t)
+    const lx = c + rBase * Math.cos(t - dt)
+    const ly = c + rBase * Math.sin(t - dt)
+    const rx = c + rBase * Math.cos(t + dt)
+    const ry = c + rBase * Math.sin(t + dt)
+    shards.push(`M${tx} ${ty}L${lx} ${ly}L${rx} ${ry}Z`)
+  }
+
+  return (
+    <Svg width={side} height={side} viewBox={`0 0 ${side} ${side}`}>
+      <Defs>
+        <LinearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <Stop offset="0%" stopColor="#E0F7FF" />
+          <Stop offset="35%" stopColor="#7DD3FC" />
+          <Stop offset="70%" stopColor="#38BDF8" />
+          <Stop offset="100%" stopColor="#C4B5FD" />
+        </LinearGradient>
+        <RadialGradient id={`shardGlow_${uid}`} cx="50%" cy="40%" rx="55%" ry="55%">
+          <Stop offset="0%" stopColor="#FFFFFF" stopOpacity={0.35} />
+          <Stop offset="100%" stopColor="#38BDF8" stopOpacity={0} />
+        </RadialGradient>
+      </Defs>
+      <Circle cx={c} cy={c} r={(rTip + rBase) / 2} fill={`url(#shardGlow_${uid})`} />
+      <Circle
+        cx={c}
+        cy={c}
+        r={photoDiameter / 2 + stroke * 0.14}
+        fill="none"
+        stroke="rgba(15, 23, 42, 0.55)"
+        strokeWidth={Math.max(2.8, stroke * 1.15)}
+      />
+      <Circle
+        cx={c}
+        cy={c}
+        r={photoDiameter / 2 + stroke * 0.14}
+        fill="none"
+        stroke="rgba(56, 189, 248, 0.35)"
+        strokeWidth={Math.max(2.2, stroke * 0.95)}
+      />
+      <Circle
+        cx={c}
+        cy={c}
+        r={photoDiameter / 2 + stroke * 0.14}
+        fill="none"
+        stroke="rgba(255, 255, 255, 0.72)"
+        strokeWidth={Math.max(1.4, stroke * 0.55)}
+      />
+      {shards.map((d, idx) => (
+        <Path
+          key={`s${idx}`}
+          d={d}
+          fill="none"
+          stroke="#0EA5E9"
+          strokeOpacity={0.4}
+          strokeWidth={stroke * 1.1}
+          strokeLinejoin="round"
+        />
+      ))}
+      {shards.map((d, idx) => (
+        <Path
+          key={`f${idx}`}
+          d={d}
+          fill={`url(#${gradId})`}
+          fillOpacity={0.92}
+          stroke="#FFFFFF"
+          strokeOpacity={0.45}
+          strokeWidth={Math.max(0.9, stroke * 0.16)}
+          strokeLinejoin="round"
+        />
+      ))}
+    </Svg>
+  )
+}
+
+function VectorFrameById({
+  frameId,
+  side,
+  photoDiameter,
+}: {
+  frameId: BorderFrameId
+  side: number
+  photoDiameter: number
+}) {
+  switch (frameId) {
+    case 'neon':
+      return <NeonVectorFrame side={side} photoDiameter={photoDiameter} />
+    case 'gold':
+      return <GoldVectorFrame side={side} photoDiameter={photoDiameter} />
+    case 'rainbow':
+      return <RainbowVectorFrame side={side} photoDiameter={photoDiameter} />
+    case 'prism':
+      return <PrismVectorFrame side={side} photoDiameter={photoDiameter} />
+    case 'meridian':
+      return <MeridianVectorFrame side={side} photoDiameter={photoDiameter} />
+    case 'hex':
+      return <HexVectorFrame side={side} photoDiameter={photoDiameter} />
+    case 'shard':
+      return <ShardVectorFrame side={side} photoDiameter={photoDiameter} />
+    default:
+      return null
+  }
+}
+
 function BorderFrameLayer({ size, frameId, fit = 'default', innerBackgroundColor, children }: BorderFrameLayerProps) {
   const base = fit === 'chat' ? 1 : frameImageBaseScale()
   const holeMatch = frameHoleMatchScale(frameId)
@@ -377,10 +636,7 @@ function BorderFrameLayer({ size, frameId, fit = 'default', innerBackgroundColor
           },
         ]}
       >
-        {frameId === 'neon' ? <NeonVectorFrame side={imgSide} photoDiameter={photoD} /> : null}
-        {frameId === 'gold' ? <GoldVectorFrame side={imgSide} photoDiameter={photoD} /> : null}
-        {frameId === 'rainbow' ? <RainbowVectorFrame side={imgSide} photoDiameter={photoD} /> : null}
-        {frameId === 'prism' ? <PrismVectorFrame side={imgSide} photoDiameter={photoD} /> : null}
+        <VectorFrameById frameId={frameId} side={imgSide} photoDiameter={photoD} />
       </View>
     </View>
   )
