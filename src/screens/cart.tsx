@@ -6,6 +6,10 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppContext, ThemeContext } from '../context'
 import { formatMoney, parseMoneyToNumber } from '../money'
 
+const SHIPPING_SINGLE_ZAR = 150
+const SHIPPING_WHOLE_SET_ZAR = 200
+const CART_CURRENCY = 'ZAR'
+
 const ACCENT = '#CBFF00'
 const ACCENT_TEXT = '#000000'
 const HEADING_FONT = 'Montserrat_700Bold' as const
@@ -20,12 +24,26 @@ export function Cart({ navigation }: any) {
   const { cartItems, updateCartItemQuantity, removeFromCart, clearCart } = useContext(AppContext)
   const iconColor = theme.textColor || '#ffffff'
 
-  const total = useMemo(() => {
+  const subtotal = useMemo(() => {
     return cartItems.reduce((sum, item) => {
       const price = parseMoneyToNumber(item.price)
       return sum + price * (item.quantity || 1)
     }, 0)
   }, [cartItems])
+
+  const shippingTotal = useMemo(() => {
+    return cartItems.reduce((sum, item) => {
+      const isWholeSet =
+        item?.selectedPackaging === 'set' || String(item?.title || '').includes('(Whole set)')
+      const rate = isWholeSet ? SHIPPING_WHOLE_SET_ZAR : SHIPPING_SINGLE_ZAR
+      return sum + rate * (item.quantity || 1)
+    }, 0)
+  }, [cartItems])
+
+  const orderTotal = subtotal + shippingTotal
+
+  const formatZar = (amount: number) =>
+    formatMoney({ amount: amount.toFixed(2), currencyCode: CART_CURRENCY }, CART_CURRENCY)
 
   const scrollBottomPad = 120 + insets.bottom
 
@@ -151,18 +169,18 @@ export function Cart({ navigation }: any) {
         <View style={styles.summaryCard}>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryValue}>${total.toFixed(2)}</Text>
+            <Text style={styles.summaryValue}>{formatZar(subtotal)}</Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Shipping</Text>
-            <Text style={styles.summaryValue}>$0.00</Text>
+            <Text style={styles.summaryValue}>{formatZar(shippingTotal)}</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
             <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
+            <Text style={styles.totalValue}>{formatZar(orderTotal)}</Text>
           </View>
-          <Pressable style={styles.checkoutButton} onPress={() => navigation.navigate('Profile')}>
+          <Pressable style={styles.checkoutButton} onPress={() => navigation.navigate('CartCheckout')}>
             <Text style={styles.checkoutText}>Checkout</Text>
           </Pressable>
         </View>

@@ -2,6 +2,7 @@ import { useCallback, useContext, useState } from 'react'
 import {
   View,
   Text,
+  Image,
   FlatList,
   StyleSheet,
   Pressable,
@@ -72,7 +73,20 @@ export function MyOrders({ navigation }: any) {
                 contentStyle={styles.cardInner}
               >
                 <View style={styles.rowTop}>
-                  <Text style={styles.ref}>{item.referenceCode}</Text>
+                  <View style={styles.rowTopLeft}>
+                    {item.previewImageUrl ? (
+                      <Image
+                        source={{ uri: item.previewImageUrl }}
+                        style={styles.orderThumbImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.orderThumbPlaceholder}>
+                        <FeatherIcon name="package" size={18} color={ACCENT} />
+                      </View>
+                    )}
+                    <Text style={styles.ref}>{item.referenceCode}</Text>
+                  </View>
                   <Text style={styles.total}>{formatTotal(item.totalCents, item.currencyCode)}</Text>
                 </View>
                 <View style={styles.metaRow}>
@@ -113,8 +127,27 @@ const getStyles = (theme: any) =>
     },
     cardOuter: { width: '100%', marginBottom: 12 },
     cardInner: { paddingVertical: 14, paddingHorizontal: 14 },
-    rowTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-    ref: { fontFamily: theme.boldFont, fontSize: 16, color: ACCENT },
+    rowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    rowTopLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, marginRight: 8 },
+    orderThumbImage: {
+      width: 40,
+      height: 40,
+      borderRadius: 10,
+      backgroundColor: 'rgba(255,255,255,0.06)',
+      borderWidth: 1,
+      borderColor: 'rgba(203,255,0,0.22)',
+    },
+    orderThumbPlaceholder: {
+      width: 40,
+      height: 40,
+      borderRadius: 10,
+      backgroundColor: 'rgba(255,255,255,0.06)',
+      borderWidth: 1,
+      borderColor: 'rgba(203,255,0,0.22)',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    ref: { fontFamily: theme.boldFont, fontSize: 16, color: ACCENT, flexShrink: 1 },
     total: { fontFamily: theme.boldFont, fontSize: 15, color: ACCENT },
     metaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
     meta: { fontFamily: theme.mediumFont, fontSize: 12, color: 'rgba(203,255,0,0.75)' },

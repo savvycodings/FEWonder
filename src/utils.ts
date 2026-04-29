@@ -944,18 +944,46 @@ export async function getDbCategoryBySlug(slug: string): Promise<DbCategoryWithP
   return data as DbCategoryWithProductsResponse
 }
 
+export type DbCategorySummary = {
+  shopifyId: string
+  handle: string
+  title: string
+  imageUrl: string | null
+  productCount: number
+}
+
+/** Catalogue collections from Postgres (for matching home chips to real category handles). */
+export async function listDbCategories(): Promise<DbCategorySummary[]> {
+  if (!DOMAIN) {
+    throw new Error('API domain is not configured. Set EXPO_PUBLIC_DEV_API_URL.')
+  }
+  const response = await fetch(`${DOMAIN}/categories`)
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to load categories')
+  }
+  return (data.categories || []) as DbCategorySummary[]
+}
+
 export async function listDbProducts(params?: {
   first?: number
   query?: string
+  /** `new` = newest `created_at`; omit/`updated` style = `updated_at` (fresh catalogue edits). */
+  sort?: 'new'
+  /** Collection `handle` from `collections` table — filters via `collection_products`. */
+  collection?: string
 }): Promise<ShopifyProduct[]> {
   if (!DOMAIN) {
     throw new Error('API domain is not configured. Set EXPO_PUBLIC_DEV_API_URL.')
   }
   const first = params?.first ?? 20
   const query = params?.query?.trim() ?? ''
+  const collection = params?.collection?.trim() ?? ''
   const url = new URL(`${DOMAIN}/products`)
   url.searchParams.set('first', String(first))
   if (query) url.searchParams.set('q', query)
+  if (params?.sort === 'new') url.searchParams.set('sort', 'new')
+  if (collection) url.searchParams.set('collection', collection)
 
   const response = await fetch(url.toString())
   const data = await response.json()

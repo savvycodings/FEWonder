@@ -25,7 +25,11 @@ import { KeyboardProvider } from 'react-native-keyboard-controller'
 
 LogBox.ignoreLogs([
   'Key "cancelled" in the image picker result is deprecated and will be removed in SDK 48, use "canceled" instead',
-  'No native splash screen registered'
+  'No native splash screen registered',
+  /** Hermes dev noise when Metro serves a stale bundle — harmless once reload clears cache */
+  "Property 'categories' doesn't exist",
+  "Property 'SECTION_TITLE' doesn't exist",
+  "Property 'NotificationsModal' doesn't exist",
 ])
 
 export default function App() {

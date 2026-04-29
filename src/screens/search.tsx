@@ -22,6 +22,8 @@ const GRID_GAP = 12
 /** Match home.tsx price pills: lime fill + black label */
 const HOME_ACCENT_BG = '#CBFF00'
 const HOME_ACCENT_TEXT = '#000000'
+/** Unselected home category chip fill (`chipPlainOuter`) */
+const HOME_CHIP_FILL = '#000000'
 
 /** Same Montserrat weight as home category chips (e.g. Popular) — registered in App.tsx */
 const HOME_CHIP_MONTSERRAT = 'Montserrat_800ExtraBold' as const
@@ -40,6 +42,12 @@ function productToSavePayload(item: ShopifyProduct) {
     image: getImageSource(item),
     category: item.productType || undefined,
   }
+}
+
+/** Hide storefront utility collections from the Search collections grid. */
+function isExcludedSearchCollection(c: ShopifyCollectionSummary): boolean {
+  const hay = `${c.title || ''} ${c.handle || ''}`.toLowerCase().replace(/[-_]+/g, ' ')
+  return /\ball products\b/.test(hay) || /\bnew releases?\b/.test(hay)
 }
 
 const banners = [
@@ -104,9 +112,13 @@ export function Search({ navigation }: { navigation: any }) {
   const newArrivals = useMemo(() => products.slice(2, 4), [products])
   const cardW = (width - 32 - GRID_GAP) / 2
   const collectionCardW = (width - 32 - GRID_GAP) / 2
+  const collectionsForGrid = useMemo(
+    () => collections.filter((c) => !isExcludedSearchCollection(c)),
+    [collections]
+  )
   const visibleCollections = useMemo(
-    () => (showAllCollections ? collections : collections.slice(0, 4)),
-    [showAllCollections, collections]
+    () => (showAllCollections ? collectionsForGrid : collectionsForGrid.slice(0, 4)),
+    [showAllCollections, collectionsForGrid]
   )
   const gridStyles = useMemo(() => getProductGridStyles(theme), [theme])
 
@@ -350,7 +362,7 @@ export function Search({ navigation }: { navigation: any }) {
           <View style={styles.collectionsSection}>
             <View style={styles.resultsHeader}>
               <Text style={[styles.resultsTitleMontserrat, { color: theme.textColor }]}>Collections</Text>
-              {collections.length > 4 ? (
+              {collectionsForGrid.length > 4 ? (
                 <Pressable onPress={() => setShowAllCollections((prev) => !prev)} hitSlop={8}>
                   <Text style={[styles.seeAllButtonText, { color: theme.textColor }]}>
                     {showAllCollections ? 'See less' : 'See all'}
@@ -365,13 +377,9 @@ export function Search({ navigation }: { navigation: any }) {
                 {visibleCollections.map((collection) => (
                   <Pressable
                     key={collection.id}
-                    style={[
+                    style={({ pressed }) => [
                       styles.collectionCard,
-                      {
-                        width: collectionCardW,
-                        backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
-                        borderColor: theme.tileBorderColor || theme.borderColor,
-                      },
+                      { width: collectionCardW, opacity: pressed ? 0.92 : 1 },
                     ]}
                     onPress={() =>
                       navigation.navigate('CategoryProducts', {
@@ -380,10 +388,7 @@ export function Search({ navigation }: { navigation: any }) {
                       })
                     }
                   >
-                    <Text
-                      style={[styles.collectionTitle, { color: theme.headingColor || theme.textColor }]}
-                      numberOfLines={2}
-                    >
+                    <Text style={styles.collectionTitle} numberOfLines={2}>
                       {collection.title}
                     </Text>
                   </Pressable>
@@ -636,18 +641,27 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: GRID_GAP,
   },
+  /** Match home unselected `HomeCategoryChip` (`chipPlainOuter` + `chipText`) */
   collectionCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 12,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: HOME_ACCENT_BG,
+    backgroundColor: HOME_CHIP_FILL,
+    paddingHorizontal: 6,
     paddingVertical: 12,
-    minHeight: 62,
+    minHeight: 56,
     justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
   },
   collectionTitle: {
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 14,
-    lineHeight: 18,
+    color: HOME_ACCENT_BG,
+    fontFamily: HOME_CHIP_MONTSERRAT,
+    fontSize: 13,
+    lineHeight: 16,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    width: '100%',
   },
   seeAllButtonText: {
     fontFamily: 'Geist-SemiBold',

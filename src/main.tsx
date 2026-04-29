@@ -30,6 +30,7 @@ import {
   MyOrderDetail,
   CommunityUserProfile,
 } from './screens'
+import { CartCheckout } from './screens/cartCheckout'
 import { WonderJump } from './screens/wonderJump'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -633,6 +634,7 @@ export function Main() {
         </Stack.Screen>
       )}
       <Stack.Screen name="Cart" component={Cart} />
+      <Stack.Screen name="CartCheckout" component={CartCheckout} />
       <Stack.Screen name="Product" component={Product} />
       <Stack.Screen
         name="CategoryProducts"

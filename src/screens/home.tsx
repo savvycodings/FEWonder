@@ -1,5 +1,6 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Image,
   ImageSourcePropType,
   Pressable,
   ScrollView,
@@ -9,6 +10,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native'
+import { LinearGradient } from 'expo-linear-gradient'
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -16,17 +18,54 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import {
-  NotificationsModal,
-  ProductTileImageWithHeart,
-  WonderportAccentCard,
-} from '../components'
+import { ProductTileImageWithHeart, WonderportAccentCard } from '../components'
 import { ThemeContext } from '../context'
-import { getDailyRewardStatus, listDbProducts, readDailyRewardsCache } from '../utils'
+import {
+  getDailyRewardStatus,
+  listDbCategories,
+  listDbProducts,
+  readDailyRewardsCache,
+  type DbCategorySummary,
+} from '../utils'
 import { ShopifyProduct } from '../../types'
 import { formatMoney } from '../money'
 
-const categories = ['Hot', 'Pops', 'Figures', 'Anime']
+/** Home row chips — each maps to DB-backed lists (see load effect). */
+const HOME_CHIPS = ['New', 'Pops', 'Figures', 'Brands'] as const
+
+/** If no collection title matches, search title/type/vendor/tags via API `q`. */
+const CHIP_SEARCH_FALLBACK: Record<string, string> = {
+  Pops: 'pop',
+  Figures: 'figure',
+}
+
+const COLLECTION_MATCHERS: Record<string, (c: DbCategorySummary) => boolean> = {
+  Pops: (c) => /pop|funko|vinyl/i.test(`${c.handle} ${c.title}`),
+  Figures: (c) => /figure|figur|statue|nendoroid|model/i.test(`${c.handle} ${c.title}`),
+}
+
+function matchCollectionHandle(chip: string, categories: DbCategorySummary[]): string | undefined {
+  const match = COLLECTION_MATCHERS[chip]
+  if (!match || !categories.length) return undefined
+  for (const c of categories) {
+    if (match(c)) return c.handle
+  }
+  return undefined
+}
+
+/** Hide utility Shopify collections from the Brands carousel (matched on title + handle). */
+function isExcludedBrandCollection(c: DbCategorySummary): boolean {
+  const hay = `${c.title} ${c.handle}`.toLowerCase().replace(/[-_]+/g, ' ')
+  return (
+    /\ball products\b/.test(hay) ||
+    /\bout of stock\b/.test(hay) ||
+    /\bnew releases?\b/.test(hay)
+  )
+}
+
+function hasBrandBannerImage(c: DbCategorySummary): boolean {
+  return String(c.imageUrl || '').trim().length > 0
+}
 
 function getImageSource(item: ShopifyProduct): ImageSourcePropType | undefined {
   if (item?.featuredImageUrl) return { uri: item.featuredImageUrl }
@@ -56,6 +95,9 @@ const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
 /** Heavier weight for category chips only */
 const HOME_CHIP_MONTSERRAT = 'Montserrat_800ExtraBold' as const
 
+/** Bell — disabled until notifications are wired; modal code removed to avoid bundler init issues. */
+const SHOW_HOME_NOTIFICATIONS = false
+
 export function Home({ navigation, sessionToken }: { navigation: any; sessionToken?: string }) {
   const { width } = useWindowDimensions()
   const cardW = (width - 32 - GRID_GAP) / 2
@@ -64,21 +106,69 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
   const heroGreeting = useMemo(() => 'Wonderport', [])
   const [products, setProducts] = useState<ShopifyProduct[]>([])
   const [loadingProducts, setLoadingProducts] = useState(true)
-  const [activeCategory, setActiveCategory] = useState(categories[0])
-  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [activeCategory, setActiveCategory] = useState<string>(HOME_CHIPS[0])
+  const [dbCategories, setDbCategories] = useState<DbCategorySummary[]>([])
+  const [categoriesLoading, setCategoriesLoading] = useState(true)
   const [hasUnclaimedReward, setHasUnclaimedReward] = useState(false)
   const lastRewardsPrefetchAt = useRef(0)
 
-  const hasNewNotifications = true
-
   useEffect(() => {
     let cancelled = false
+    setCategoriesLoading(true)
+    listDbCategories()
+      .then((rows) => {
+        if (!cancelled) setDbCategories(Array.isArray(rows) ? rows : [])
+      })
+      .catch(() => {
+        if (!cancelled) setDbCategories([])
+      })
+      .finally(() => {
+        if (!cancelled) setCategoriesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const brandsSorted = useMemo(() => {
+    return [...dbCategories]
+      .filter((c) => !isExcludedBrandCollection(c) && hasBrandBannerImage(c))
+      .sort((a, b) => {
+        const pc = (b.productCount || 0) - (a.productCount || 0)
+        if (pc !== 0) return pc
+        return String(a.title || '').localeCompare(String(b.title || ''), undefined, {
+          sensitivity: 'base',
+        })
+      })
+  }, [dbCategories])
+
+  useEffect(() => {
+    if (activeCategory === 'Brands') {
+      setLoadingProducts(false)
+      setProducts([])
+      return
+    }
+    let cancelled = false
     ;(async () => {
+      setLoadingProducts(true)
       try {
-        const fetched = await listDbProducts({ first: 12 })
-        if (!cancelled && fetched.length) setProducts(fetched)
+        let fetched: ShopifyProduct[] = []
+        if (activeCategory === 'New') {
+          fetched = await listDbProducts({ first: 12, sort: 'new' })
+        } else {
+          const slug = matchCollectionHandle(activeCategory, dbCategories)
+          if (slug) {
+            fetched = await listDbProducts({ first: 12, collection: slug })
+          }
+          if (!fetched.length) {
+            const q = CHIP_SEARCH_FALLBACK[activeCategory]
+            if (q) fetched = await listDbProducts({ first: 12, query: q })
+          }
+        }
+        if (!cancelled) setProducts(fetched)
       } catch (e) {
         if (!cancelled) console.log('[Home] DB products load failed', e)
+        if (!cancelled) setProducts([])
       } finally {
         if (!cancelled) setLoadingProducts(false)
       }
@@ -86,7 +176,7 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [activeCategory, dbCategories])
 
   useEffect(() => {
     let cancelled = false
@@ -122,20 +212,13 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
         <View style={styles.headerRow}>
           <Text style={styles.title}>{heroGreeting}</Text>
           <View style={styles.headerActions}>
-            <View style={[styles.iconBadgeWrap, styles.bellButtonOffset]}>
-              <TouchableOpacity
-                style={styles.bellButton}
-                activeOpacity={0.85}
-                onPress={() => setNotificationsOpen(true)}
-              >
-                <FeatherIcon name="bell" size={24} color={theme.textColor} />
-              </TouchableOpacity>
-              {hasNewNotifications ? (
-                <View style={styles.alertBadge}>
-                  <Text style={styles.alertBadgeText}>!</Text>
-                </View>
-              ) : null}
-            </View>
+            {SHOW_HOME_NOTIFICATIONS ? (
+              <View style={[styles.iconBadgeWrap, styles.bellButtonOffset]}>
+                <TouchableOpacity style={styles.bellButton} activeOpacity={0.85}>
+                  <FeatherIcon name="bell" size={24} color={theme.textColor} />
+                </TouchableOpacity>
+              </View>
+            ) : null}
             <View style={styles.iconBadgeWrap}>
               <TouchableOpacity
                 style={styles.bellButton}
@@ -156,7 +239,7 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
         </View>
 
         <View style={styles.chipsRow}>
-          {categories.map((item) => (
+          {HOME_CHIPS.map((item) => (
             <HomeCategoryChip
               key={item}
               label={item}
@@ -167,79 +250,129 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
           ))}
         </View>
 
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Hot Items</Text>
-        </View>
-
-        {loadingProducts ? (
-          <Text style={styles.loadingText}>Loading products…</Text>
-        ) : !products.length ? (
-          <Text style={styles.loadingText}>No products found.</Text>
-        ) : null}
-
-        <View style={styles.grid}>
-          {products.map((item) => {
-            const src = getImageSource(item)
-            const priceLabel =
-              item.price?.amount != null && item.price.amount !== ''
-                ? formatMoney(item.price)
-                : 'View details'
-            const savePayload = productToSavePayload(item)
-            return (
-              <View key={item.id || item.handle || item.title} style={[styles.card, { width: cardW }]}>
-                {src ? (
-                  <ProductTileImageWithHeart
-                    product={savePayload}
-                    source={src}
-                    resizeMode="cover"
-                    imageTranslateY={0}
-                    wrapStyle={styles.media}
-                    imageStyle={styles.mediaImage}
-                    onPress={() => navigation.navigate('Product', { product: item })}
-                  />
-                ) : (
+        {activeCategory === 'Brands' ? (
+          categoriesLoading ? (
+            <Text style={styles.loadingText}>Loading collections…</Text>
+          ) : !brandsSorted.length ? (
+            <Text style={styles.loadingText}>No collections with banner images yet.</Text>
+          ) : (
+            <View style={styles.brandsList}>
+              {brandsSorted.map((c) => {
+                const count = Math.max(0, Math.floor(Number(c.productCount) || 0))
+                const countLabel = count === 1 ? '1 product' : `${count} products`
+                return (
                   <Pressable
-                    style={styles.media}
-                    onPress={() => navigation.navigate('Product', { product: item })}
+                    key={String(c.shopifyId || c.handle)}
+                    style={({ pressed }) => [styles.brandCard, pressed && styles.brandCardPressed]}
+                    onPress={() =>
+                      navigation.navigate('CategoryProducts', {
+                        slug: c.handle,
+                        title: c.title,
+                      })
+                    }
                   >
-                    <View style={styles.mediaPlaceholder}>
-                      <Text
-                        style={styles.mediaPlaceholderText}
-                        numberOfLines={2}
-                        ellipsizeMode="tail"
-                      >
-                        {item.title}
-                      </Text>
-                    </View>
-                  </Pressable>
-                )}
-                <View style={styles.footerBand}>
-                  <Pressable
-                    style={styles.cardFooter}
-                    onPress={() => navigation.navigate('Product', { product: item })}
-                  >
-                    <Text style={styles.itemTitle} numberOfLines={2} ellipsizeMode="tail">
-                      {item.title}
-                    </Text>
-                    <View style={styles.priceRow}>
-                      <View style={styles.pricePill}>
-                        <Text style={styles.pricePillText}>{priceLabel}</Text>
+                    <WonderportAccentCard
+                      borderWidth={2}
+                      borderRadius={18}
+                      innerBackgroundColor="#0a0a0c"
+                      style={styles.brandAccentOuter}
+                      contentStyle={styles.brandAccentInner}
+                    >
+                      <View style={styles.brandBannerClip}>
+                        <Image
+                          source={{ uri: String(c.imageUrl).trim() }}
+                          style={styles.brandBannerImage}
+                          resizeMode="cover"
+                        />
+                        <LinearGradient
+                          pointerEvents="none"
+                          colors={['transparent', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.92)']}
+                          locations={[0, 0.45, 1]}
+                          style={styles.brandBannerGradient}
+                        />
+                        <View style={styles.brandBannerMeta} pointerEvents="none">
+                          <View style={styles.brandTitleBlock}>
+                            <Text style={styles.brandTitle} numberOfLines={2}>
+                              {c.title}
+                            </Text>
+                            <View style={styles.brandCountPill}>
+                              <Text style={styles.brandCountText}>{countLabel}</Text>
+                            </View>
+                          </View>
+                        </View>
                       </View>
-                    </View>
+                    </WonderportAccentCard>
                   </Pressable>
-                </View>
-              </View>
-            )
-          })}
-        </View>
-      </ScrollView>
+                )
+              })}
+            </View>
+          )
+        ) : (
+          <>
+            {loadingProducts ? (
+              <Text style={styles.loadingText}>Loading products…</Text>
+            ) : !products.length ? (
+              <Text style={styles.loadingText}>No products found.</Text>
+            ) : null}
 
-      <NotificationsModal
-        visible={notificationsOpen}
-        onClose={() => setNotificationsOpen(false)}
-        navigation={navigation}
-        sessionToken={sessionToken || ''}
-      />
+            <View style={styles.grid}>
+              {products.map((item) => {
+                const src = getImageSource(item)
+                const priceLabel =
+                  item.price?.amount != null && item.price.amount !== ''
+                    ? formatMoney(item.price)
+                    : 'View details'
+                const savePayload = productToSavePayload(item)
+                return (
+                  <View key={item.id || item.handle || item.title} style={[styles.card, { width: cardW }]}>
+                    {src ? (
+                      <ProductTileImageWithHeart
+                        product={savePayload}
+                        source={src}
+                        resizeMode="cover"
+                        imageTranslateY={0}
+                        wrapStyle={styles.media}
+                        imageStyle={styles.mediaImage}
+                        onPress={() => navigation.navigate('Product', { product: item })}
+                      />
+                    ) : (
+                      <Pressable
+                        style={styles.media}
+                        onPress={() => navigation.navigate('Product', { product: item })}
+                      >
+                        <View style={styles.mediaPlaceholder}>
+                          <Text
+                            style={styles.mediaPlaceholderText}
+                            numberOfLines={2}
+                            ellipsizeMode="tail"
+                          >
+                            {item.title}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    )}
+                    <View style={styles.footerBand}>
+                      <Pressable
+                        style={styles.cardFooter}
+                        onPress={() => navigation.navigate('Product', { product: item })}
+                      >
+                        <Text style={styles.itemTitle} numberOfLines={2} ellipsizeMode="tail">
+                          {item.title}
+                        </Text>
+                        <View style={styles.priceRow}>
+                          <View style={styles.pricePill}>
+                            <Text style={styles.pricePillText}>{priceLabel}</Text>
+                          </View>
+                        </View>
+                      </Pressable>
+                    </View>
+                  </View>
+                )
+              })}
+            </View>
+          </>
+        )}
+      </ScrollView>
     </View>
   )
 }
@@ -350,17 +483,6 @@ const getStyles = (theme: any) =>
       textTransform: 'uppercase',
       width: '100%',
     },
-    sectionHeaderRow: {
-      marginBottom: 6,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    sectionTitle: {
-      color: theme.textColor,
-      fontFamily: theme.boldFont,
-      fontSize: 18,
-    },
     grid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
@@ -449,6 +571,75 @@ const getStyles = (theme: any) =>
       fontFamily: theme.mediumFont,
       fontSize: 12,
       marginBottom: 10,
+    },
+    brandsList: {
+      gap: 14,
+      marginTop: 10,
+    },
+    brandCard: {
+      width: '100%',
+    },
+    brandCardPressed: {
+      opacity: 0.92,
+    },
+    brandAccentOuter: {
+      width: '100%',
+    },
+    brandAccentInner: {
+      padding: 0,
+      overflow: 'hidden',
+    },
+    brandBannerClip: {
+      width: '100%',
+      height: 156,
+      borderRadius: 14,
+      overflow: 'hidden',
+      backgroundColor: '#141418',
+    },
+    brandBannerImage: {
+      ...StyleSheet.absoluteFillObject,
+      width: '100%',
+      height: '100%',
+    },
+    brandBannerGradient: {
+      ...StyleSheet.absoluteFillObject,
+      justifyContent: 'flex-end',
+    },
+    brandBannerMeta: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal: 14,
+      paddingBottom: 12,
+      paddingTop: 28,
+    },
+    brandTitleBlock: {
+      flex: 1,
+    },
+    brandTitle: {
+      color: '#ffffff',
+      fontFamily: HOME_MONTSERRAT_BOLD,
+      fontSize: 18,
+      lineHeight: 22,
+      letterSpacing: -0.3,
+      textShadowColor: 'rgba(0,0,0,0.75)',
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 6,
+    },
+    brandCountPill: {
+      alignSelf: 'flex-start',
+      marginTop: 8,
+      backgroundColor: HOME_ACCENT_BG,
+      paddingHorizontal: 12,
+      paddingVertical: 5,
+      borderRadius: 999,
+    },
+    brandCountText: {
+      color: HOME_ACCENT_TEXT,
+      fontFamily: theme.boldFont,
+      fontSize: 12,
+      letterSpacing: 0.2,
     },
   })
 

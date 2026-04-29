@@ -209,7 +209,7 @@ export function Product({ route, navigation }: any) {
       return 'Enter a valid email address for order updates.'
     }
     if (deliveryMethod === 'standard' && !shippingFull.trim()) {
-      return 'Enter your full shipping address for courier delivery (R150).'
+      return 'Enter your full shipping address for courier delivery.'
     }
     if (deliveryMethod === 'pudo' && (!pudoName.trim() || !pudoAddr.trim())) {
       return 'Enter Pudo locker name and address (R70).'
@@ -273,7 +273,7 @@ export function Product({ route, navigation }: any) {
     const shipNote =
       deliveryMethod === 'pudo'
         ? 'Pudo locker delivery includes R70.00 shipping in your total.'
-        : 'Standard shipping includes R150.00 in your total.'
+        : 'Courier: R150 per single box, R200 per whole set (included in your total).'
     Alert.alert('Payment method', `${shipNote}\nHow would you like to pay?`, [
       { text: 'EFT (bank transfer)', onPress: () => runCheckout('eft') },
       { text: 'Peach (card)', onPress: () => runCheckout('peach') },
@@ -495,7 +495,7 @@ export function Product({ route, navigation }: any) {
           <View style={styles.deliveryCard}>
             <Text style={styles.deliveryTitle}>Delivery & contact</Text>
             <Text style={styles.deliverySub}>
-              Choose delivery. Pudo R70 or standard courier R150 — included in your total (ZAR only).
+              Courier: R150 single / R200 whole set per item. Pudo: R70 flat. Included in total (ZAR only).
             </Text>
             <View style={styles.deliveryChipsRow}>
               <TouchableOpacity
@@ -509,7 +509,7 @@ export function Product({ route, navigation }: any) {
                     deliveryMethod === 'standard' ? styles.deliveryChipTextActive : null,
                   ]}
                 >
-                  Courier (R150)
+                  Courier (from R150)
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity

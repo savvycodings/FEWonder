@@ -149,6 +149,8 @@ export async function fetchMyOrders() {
       currencyCode: string
       totalCents: number
       createdAt: string
+      /** First purchased line item image (when stored on the order). */
+      previewImageUrl?: string | null
     }[]
   }>
 }

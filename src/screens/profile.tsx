@@ -62,6 +62,7 @@ export function Profile({
       paymentMethod: string
       totalCents: number
       currencyCode: string
+      previewImageUrl?: string | null
     }[]
   >([])
   const [orderTotalCount, setOrderTotalCount] = useState(0)
@@ -312,7 +313,15 @@ export function Profile({
               onPress={() => navigation.navigate('ProfileMyOrderDetail', { orderId: order.id })}
             >
               <View style={styles.orderThumb}>
-                <FeatherIcon name="package" size={20} color={PROFILE_ACCENT} />
+                {order.previewImageUrl ? (
+                  <Image
+                    source={{ uri: order.previewImageUrl }}
+                    style={styles.orderThumbImage}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <FeatherIcon name="package" size={20} color={PROFILE_ACCENT} />
+                )}
               </View>
               <View style={styles.orderTextWrap}>
                 <Text style={styles.orderName}>{order.referenceCode}</Text>
