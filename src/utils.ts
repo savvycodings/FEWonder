@@ -17,6 +17,36 @@ import {
 export const DAILY_REWARDS_CACHE_KEY = 'wonderport-daily-rewards-cache-v1'
 const DAILY_REWARDS_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
+/** IANA timezone from the device (sent on daily-rewards requests for local-day rules). */
+export function getDeviceIanaTimeZone(): string {
+  try {
+    const z = Intl.DateTimeFormat().resolvedOptions().timeZone
+    return typeof z === 'string' && z.trim() ? z.trim() : 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
+
+function dailyRewardsAuthHeaders(sessionToken: string): Record<string, string> {
+  return {
+    Authorization: `Bearer ${sessionToken}`,
+    'X-User-Timezone': getDeviceIanaTimeZone(),
+  }
+}
+
+export function normalizeDailyRewardStatus(status: DailyRewardStatus): void {
+  if (!Array.isArray(status.ownedStoreItemIds)) {
+    status.ownedStoreItemIds = []
+  }
+  if (typeof status.paidOrderCount !== 'number' || !Number.isFinite(status.paidOrderCount)) {
+    status.paidOrderCount = 0
+  }
+  if (typeof status.currentStreakDays !== 'number' || !Number.isFinite(status.currentStreakDays)) {
+    const claimed = typeof status.claimedCount === 'number' && Number.isFinite(status.claimedCount) ? status.claimedCount : 0
+    status.currentStreakDays = Math.max(0, Math.floor(claimed))
+  }
+}
+
 export async function readDailyRewardsCache(): Promise<DailyRewardStatus | null> {
   try {
     const raw = await AsyncStorage.getItem(DAILY_REWARDS_CACHE_KEY)
@@ -26,9 +56,7 @@ export async function readDailyRewardsCache(): Promise<DailyRewardStatus | null>
     if (typeof parsed.at === 'number' && Date.now() - parsed.at > DAILY_REWARDS_CACHE_MAX_AGE_MS)
       return null
     const data = parsed.data
-    if (!Array.isArray(data.ownedStoreItemIds)) {
-      data.ownedStoreItemIds = []
-    }
+    normalizeDailyRewardStatus(data)
     return data
   } catch {
     return null
@@ -345,9 +373,7 @@ export async function updateProfileDetails(payload: {
 
 export async function getDailyRewardStatus(sessionToken: string): Promise<DailyRewardStatus> {
   const response = await fetch(`${DOMAIN}/auth/daily-rewards`, {
-    headers: {
-      Authorization: `Bearer ${sessionToken}`,
-    },
+    headers: dailyRewardsAuthHeaders(sessionToken),
   })
 
   const raw = await response.text()
@@ -363,9 +389,7 @@ export async function getDailyRewardStatus(sessionToken: string): Promise<DailyR
   }
 
   const status = data as DailyRewardStatus
-  if (!Array.isArray(status.ownedStoreItemIds)) {
-    status.ownedStoreItemIds = []
-  }
+  normalizeDailyRewardStatus(status)
   await writeDailyRewardsCache(status)
   return status
 }
@@ -373,9 +397,7 @@ export async function getDailyRewardStatus(sessionToken: string): Promise<DailyR
 export async function claimDailyReward(sessionToken: string): Promise<DailyRewardStatus> {
   const response = await fetch(`${DOMAIN}/auth/daily-rewards/claim`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${sessionToken}`,
-    },
+    headers: dailyRewardsAuthHeaders(sessionToken),
   })
 
   const raw = await response.text()
@@ -388,9 +410,7 @@ export async function claimDailyReward(sessionToken: string): Promise<DailyRewar
 
   if (response.status === 409 && data?.rewards?.length) {
     const status = data as DailyRewardStatus
-    if (!Array.isArray(status.ownedStoreItemIds)) {
-      status.ownedStoreItemIds = []
-    }
+    normalizeDailyRewardStatus(status)
     await writeDailyRewardsCache(status)
     return status
   }
@@ -400,9 +420,7 @@ export async function claimDailyReward(sessionToken: string): Promise<DailyRewar
   }
 
   const status = data as DailyRewardStatus
-  if (!Array.isArray(status.ownedStoreItemIds)) {
-    status.ownedStoreItemIds = []
-  }
+  normalizeDailyRewardStatus(status)
   await writeDailyRewardsCache(status)
   return status
 }
@@ -563,7 +581,7 @@ export async function purchaseWonderStoreItem(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${sessionToken}`,
+      ...dailyRewardsAuthHeaders(sessionToken),
     },
     body: JSON.stringify({ itemId }),
   })
@@ -578,9 +596,7 @@ export async function purchaseWonderStoreItem(
 
   if ((response.status === 409 || response.status === 402) && data?.rewards?.length) {
     const status = data as DailyRewardStatus
-    if (!Array.isArray(status.ownedStoreItemIds)) {
-      status.ownedStoreItemIds = []
-    }
+    normalizeDailyRewardStatus(status)
     await writeDailyRewardsCache(status)
     throw new Error(String(data?.error || (response.status === 402 ? 'Not enough coins' : 'Already purchased')))
   }
@@ -590,9 +606,7 @@ export async function purchaseWonderStoreItem(
   }
 
   const status = data as DailyRewardStatus
-  if (!Array.isArray(status.ownedStoreItemIds)) {
-    status.ownedStoreItemIds = []
-  }
+  normalizeDailyRewardStatus(status)
   await writeDailyRewardsCache(status)
   return status
 }

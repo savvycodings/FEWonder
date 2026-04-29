@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { WonderBadgeImage } from './components/WonderBadgeImage'
 import type { ProfileHeroBadgeSlots } from './profileHeroPreferences'
-import { isWonderBadgeId, type WonderBadgeId } from './wonderBadgesCatalog'
+import { isWonderBadgeId, migrateWonderBadgeSlotId, type WonderBadgeId } from './wonderBadgesCatalog'
 
 const BADGE_SLOT = 38
 const BADGE_RADIUS = 10
@@ -34,7 +34,8 @@ export function ProfileHeroBadgeStrip({
     return (
       <View style={rowStyle}>
         {filledIndices.map((i) => {
-          const id = slots[i]!
+          const raw = slots[i]!
+          const id = migrateWonderBadgeSlotId(raw) ?? raw
           const showWonder = Boolean(isWonderBadgeId(id))
           return (
             <View
@@ -62,7 +63,8 @@ export function ProfileHeroBadgeStrip({
   return (
     <View style={rowStyle}>
       {([0, 1, 2] as const).map((i) => {
-        const id = slots[i]
+        const raw = slots[i]
+        const id = raw ? migrateWonderBadgeSlotId(raw) ?? raw : null
         const empty = !id
         const showWonder = Boolean(id && isWonderBadgeId(id))
         const slotStyle = [

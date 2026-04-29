@@ -20,6 +20,7 @@ import Svg, {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useContext } from 'react'
 import { ThemeContext } from '../context'
+import { WonderStaticCoin } from './WonderCoin'
 
 const STORAGE_KEY = 'wonderport-avatar-frame-id'
 
@@ -717,7 +718,11 @@ type AvatarFramePreviewTileProps = {
   frameId: BorderFrameId
   size: number
   equipped: boolean
-  onEquip: () => void
+  owned: boolean
+  priceCoins: number
+  canAfford: boolean
+  busy?: boolean
+  onPrimaryPress: () => void
   previewUri?: string | null
   previewInitial?: string
 }
@@ -726,7 +731,11 @@ export function AvatarFramePreviewTile({
   frameId,
   size,
   equipped,
-  onEquip,
+  owned,
+  priceCoins,
+  canAfford,
+  busy = false,
+  onPrimaryPress,
   previewUri,
   previewInitial = '?',
 }: AvatarFramePreviewTileProps) {
@@ -734,6 +743,8 @@ export function AvatarFramePreviewTile({
   const ACCENT = '#CBFF00'
   const meta = AVATAR_FRAME_SHOP.find((f) => f.id === frameId)
   const uri = previewUri?.trim() ? previewUri : null
+  const primaryDisabled = busy || equipped || (!owned && !canAfford)
+  const primaryLabel = busy ? 'Buying...' : equipped ? 'Equipped' : !owned ? 'Buy' : 'Equip'
 
   const previewChild = uri ? (
     <Image source={{ uri }} style={styles.tilePreviewImage} resizeMode="cover" />
@@ -778,7 +789,10 @@ export function AvatarFramePreviewTile({
       <Text style={[styles.tileTagline, { color: 'rgba(255,255,255,0.72)' }]} numberOfLines={2}>
         {meta?.tagline}
       </Text>
-      <Text style={[styles.tilePrice, { color: ACCENT }]}>Free</Text>
+      <View style={styles.tilePriceRow}>
+        <WonderStaticCoin size={14} fallbackColor={ACCENT} />
+        <Text style={[styles.tilePrice, { color: ACCENT }]}>{priceCoins}</Text>
+      </View>
       <Pressable
         style={[
           styles.tileButton,
@@ -792,7 +806,8 @@ export function AvatarFramePreviewTile({
               }
             : null,
         ]}
-        onPress={onEquip}
+        disabled={primaryDisabled}
+        onPress={onPrimaryPress}
       >
         <Text
           style={[
@@ -801,7 +816,7 @@ export function AvatarFramePreviewTile({
             equipped ? { color: ACCENT } : null,
           ]}
         >
-          {equipped ? 'Equipped' : 'Equip'}
+          {primaryLabel}
         </Text>
       </Pressable>
     </View>
@@ -898,11 +913,16 @@ const styles = StyleSheet.create({
     minHeight: 28,
     marginBottom: 6,
   },
+  tilePriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 6,
+  },
   tilePrice: {
     color: '#3d7a52',
     fontFamily: 'Geist-Medium',
-    fontSize: 10,
-    marginBottom: 6,
+    fontSize: 12,
   },
   tileButton: {
     borderRadius: 8,

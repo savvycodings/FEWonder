@@ -67,7 +67,10 @@ export interface DailyRewardStatus {
   /** Wonder Store items already purchased (server-backed). */
   ownedStoreItemIds: string[]
   claimedCount: number
+  /** Consecutive local-calendar-day streak (matches phone timezone; claims + Daily Rewards after day 7). */
   currentStreakDays: number
+  /** Lifetime count of orders with status `paid` (for box badges). */
+  paidOrderCount: number
   canClaim: boolean
   nextUnlockAt: string | null
   rewards: DailyRewardItem[]

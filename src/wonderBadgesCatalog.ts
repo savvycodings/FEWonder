@@ -6,7 +6,7 @@ export const WONDER_BADGE_IDS = [
   'badge:day90',
   'badge:order1',
   'badge:order5',
-  'badge:order20',
+  'badge:order10',
   'badge:heart',
 ] as const
 
@@ -23,40 +23,46 @@ export const WONDER_BADGE_CATALOG: Record<WonderBadgeId, WonderBadgeCatalogEntry
   'badge:day7': {
     file: 'Day7.png',
     label: '7-day streak',
-    acquire: 'Reach a 7-day login streak in Daily Rewards and claim the Day 7 reward.',
+    acquire: 'Claim all 7 daily rewards by keeping your streak alive.',
   },
   'badge:day30': {
     file: 'Day30.png',
     label: '30-day streak',
-    acquire: 'Reach a 30-day login streak in Daily Rewards (coming soon to the reward track).',
+    acquire: 'Log in for 30 days in a row.',
   },
   'badge:day90': {
     file: 'Day90.png',
     label: '90-day streak',
-    acquire: 'Reach a 90-day login streak in Daily Rewards (coming soon to the reward track).',
+    acquire: 'Log in for 90 days in a row.',
   },
   'badge:order1': {
     file: 'order1.png',
-    label: 'First order',
-    acquire: 'Place your first completed order in the app.',
+    label: 'Bronze box',
+    acquire: 'Earned after 1 completed order.',
   },
   'badge:order5': {
     file: 'order5.png',
-    label: '5 orders',
-    acquire: 'Complete 5 orders in total.',
+    label: 'Silver box',
+    acquire: 'Earned after 5 completed orders.',
   },
-  'badge:order20': {
+  'badge:order10': {
     file: 'order20.png',
-    label: '20 orders',
-    acquire: 'Complete 20 orders in total.',
+    label: 'Gold box',
+    acquire: 'Earned after 10 completed orders.',
   },
   'badge:heart': {
     file: 'Heartbadge.png',
     label: 'Spread the love!',
-    acquire: 'Community badge — share kindness on Wonderport.',
+    acquire: 'Community badge for kindness on Wonderport.',
   },
 }
 
 export function isWonderBadgeId(id: string): id is WonderBadgeId {
   return (WONDER_BADGE_IDS as readonly string[]).includes(id)
+}
+
+/** Normalize legacy gold badge id from older app versions. */
+export function migrateWonderBadgeSlotId(id: string | null): string | null {
+  if (!id) return null
+  return id === 'badge:order20' ? 'badge:order10' : id
 }

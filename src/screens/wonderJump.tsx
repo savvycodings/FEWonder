@@ -212,22 +212,13 @@ const PALM_TREE_H = 74
 const PALM_TREE_BASE_Y = 20
 const PALM_TREE_IMAGE = require('../../public/wonderjump/palm-tree.png')
 const GRASSLAND_BG_IMAGE = require('../../assets/wj-grassland-bg.png')
-/** Chest sits on platform tops in tropical gameplay; spawn chance per new main-chain platform. */
-const CHEST_SPAWN_P = 0.012
+/** Chest sits on platform tops in full tropical only (`tropicalBlend === 1`, not the climb-in gradient). */
+const TROPICAL_CHEST_MIN_BLEND = 1
+/** ~1-in-200 “vibe” per eligible main-chain roll in full tropical (Bernoulli each roll, not a literal counter). */
+const CHEST_SPAWN_P = 1 / 200
 const CHEST_PICKUP_W = 32
 const CHEST_PICKUP_H = 30
-const WONDER_JUMP_CHEST_REWARD_COINS = 2
-
-/**
- * TEMP debug overrides (set false + server `WONDER_JUMP_CHEST_PICKUP_INSTANT_UNLOCK_DEBUG` false for production).
- * When true: one chest is placed on a fixed main-chain tile at world build; random tropical spawn is skipped.
- */
-const WONDER_JUMP_CHEST_DEBUG_FIXED_THIRD_PLATFORM = true
-/**
- * Which main-chain step gets the debug chest: `0` = start tile (always in view), `2` = third chain platform (two jumps up).
- * Siblings are not in `mainChainIndices`; indices count only the vertical chain.
- */
-const WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX = 0
+const WONDER_JUMP_CHEST_REWARD_COINS = 4
 
 const CRAB_W = 26
 const CRAB_H = 20
@@ -1110,15 +1101,11 @@ function trySpawnWonderJumpChest(
   platform: PlatformItem,
   chestSpawnedThisRun: boolean,
   tropicalBlend: number,
-  startBiome: WonderJumpStartBiome,
   allowChestForAccount: boolean
 ): ChestPickup[] {
-  if (WONDER_JUMP_CHEST_DEBUG_FIXED_THIRD_PLATFORM) {
-    return []
-  }
   if (!allowChestForAccount) return []
   if (chestSpawnedThisRun) return []
-  if (startBiome !== 'tropical' && tropicalBlend < TROPICAL_GAMEPLAY_BLEND) return []
+  if (tropicalBlend < TROPICAL_CHEST_MIN_BLEND) return []
   if (platform.kind === 'moving' || platform.kind === 'breakable' || platform.isFalling) return []
   if (platform.surface !== 'grass' && platform.surface !== 'sand') return []
   if (Math.random() > CHEST_SPAWN_P) return []
@@ -1356,32 +1343,8 @@ function createInitialWorld(
     }
   }
 
-  let chests: ChestPickup[] = []
-  let chestSpawnedThisRun = false
-  if (
-    WONDER_JUMP_CHEST_DEBUG_FIXED_THIRD_PLATFORM &&
-    mainChainIndices.length > WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX
-  ) {
-    const chainIdx = mainChainIndices[WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX]
-    const host = chainIdx !== undefined ? platforms[chainIdx] : undefined
-    if (host) {
-      const topY = platformTopY(host)
-      const chestPlacement: 'center' | 'right' =
-        WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX === 0 ? 'right' : 'center'
-      const left = chestHorizontalLeftOnPlatform(host, chestPlacement)
-      chests = [
-        {
-          id: `wj-chest-${host.id}-debug-chain-${WONDER_JUMP_CHEST_DEBUG_MAIN_CHAIN_INDEX}`,
-          x: left,
-          y: topY - CHEST_PICKUP_H,
-          width: CHEST_PICKUP_W,
-          height: CHEST_PICKUP_H,
-          collected: false,
-        },
-      ]
-      chestSpawnedThisRun = true
-    }
-  }
+  const chests: ChestPickup[] = []
+  const chestSpawnedThisRun = false
 
   return {
     player,
@@ -3318,7 +3281,6 @@ export function WonderJump({
             chainPlatform,
             chestSpawnedThisRun,
             tropicalBlendTick,
-            previous.startBiome,
             allowServerChest
           )
           if (chestAdded.length) {
@@ -4149,7 +4111,7 @@ export function WonderJump({
               Split touch uses screen halves. D-pad bubbles place left/right arrows at the bottom.
             </Text>
             <Pressable onPress={() => setSettingsOpen(false)} style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>Done</Text>
+              <Text style={[styles.primaryButtonText, styles.gameOverMontserratButton]}>Done</Text>
             </Pressable>
           </Animated.View>
         ) : null}
@@ -4163,14 +4125,14 @@ export function WonderJump({
             <Text style={styles.panelSubtitle}>Take a breath, then jump back in.</Text>
             <Pressable
               onPress={() => setLeaderboardOpen(true)}
-              style={[styles.leaderboardPausedButton, { borderColor: panelAccent.accentSoft }]}
+              style={styles.secondaryButton}
               accessibilityRole="button"
               accessibilityLabel="Open leaderboard"
             >
-              <Text style={[styles.leaderboardPausedButtonText, { color: panelAccent.accent }]}>Leaderboard</Text>
+              <Text style={styles.secondaryButtonText}>Leaderboard</Text>
             </Pressable>
             <Pressable onPress={resumeGame} style={[styles.primaryButton, primaryButtonTone]}>
-              <Text style={styles.primaryButtonText}>Resume</Text>
+              <Text style={[styles.primaryButtonText, styles.gameOverMontserratButton]}>Resume</Text>
             </Pressable>
             <Pressable onPress={restartRun} style={styles.secondaryButton}>
               <Text style={styles.secondaryButtonText}>Restart Run</Text>
@@ -4768,21 +4730,21 @@ const styles = StyleSheet.create({
     top: 10,
     zIndex: 9,
     elevation: 9,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(18, 35, 70, 0.78)',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: APP_UI_SURFACE,
     borderWidth: 1,
-    borderColor: 'rgba(200, 230, 255, 0.5)',
+    borderColor: APP_UI_ACCENT_SOFT,
     alignItems: 'center',
     justifyContent: 'center',
   },
   pauseButtonText: {
-    color: '#ffffff',
-    fontFamily: CLASSIC_GAME_FONT_BOLD,
-    fontSize: 14,
+    color: APP_UI_TEXT,
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 13,
     marginTop: -1,
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   panel: {
     position: 'absolute',
@@ -4848,22 +4810,6 @@ const styles = StyleSheet.create({
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 12,
     letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  leaderboardPausedButton: {
-    width: '100%',
-    marginBottom: 4,
-    paddingVertical: 11,
-    borderRadius: 12,
-    borderWidth: 1,
-    backgroundColor: 'rgba(32, 48, 88, 0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  leaderboardPausedButtonText: {
-    fontFamily: WONDER_JUMP_UI_BOLD,
-    fontSize: 13,
-    letterSpacing: 0.9,
     textTransform: 'uppercase',
   },
   gameOverDeathBlurb: {
@@ -5354,23 +5300,23 @@ const styles = StyleSheet.create({
   },
   panelTitle: {
     color: APP_UI_TEXT,
-    fontFamily: CLASSIC_GAME_FONT_BOLD,
-    fontSize: 25,
-    letterSpacing: 0.6,
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 24,
+    letterSpacing: 0.2,
   },
   panelBiome: {
     color: APP_UI_ACCENT,
-    fontFamily: CLASSIC_GAME_FONT_BOLD,
+    fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 12,
-    letterSpacing: 0.6,
+    letterSpacing: 1,
     textTransform: 'uppercase',
   },
   panelSubtitleSmall: {
     color: APP_UI_TEXT_DIM,
     fontSize: 12,
-    fontFamily: CLASSIC_GAME_FONT_BOLD,
+    fontFamily: WONDER_JUMP_UI_BOLD,
     marginBottom: -4,
-    letterSpacing: 0.5,
+    letterSpacing: 0.12,
   },
   panelBiomeRow: {
     flexDirection: 'row',
@@ -5413,21 +5359,22 @@ const styles = StyleSheet.create({
   panelBiomeChipText: {
     color: APP_UI_TEXT_MUTED,
     fontSize: 12,
-    fontFamily: CLASSIC_GAME_FONT_BOLD,
+    fontFamily: WONDER_JUMP_UI_BOLD,
     textAlign: 'center',
-    letterSpacing: 0.25,
+    letterSpacing: 0.2,
   },
   panelBiomeChipTextActive: {
     color: '#ffffff',
-    fontFamily: CLASSIC_GAME_FONT_BOLD,
+    fontFamily: WONDER_JUMP_UI_BOLD,
   },
   panelSubtitle: {
     color: APP_UI_TEXT_MUTED,
-    fontSize: 14,
-    fontFamily: CLASSIC_GAME_FONT,
+    fontSize: 13,
+    fontFamily: WONDER_JUMP_UI_BOLD,
     textAlign: 'center',
     marginBottom: 6,
-    lineHeight: 20,
+    lineHeight: 18,
+    letterSpacing: 0.15,
   },
   settingsOptionRow: {
     flexDirection: 'row',
@@ -5439,46 +5386,46 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     paddingHorizontal: 8,
-    borderRadius: 10,
+    borderRadius: 11,
     borderWidth: 1,
-    borderColor: 'rgba(203, 255, 0, 0.28)',
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    borderColor: APP_UI_ACCENT_SOFT,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
   },
   settingsOptionChipActive: {
     borderColor: APP_UI_ACCENT,
-    backgroundColor: 'rgba(203, 255, 0, 0.14)',
+    backgroundColor: 'rgba(203, 255, 0, 0.12)',
   },
   settingsOptionText: {
     color: APP_UI_TEXT_MUTED,
-    fontSize: 12,
-    fontFamily: CLASSIC_GAME_FONT_BOLD,
+    fontSize: 11,
+    fontFamily: WONDER_JUMP_UI_BOLD,
     textAlign: 'center',
-    letterSpacing: 0.25,
+    letterSpacing: 0.2,
   },
   settingsOptionTextActive: {
     color: APP_UI_TEXT,
-    fontFamily: CLASSIC_GAME_FONT_BOLD,
+    fontFamily: WONDER_JUMP_UI_BOLD,
   },
   primaryButton: {
     width: '100%',
     backgroundColor: APP_UI_ACCENT,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: APP_UI_ACCENT,
-    paddingVertical: 11,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   primaryButtonText: {
     color: '#000000',
-    fontFamily: CLASSIC_GAME_FONT_BOLD,
-    fontSize: 13,
-    letterSpacing: 0.35,
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 14,
+    letterSpacing: 0.28,
   },
   secondaryButton: {
     width: '100%',
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    borderRadius: 10,
+    borderRadius: 11,
     borderWidth: 1,
     borderColor: APP_UI_ACCENT_SOFT,
     paddingVertical: 11,
@@ -5486,9 +5433,9 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: APP_UI_TEXT,
-    fontFamily: CLASSIC_GAME_FONT_BOLD,
-    fontSize: 13,
-    letterSpacing: 0.35,
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 12,
+    letterSpacing: 0.2,
   },
   touchLayer: {
     ...StyleSheet.absoluteFillObject,

@@ -14,7 +14,7 @@ export function wonderBadgeImageSource(id: WonderBadgeId): ImageSourcePropType {
       return require('../public/homepageimgs/badges/order1.png')
     case 'badge:order5':
       return require('../public/homepageimgs/badges/order5.png')
-    case 'badge:order20':
+    case 'badge:order10':
       return require('../public/homepageimgs/badges/order20.png')
     case 'badge:heart':
       return require('../public/homepageimgs/badges/Heartbadge.png')

@@ -1,8 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import {
-  Animated,
-  Easing,
-  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -12,7 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { SvgUri, SvgXml } from 'react-native-svg'
+import { SvgUri } from 'react-native-svg'
 import { useFocusEffect } from '@react-navigation/native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { DailyRewardItem, DailyRewardStatus, User } from '../../types'
@@ -21,9 +18,16 @@ import {
   getDailyRewardStatus,
   getProfileHero,
   updateProfileHero,
+  purchaseWonderStoreItem,
   readDailyRewardsCache,
   syncEquippedAvatarFrame,
 } from '../utils'
+import {
+  avatarFrameStoreItemId,
+  getAvatarFrameStorePrice,
+  WONDERJUMP_GHOST_STORE_COST,
+  WONDERJUMP_GHOST_STORE_ITEM_ID,
+} from '../wonderStoreCatalog'
 import {
   AVATAR_FRAME_SHOP,
   AVATAR_FRAME_SIZE_PREVIEW_TILE,
@@ -40,28 +44,131 @@ import {
   saveProfileHeroPreferences,
   type ProfileHeroBadgeSlots,
 } from '../profileHeroPreferences'
-import { WONDER_BADGE_IDS, type WonderBadgeId } from '../wonderBadgesCatalog'
+import {
+  WONDER_BADGE_CATALOG,
+  WONDER_BADGE_IDS,
+  migrateWonderBadgeSlotId,
+  type WonderBadgeId,
+} from '../wonderBadgesCatalog'
 import {
   WONDER_JUMP_CHARACTER_OPTIONS,
   loadWonderJumpCharacterStyle,
   saveWonderJumpCharacterStyle,
   type WonderJumpCharacterStyle,
 } from '../wonderJumpCharacters'
-import {
-  DailyRewardsGiftBoxRayBurst,
-  DAILY_REWARDS_GIFT_FLOAT_LOOP_MS,
-  DAILY_REWARDS_GIFT_RAY_SPIN_MS,
-} from '../components/DailyRewardsMysteryGiftVisual'
 import { WonderJumpCharacterSvg } from '../components/WonderJumpCharacterSvg'
+
+type WonderBadgeCardMeta = {
+  earned: boolean
+  label: string
+  caption: string
+  /** `null` = no numeric progress row (e.g. heart). */
+  progressLabel: string | null
+  fillRatio: number
+}
+
+function wonderBadgeCardMeta(
+  id: WonderBadgeId,
+  claimedCount: number,
+  loginStreak: number,
+  paidOrders: number,
+): WonderBadgeCardMeta {
+  const entry = WONDER_BADGE_CATALOG[id]
+  switch (id) {
+    case 'badge:day7': {
+      const target = 7
+      const p = Math.min(Math.max(0, claimedCount), target)
+      return {
+        earned: claimedCount >= 7,
+        label: entry.label,
+        caption: entry.acquire,
+        progressLabel: `${p} / ${target}`,
+        fillRatio: target > 0 ? p / target : 0,
+      }
+    }
+    case 'badge:day30': {
+      const target = 30
+      const s = Math.max(0, loginStreak)
+      const p = Math.min(s, target)
+      return {
+        earned: s >= target,
+        label: entry.label,
+        caption: entry.acquire,
+        progressLabel: `${p} / ${target}`,
+        fillRatio: target > 0 ? p / target : 0,
+      }
+    }
+    case 'badge:day90': {
+      const target = 90
+      const s = Math.max(0, loginStreak)
+      const p = Math.min(s, target)
+      return {
+        earned: s >= target,
+        label: entry.label,
+        caption: entry.acquire,
+        progressLabel: `${p} / ${target}`,
+        fillRatio: target > 0 ? p / target : 0,
+      }
+    }
+    case 'badge:order1': {
+      const target = 1
+      const o = Math.max(0, paidOrders)
+      const p = Math.min(o, target)
+      return {
+        earned: o >= 1,
+        label: entry.label,
+        caption: entry.acquire,
+        progressLabel: `${p} / ${target}`,
+        fillRatio: target > 0 ? p / target : 0,
+      }
+    }
+    case 'badge:order5': {
+      const target = 5
+      const o = Math.max(0, paidOrders)
+      const p = Math.min(o, target)
+      return {
+        earned: o >= 5,
+        label: entry.label,
+        caption: entry.acquire,
+        progressLabel: `${p} / ${target}`,
+        fillRatio: target > 0 ? p / target : 0,
+      }
+    }
+    case 'badge:order10': {
+      const target = 10
+      const o = Math.max(0, paidOrders)
+      const p = Math.min(o, target)
+      return {
+        earned: o >= 10,
+        label: entry.label,
+        caption: entry.acquire,
+        progressLabel: `${p} / ${target}`,
+        fillRatio: target > 0 ? p / target : 0,
+      }
+    }
+    case 'badge:heart':
+      return {
+        earned: true,
+        label: entry.label,
+        caption: entry.acquire,
+        progressLabel: null,
+        fillRatio: 1,
+      }
+    default:
+      return {
+        earned: false,
+        label: entry.label,
+        caption: entry.acquire,
+        progressLabel: null,
+        fillRatio: 0,
+      }
+  }
+}
 
 const weekDays = ['1', '2', '3', '4', '5', '6', '7']
 const weekRewards = [1, 2, 3, 4, 5, 6, 7]
 const DAILY_ACCENT = '#CBFF00'
 const DAILY_FILL = '#000000'
-const GIFT_BOX_STORAGE_KEY = 'daily-reward-giftbox-ready-at'
-const GIFT_BOX_COOLDOWN_MS = 6 * 60 * 60 * 1000
-const GIFT_BOX_BONUS_COINS_KEY = 'daily-reward-giftbox-bonus-coins'
-const GIFT_BOX_REWARD_COINS = 2
 /** Horizontal gap between reward cards (must match `rewardCarousel` `gap`). */
 const REWARD_CAROUSEL_GAP = 10
 /** Matches `rewardCarousel` `paddingRight`. */
@@ -84,17 +191,6 @@ function WonderJumpCharacterPreview({ styleId }: { styleId: WonderJumpCharacterS
   )
 }
 
-function formatDuration(totalMs: number): string {
-  const totalSeconds = Math.max(0, Math.ceil(totalMs / 1000))
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-  const hh = String(hours).padStart(2, '0')
-  const mm = String(minutes).padStart(2, '0')
-  const ss = String(seconds).padStart(2, '0')
-  return `${hh}:${mm}:${ss}`
-}
-
 export function DailyRewards({ navigation, route }: any) {
   const { theme } = useContext(ThemeContext)
   const styles = useMemo(() => getStyles(theme), [theme])
@@ -105,12 +201,6 @@ export function DailyRewards({ navigation, route }: any) {
   const [claimingReward, setClaimingReward] = useState(false)
   const [rewardsError, setRewardsError] = useState('')
   const [storeMessage, setStoreMessage] = useState('')
-  const [giftBoxSvgUri, setGiftBoxSvgUri] = useState('')
-  const [giftBoxSvgXml, setGiftBoxSvgXml] = useState('')
-  const [giftBoxBonusCoins, setGiftBoxBonusCoins] = useState(0)
-  const [giftBoxReadyAt, setGiftBoxReadyAt] = useState<number | null>(null)
-  const [giftBoxNow, setGiftBoxNow] = useState(() => Date.now())
-  const [claimingGiftBoxReward, setClaimingGiftBoxReward] = useState(false)
   const [equippedAvatarFrame, setEquippedAvatarFrame] = useState<AvatarFrameId>('none')
   const [framePreviewUser, setFramePreviewUser] = useState<{
     uri: string | null
@@ -119,6 +209,15 @@ export function DailyRewards({ navigation, route }: any) {
   const [heroBadgeSlots, setHeroBadgeSlots] = useState<ProfileHeroBadgeSlots>([null, null, null])
   const [equippedWonderJumpCharacter, setEquippedWonderJumpCharacter] =
     useState<WonderJumpCharacterStyle>('classic')
+  const [purchasingItemId, setPurchasingItemId] = useState<string | null>(null)
+
+  const isStoreItemOwned = useCallback(
+    (itemId: string, freshStatus?: DailyRewardStatus | null) => {
+      const list = freshStatus?.ownedStoreItemIds ?? rewardStatus?.ownedStoreItemIds ?? []
+      return list.some((s) => String(s).toLowerCase() === itemId.toLowerCase())
+    },
+    [rewardStatus?.ownedStoreItemIds],
+  )
 
   const fallbackRewards = useMemo<DailyRewardItem[]>(
     () => weekDays.map((day, index) => ({ day: Number(day), amount: weekRewards[index], status: 'locked' })),
@@ -126,9 +225,15 @@ export function DailyRewards({ navigation, route }: any) {
   )
   const rewards = rewardStatus?.rewards?.length ? rewardStatus.rewards : fallbackRewards
   const claimedCount = rewardStatus?.claimedCount || 0
-  const currentStreak = rewardStatus?.currentStreakDays || claimedCount
+  const currentStreak =
+    rewardStatus != null &&
+    typeof rewardStatus.currentStreakDays === 'number' &&
+    Number.isFinite(rewardStatus.currentStreakDays)
+      ? Math.max(0, Math.floor(rewardStatus.currentStreakDays))
+      : claimedCount
+  const paidOrderCount = rewardStatus?.paidOrderCount ?? 0
   const walletBalance = rewardStatus?.walletBalance || 0
-  const availableCoins = walletBalance + giftBoxBonusCoins
+  const availableCoins = walletBalance
   const rewardCarouselViewportW = screenWidth - REWARD_CONTENT_H_PAD
   /** Two cards + one gap fill the viewport so only ~2 cards show at once. */
   const rewardCardWidth = useMemo(
@@ -138,8 +243,6 @@ export function DailyRewards({ navigation, route }: any) {
   const rewardCarouselRef = useRef<ScrollView>(null)
   const scrollXRef = useRef(0)
   const [carouselScrollX, setCarouselScrollX] = useState(0)
-  const giftBoxPreviewPhase = useRef(new Animated.Value(0)).current
-  const giftBoxGlowRotateAnim = useRef(new Animated.Value(0)).current
 
   const rewardCarouselStep = rewardCardWidth + REWARD_CAROUSEL_GAP
   const rewardCarouselContentW = useMemo(() => {
@@ -151,34 +254,6 @@ export function DailyRewards({ navigation, route }: any) {
 
   const carouselCanGoBack = carouselScrollX > 2
   const carouselCanGoForward = carouselScrollX < rewardCarouselMaxX - 2
-  const giftBoxRemainingMs = useMemo(() => {
-    if (!giftBoxReadyAt) return 0
-    return Math.max(0, giftBoxReadyAt - giftBoxNow)
-  }, [giftBoxNow, giftBoxReadyAt])
-  const isGiftBoxCoolingDown = giftBoxRemainingMs > 0
-  const isGiftBoxReadyToClaim = Boolean(giftBoxReadyAt) && !isGiftBoxCoolingDown
-  const showGiftBoxAnimationPreview = false
-  const giftBoxTimerText = useMemo(() => formatDuration(giftBoxRemainingMs), [giftBoxRemainingMs])
-  const giftBoxFloatY = useMemo(
-    () =>
-      giftBoxPreviewPhase.interpolate({
-        inputRange: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1],
-        outputRange: [0, -4, -9, -5, 0, 4, 8, 4, 0],
-      }),
-    [giftBoxPreviewPhase],
-  )
-  const giftBoxTiltDeg = useMemo(
-    () =>
-      giftBoxPreviewPhase.interpolate({
-        inputRange: [0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1],
-        outputRange: ['-2.4deg', '-1deg', '2.2deg', '0.8deg', '-2deg', '-0.8deg', '2.2deg', '1deg', '-2.4deg'],
-      }),
-    [giftBoxPreviewPhase],
-  )
-  const giftBoxGlowRotateDeg = useMemo(
-    () => giftBoxGlowRotateAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }),
-    [giftBoxGlowRotateAnim],
-  )
 
   function scrollRewardCarousel(dir: -1 | 1) {
     const step = rewardCarouselStep
@@ -226,116 +301,24 @@ export function DailyRewards({ navigation, route }: any) {
     loadPreviewUser()
   }, [loadPreviewUser])
 
-  const grantGiftBoxReward = useCallback(async () => {
-    const rawBonus = await AsyncStorage.getItem(GIFT_BOX_BONUS_COINS_KEY)
-    const currentBonus = Number(rawBonus || 0)
-    const safeBonus = Number.isFinite(currentBonus) && currentBonus > 0 ? currentBonus : 0
-    const nextBonus = safeBonus + GIFT_BOX_REWARD_COINS
-    await AsyncStorage.setItem(GIFT_BOX_BONUS_COINS_KEY, String(nextBonus))
-    setGiftBoxBonusCoins(nextBonus)
-    setStoreMessage(`Gift opened! +${GIFT_BOX_REWARD_COINS} coins added.`)
-  }, [])
-
-  useEffect(() => {
-    let isMounted = true
-    async function loadGiftBoxSvg() {
-      try {
-        const resolved = Image.resolveAssetSource(require('../../assets/giftbox.svg'))
-        const uri = resolved?.uri || ''
-        if (!isMounted || !uri) return
-        setGiftBoxSvgUri(uri)
-        const response = await fetch(uri)
-        const xml = await response.text()
-        if (isMounted) {
-          setGiftBoxSvgXml(xml)
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    loadGiftBoxSvg()
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
-  useEffect(() => {
-    let isMounted = true
-    async function loadGiftBoxTimer() {
-      try {
-        const rawBonus = await AsyncStorage.getItem(GIFT_BOX_BONUS_COINS_KEY)
-        const parsedBonus = Number(rawBonus || 0)
-        if (isMounted && Number.isFinite(parsedBonus) && parsedBonus > 0) {
-          setGiftBoxBonusCoins(parsedBonus)
-        }
-        const rawReadyAt = await AsyncStorage.getItem(GIFT_BOX_STORAGE_KEY)
-        const parsedReadyAt = Number(rawReadyAt || 0)
-        if (!isMounted || !Number.isFinite(parsedReadyAt) || parsedReadyAt <= 0) return
-        setGiftBoxNow(Date.now())
-        setGiftBoxReadyAt(parsedReadyAt)
-      } catch {
-        /* ignore */
-      }
-    }
-    loadGiftBoxTimer()
-    return () => {
-      isMounted = false
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!isGiftBoxCoolingDown) return
-    const interval = setInterval(() => {
-      setGiftBoxNow(Date.now())
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [isGiftBoxCoolingDown])
-
-  useEffect(() => {
-    if (!isGiftBoxReadyToClaim && !showGiftBoxAnimationPreview) {
-      giftBoxPreviewPhase.stopAnimation()
-      giftBoxGlowRotateAnim.stopAnimation()
-      giftBoxPreviewPhase.setValue(0)
-      giftBoxGlowRotateAnim.setValue(0)
-      return
-    }
-
-    const motionLoop = Animated.loop(
-      Animated.timing(giftBoxPreviewPhase, {
-        toValue: 1,
-        duration: DAILY_REWARDS_GIFT_FLOAT_LOOP_MS,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-    )
-    const glowSpinLoop = Animated.loop(
-      Animated.timing(giftBoxGlowRotateAnim, {
-        toValue: 1,
-        duration: DAILY_REWARDS_GIFT_RAY_SPIN_MS,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-    )
-
-    giftBoxPreviewPhase.setValue(0)
-    motionLoop.start()
-    glowSpinLoop.start()
-
-    return () => {
-      motionLoop.stop()
-      glowSpinLoop.stop()
-      giftBoxGlowRotateAnim.setValue(0)
-    }
-  }, [giftBoxGlowRotateAnim, giftBoxPreviewPhase, isGiftBoxReadyToClaim, showGiftBoxAnimationPreview])
-
   const refreshHeroBadges = useCallback(async () => {
     try {
       if (sessionToken) {
         const remote = await getProfileHero(sessionToken)
-        setHeroBadgeSlots(remote.badgeSlots)
+        const migrated: ProfileHeroBadgeSlots = [
+          migrateWonderBadgeSlotId(remote.badgeSlots[0]),
+          migrateWonderBadgeSlotId(remote.badgeSlots[1]),
+          migrateWonderBadgeSlotId(remote.badgeSlots[2]),
+        ]
+        setHeroBadgeSlots(migrated)
       } else {
         const p = await loadProfileHeroPreferences()
-        setHeroBadgeSlots(p.badgeSlots)
+        const migrated: ProfileHeroBadgeSlots = [
+          migrateWonderBadgeSlotId(p.badgeSlots[0]),
+          migrateWonderBadgeSlotId(p.badgeSlots[1]),
+          migrateWonderBadgeSlotId(p.badgeSlots[2]),
+        ]
+        setHeroBadgeSlots(migrated)
       }
     } catch {
       /* ignore */
@@ -440,20 +423,65 @@ export function DailyRewards({ navigation, route }: any) {
     }
   }
 
-  async function handleEquipAvatarFrame(id: AvatarFrameId) {
-    await saveEquippedAvatarFrame(id)
-    setEquippedAvatarFrame(id)
-    setStoreMessage(id === 'none' ? 'Plain avatar on.' : 'Frame saved. See your profile.')
-    if (sessionToken) {
-      try {
-        await syncEquippedAvatarFrame(sessionToken, id)
-      } catch (error) {
-        console.log('[dailyRewards] avatar frame server sync failed', error)
-      }
+  async function purchaseStoreItem(
+    itemId: string,
+    afterSuccess?: (status: DailyRewardStatus) => Promise<void>,
+  ) {
+    if (!sessionToken) {
+      setStoreMessage('Log in to purchase from the Wonder Store.')
+      return
+    }
+    setPurchasingItemId(itemId)
+    setStoreMessage('')
+    try {
+      const status = await purchaseWonderStoreItem(sessionToken, itemId)
+      setRewardStatus(status)
+      if (afterSuccess) await afterSuccess(status)
+    } catch (e: any) {
+      setStoreMessage(String(e?.message || 'Could not complete purchase.'))
+    } finally {
+      setPurchasingItemId(null)
     }
   }
 
-  async function handleEquipWonderJumpCharacter(style: WonderJumpCharacterStyle) {
+  async function handleEquipAvatarFrame(id: AvatarFrameId, freshStatus?: DailyRewardStatus) {
+    const prev = equippedAvatarFrame
+    setStoreMessage('')
+    if (id !== 'none') {
+      const itemId = avatarFrameStoreItemId(id)
+      if (getAvatarFrameStorePrice(id) != null && !isStoreItemOwned(itemId, freshStatus ?? null)) {
+        setStoreMessage('Purchase this frame in the Wonder Store first.')
+        return
+      }
+    }
+    try {
+      await saveEquippedAvatarFrame(id)
+      setEquippedAvatarFrame(id)
+      setStoreMessage(id === 'none' ? 'Plain avatar on.' : 'Frame saved. See your profile.')
+      if (sessionToken) {
+        try {
+          await syncEquippedAvatarFrame(sessionToken, id)
+        } catch (error: any) {
+          await saveEquippedAvatarFrame(prev)
+          setEquippedAvatarFrame(prev)
+          setStoreMessage(String(error?.message || 'Could not sync avatar frame. Try again.'))
+        }
+      }
+    } catch {
+      setStoreMessage('Could not save frame locally.')
+    }
+  }
+
+  async function handleEquipWonderJumpCharacter(
+    style: WonderJumpCharacterStyle,
+    freshStatus?: DailyRewardStatus,
+  ) {
+    if (style === 'ghost') {
+      if (!isStoreItemOwned(WONDERJUMP_GHOST_STORE_ITEM_ID, freshStatus ?? null)) {
+        setStoreMessage('Purchase the Ghost character first.')
+        return
+      }
+    }
     await saveWonderJumpCharacterStyle(style)
     setEquippedWonderJumpCharacter(style)
     setStoreMessage(`${style[0].toUpperCase()}${style.slice(1)} character equipped for WonderJump.`)
@@ -463,7 +491,7 @@ export function DailyRewards({ navigation, route }: any) {
     try {
       const prefs = await loadProfileHeroPreferences()
       const slots: ProfileHeroBadgeSlots = [...prefs.badgeSlots]
-      if (slots.some((s) => s === badgeId)) {
+      if (slots.some((s) => (migrateWonderBadgeSlotId(s) ?? s) === badgeId)) {
         setStoreMessage('This badge is already on your profile showcase.')
         return
       }
@@ -483,33 +511,6 @@ export function DailyRewards({ navigation, route }: any) {
       setStoreMessage('')
     } catch {
       setStoreMessage('Could not save badge. Try again.')
-    }
-  }
-
-  async function handleOpenGiftBox() {
-    if (isGiftBoxCoolingDown || isGiftBoxReadyToClaim || claimingGiftBoxReward) return
-    const nextReadyAt = Date.now() + GIFT_BOX_COOLDOWN_MS
-    setGiftBoxReadyAt(nextReadyAt)
-    setGiftBoxNow(Date.now())
-    try {
-      await AsyncStorage.setItem(GIFT_BOX_STORAGE_KEY, String(nextReadyAt))
-    } catch {
-      /* ignore */
-    }
-  }
-
-  async function handleClaimGiftBoxReward() {
-    if (!isGiftBoxReadyToClaim || claimingGiftBoxReward) return
-    try {
-      setClaimingGiftBoxReward(true)
-      await grantGiftBoxReward()
-      setGiftBoxReadyAt(null)
-      setGiftBoxNow(Date.now())
-      await AsyncStorage.removeItem(GIFT_BOX_STORAGE_KEY)
-    } catch {
-      /* ignore */
-    } finally {
-      setClaimingGiftBoxReward(false)
     }
   }
 
@@ -537,7 +538,9 @@ export function DailyRewards({ navigation, route }: any) {
           <View style={styles.bannerTopRow}>
             <Text style={styles.bannerTitle}>Keep your streak alive</Text>
           </View>
-          <Text style={styles.bannerSubtitle}>Claim once each day to earn more Wonder Wallet coins.</Text>
+          <Text style={styles.bannerSubtitle}>
+            After day 7, open this screen once a day to grow your streak.
+          </Text>
 
           <View style={styles.daysRow}>
             {rewards.map((reward) => {
@@ -660,108 +663,6 @@ export function DailyRewards({ navigation, route }: any) {
             )
           })}
       </ScrollView>
-      <View style={styles.giftBoxCard}>
-        <Text style={styles.giftBoxTitle}>Mystery Gift Box</Text>
-        <Text style={styles.giftBoxSubtitle}>
-          {isGiftBoxReadyToClaim
-            ? 'Ready to open! Tap the box to claim +2 coins.'
-            : 'Click Open to start a 6-hour timer. When it ends, tap the box to claim your coins.'}
-        </Text>
-        <View style={styles.giftBoxPreviewStage}>
-          <Pressable onPress={handleClaimGiftBoxReward} disabled={!isGiftBoxReadyToClaim || claimingGiftBoxReward}>
-            <Animated.View
-              style={[
-                styles.giftBoxAnimatedPreviewGroup,
-                {
-                  transform: [
-                    { translateY: isGiftBoxReadyToClaim ? giftBoxFloatY : 0 },
-                    { rotate: isGiftBoxReadyToClaim ? giftBoxTiltDeg : '0deg' },
-                  ],
-                },
-              ]}
-            >
-              {isGiftBoxReadyToClaim ? (
-                <Animated.View
-                  pointerEvents="none"
-                  style={[
-                    styles.giftBoxPrizeRaysOrbit,
-                    {
-                      transform: [{ rotate: giftBoxGlowRotateDeg }],
-                    },
-                  ]}
-                >
-                  <DailyRewardsGiftBoxRayBurst size={236} />
-                </Animated.View>
-              ) : null}
-              <View style={styles.giftBoxAnimatedWrap}>
-                {giftBoxSvgXml ? (
-                  <SvgXml xml={giftBoxSvgXml} width={180} height={146} />
-                ) : giftBoxSvgUri ? (
-                  <SvgUri uri={giftBoxSvgUri} width={180} height={146} />
-                ) : (
-                  <FeatherIcon name="gift" size={64} color={DAILY_ACCENT} />
-                )}
-              </View>
-            </Animated.View>
-          </Pressable>
-        </View>
-        <Pressable
-          style={[
-            styles.giftBoxButton,
-            isGiftBoxCoolingDown || isGiftBoxReadyToClaim ? styles.giftBoxButtonDisabled : null,
-          ]}
-          onPress={handleOpenGiftBox}
-          disabled={isGiftBoxCoolingDown || isGiftBoxReadyToClaim}
-        >
-          <Text
-            style={[
-              styles.giftBoxButtonText,
-              isGiftBoxCoolingDown || isGiftBoxReadyToClaim ? styles.giftBoxButtonTextDisabled : null,
-            ]}
-          >
-            {isGiftBoxReadyToClaim ? (claimingGiftBoxReward ? 'Claiming...' : 'Tap box to claim') : isGiftBoxCoolingDown ? `Opens in ${giftBoxTimerText}` : 'Open'}
-          </Text>
-        </Pressable>
-      </View>
-      {showGiftBoxAnimationPreview ? (
-        <View style={styles.giftBoxCard}>
-          <Text style={styles.giftBoxTitle}>Mystery Gift Box (Animation Preview)</Text>
-          <Text style={styles.giftBoxSubtitle}>
-            Preview of the ready-state animation.
-          </Text>
-          <View style={styles.giftBoxPreviewStage}>
-            <Animated.View
-              style={[
-                styles.giftBoxAnimatedPreviewGroup,
-                {
-                  transform: [{ translateY: giftBoxFloatY }, { rotate: giftBoxTiltDeg }],
-                },
-              ]}
-            >
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.giftBoxPrizeRaysOrbit,
-                  {
-                    transform: [{ rotate: giftBoxGlowRotateDeg }],
-                  },
-                ]}
-              >
-                <DailyRewardsGiftBoxRayBurst size={236} />
-              </Animated.View>
-              <View style={styles.giftBoxAnimatedWrap}>
-                {giftBoxSvgXml ? (
-                  <SvgXml xml={giftBoxSvgXml} width={180} height={146} />
-                ) : giftBoxSvgUri ? (
-                  <SvgUri uri={giftBoxSvgUri} width={180} height={146} />
-                ) : (
-                  <FeatherIcon name="gift" size={64} color={DAILY_ACCENT} />
-                )}
-              </View>
-            </Animated.View>
-          </View>
-        </View>
-      ) : null}
       {loadingRewards ? <Text style={styles.infoText}>Loading rewards...</Text> : null}
       {rewardsError ? <Text style={styles.errorText}>{rewardsError}</Text> : null}
 
@@ -779,7 +680,10 @@ export function DailyRewards({ navigation, route }: any) {
         <Text style={styles.badgesHeading}>Badges</Text>
         <View style={styles.badgesGrid}>
           {WONDER_BADGE_IDS.map((id) => {
-            const equipped = heroBadgeSlots.some((s) => s === id)
+            const slotMatches = (s: string | null) => (migrateWonderBadgeSlotId(s) ?? s) === id
+            const equipped = heroBadgeSlots.some((s) => slotMatches(s))
+            const meta = wonderBadgeCardMeta(id, claimedCount, currentStreak, paidOrderCount)
+            const dimmed = !meta.earned
             return (
               <View
                 key={id}
@@ -787,31 +691,77 @@ export function DailyRewards({ navigation, route }: any) {
                   styles.badgeStoreCard,
                   { width: badgeStoreCardWidth },
                   equipped ? styles.badgeStoreCardEquipped : null,
+                  dimmed ? styles.badgeStoreCardLocked : null,
                 ]}
               >
-                <View style={[styles.badgePreviewPlate, equipped ? styles.badgePreviewPlateEquipped : null]}>
-                  <WonderBadgeImage badgeId={id} size={64} fallbackColor={DAILY_ACCENT} />
+                <View style={styles.badgeCardBody}>
+                  <View style={[styles.badgePreviewPlate, equipped ? styles.badgePreviewPlateEquipped : null]}>
+                    <WonderBadgeImage badgeId={id} size={64} fallbackColor={DAILY_ACCENT} />
+                  </View>
+                  <View style={styles.badgeTitleSlot}>
+                    <Text style={styles.badgeCardTitle} numberOfLines={2}>
+                      {meta.label}
+                    </Text>
+                  </View>
+                  <View style={styles.badgeCaptionSlot}>
+                    <Text style={styles.badgeCardCaption} numberOfLines={3}>
+                      {meta.caption}
+                    </Text>
+                  </View>
                 </View>
-                <Pressable
-                  style={[styles.badgeEquipButton, equipped ? styles.badgeEquipButtonEquipped : null]}
-                  disabled={equipped}
-                  onPress={() => void equipWonderBadge(id)}
-                >
-                  <Text
-                    style={[styles.badgeEquipButtonText, equipped ? styles.badgeEquipButtonTextEquipped : null]}
+                <View style={styles.badgeCardFooter}>
+                  <View style={styles.badgeProgressSlot}>
+                    {meta.progressLabel ? (
+                      <View style={styles.badgeProgressBlock}>
+                        <View style={styles.badgeProgressLabels}>
+                          <Text style={styles.badgeProgressText}>{meta.progressLabel}</Text>
+                        </View>
+                        <View style={styles.badgeProgressTrack}>
+                          <View
+                            style={[
+                              styles.badgeProgressFill,
+                              { width: `${Math.min(100, Math.max(0, meta.fillRatio * 100))}%` },
+                            ]}
+                          />
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={styles.badgeProgressSlotSpacer} />
+                    )}
+                  </View>
+                  <Pressable
+                    style={[
+                      styles.badgeEquipButton,
+                      equipped ? styles.badgeEquipButtonEquipped : null,
+                      !meta.earned || equipped ? styles.badgeEquipButtonDisabled : null,
+                    ]}
+                    disabled={!meta.earned || equipped}
+                    onPress={() => void equipWonderBadge(id)}
                   >
-                    {equipped ? 'Equipped' : 'Equip'}
-                  </Text>
-                </Pressable>
+                    <Text
+                      style={[
+                        styles.badgeEquipButtonText,
+                        equipped ? styles.badgeEquipButtonTextEquipped : null,
+                        !meta.earned || equipped ? styles.badgeEquipButtonTextDisabled : null,
+                      ]}
+                    >
+                      {equipped ? 'Equipped' : !meta.earned ? 'Locked' : 'Equip'}
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
             )
           })}
         </View>
         <View style={styles.charactersSection}>
-          <Text style={styles.sectionHeading}>Characters</Text>
+          <Text style={styles.sectionHeading}>Wonderjump Characters</Text>
           <View style={styles.charactersGrid}>
             {WONDER_JUMP_CHARACTER_OPTIONS.map((option) => {
               const equipped = equippedWonderJumpCharacter === option.id
+              const isGhost = option.id === 'ghost'
+              const ghostOwned = isStoreItemOwned(WONDERJUMP_GHOST_STORE_ITEM_ID)
+              const ghostBusy = purchasingItemId === WONDERJUMP_GHOST_STORE_ITEM_ID
+              const ghostCanAfford = availableCoins >= WONDERJUMP_GHOST_STORE_COST
               return (
                 <View key={option.id} style={styles.characterCard}>
                   <View style={styles.characterPreviewPlate}>
@@ -819,12 +769,35 @@ export function DailyRewards({ navigation, route }: any) {
                   </View>
                   <Text style={styles.characterName}>{option.label}</Text>
                   <Text style={styles.characterBlurb}>{option.blurb}</Text>
-                  <View style={styles.characterMetaRow}>
-                    <Text style={styles.characterPrice}>FREE</Text>
+                  <View
+                    style={[
+                      styles.characterMetaRow,
+                      !isGhost ? styles.characterMetaRowEnd : null,
+                    ]}
+                  >
+                    {isGhost ? (
+                      <View style={styles.characterPriceRow}>
+                        <RewardStaticCoin size={16} />
+                        <Text style={styles.characterPrice}>{WONDERJUMP_GHOST_STORE_COST}</Text>
+                      </View>
+                    ) : null}
                     <Pressable
-                      style={[styles.characterEquipButton, equipped ? styles.characterEquipButtonEquipped : null]}
-                      disabled={equipped}
-                      onPress={() => void handleEquipWonderJumpCharacter(option.id)}
+                      style={[
+                        styles.characterEquipButton,
+                        equipped ? styles.characterEquipButtonEquipped : null,
+                      ]}
+                      disabled={
+                        equipped || (isGhost && !ghostOwned && (ghostBusy || !ghostCanAfford))
+                      }
+                      onPress={() => {
+                        if (isGhost && !ghostOwned) {
+                          void purchaseStoreItem(WONDERJUMP_GHOST_STORE_ITEM_ID, async (status) => {
+                            await handleEquipWonderJumpCharacter('ghost', status)
+                          })
+                          return
+                        }
+                        void handleEquipWonderJumpCharacter(option.id)
+                      }}
                     >
                       <Text
                         style={[
@@ -832,7 +805,13 @@ export function DailyRewards({ navigation, route }: any) {
                           equipped ? styles.characterEquipButtonTextEquipped : null,
                         ]}
                       >
-                        {equipped ? 'Equipped' : 'Equip'}
+                        {equipped
+                          ? 'Equipped'
+                          : isGhost && !ghostOwned
+                            ? ghostBusy
+                              ? 'Buying...'
+                              : 'Buy'
+                            : 'Equip'}
                       </Text>
                     </Pressable>
                   </View>
@@ -847,17 +826,36 @@ export function DailyRewards({ navigation, route }: any) {
       <View style={styles.framesSection}>
         <Text style={styles.sectionHeading}>Avatar Frames</Text>
         <View style={styles.framesGrid}>
-          {AVATAR_FRAME_SHOP.map((frame) => (
-            <AvatarFramePreviewTile
-              key={frame.id}
-              frameId={frame.id}
-              size={AVATAR_FRAME_SIZE_PREVIEW_TILE}
-              equipped={equippedAvatarFrame === frame.id}
-              onEquip={() => handleEquipAvatarFrame(frame.id)}
-              previewUri={framePreviewUser.uri}
-              previewInitial={framePreviewUser.initial}
-            />
-          ))}
+          {AVATAR_FRAME_SHOP.map((frame) => {
+            const itemId = avatarFrameStoreItemId(frame.id)
+            const price = getAvatarFrameStorePrice(frame.id) ?? 0
+            const owned = isStoreItemOwned(itemId)
+            const busy = purchasingItemId === itemId
+            const canAfford = availableCoins >= price
+            return (
+              <AvatarFramePreviewTile
+                key={frame.id}
+                frameId={frame.id}
+                size={AVATAR_FRAME_SIZE_PREVIEW_TILE}
+                equipped={equippedAvatarFrame === frame.id}
+                owned={owned}
+                priceCoins={price}
+                canAfford={canAfford}
+                busy={busy}
+                onPrimaryPress={() => {
+                  if (!owned) {
+                    void purchaseStoreItem(itemId, async (status) => {
+                      await handleEquipAvatarFrame(frame.id, status)
+                    })
+                    return
+                  }
+                  void handleEquipAvatarFrame(frame.id)
+                }}
+                previewUri={framePreviewUser.uri}
+                previewInitial={framePreviewUser.initial}
+              />
+            )
+          })}
         </View>
         <Pressable
           style={styles.plainFrameRow}
@@ -1094,76 +1092,6 @@ const getStyles = (theme: any) => StyleSheet.create({
   rewardStatusTextClaimed: {
     color: DAILY_ACCENT,
   },
-  giftBoxCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.32)',
-    backgroundColor: DAILY_FILL,
-    padding: 14,
-    marginBottom: 8,
-  },
-  giftBoxTitle: {
-    color: '#ffffff',
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 20,
-  },
-  giftBoxSubtitle: {
-    color: 'rgba(255,255,255,0.72)',
-    fontFamily: 'Geist-Regular',
-    fontSize: 12,
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  giftBoxSvgWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-  },
-  giftBoxButton: {
-    minHeight: 40,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: DAILY_ACCENT,
-    marginTop: 8,
-  },
-  giftBoxButtonDisabled: {
-    backgroundColor: DAILY_FILL,
-    borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.3)',
-  },
-  giftBoxButtonText: {
-    color: '#050505',
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 14,
-  },
-  giftBoxButtonTextDisabled: {
-    color: DAILY_ACCENT,
-  },
-  giftBoxPreviewStage: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 190,
-    marginTop: 4,
-  },
-  giftBoxAnimatedPreviewGroup: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 236,
-    height: 236,
-  },
-  giftBoxPrizeRaysOrbit: {
-    position: 'absolute',
-    width: 236,
-    height: 236,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  giftBoxAnimatedWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2,
-  },
   infoText: {
     marginTop: 10,
     color: 'rgba(255,255,255,0.74)',
@@ -1189,28 +1117,100 @@ const getStyles = (theme: any) => StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 11,
+    alignItems: 'stretch',
   },
   badgeStoreCard: {
     backgroundColor: DAILY_FILL,
-    borderRadius: 12,
+    borderRadius: 11,
     borderWidth: 1,
     borderColor: 'rgba(203,255,0,0.28)',
-    padding: 10,
+    padding: 8,
     alignItems: 'stretch',
+    alignSelf: 'stretch',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+  },
+  badgeCardBody: {
+    flexGrow: 1,
+    flexShrink: 1,
   },
   badgeStoreCardEquipped: {
     backgroundColor: 'rgba(0,0,0,0.62)',
     borderColor: 'rgba(203,255,0,0.45)',
   },
+  badgeStoreCardLocked: {
+    opacity: 0.55,
+  },
+  badgeTitleSlot: {
+    minHeight: 32,
+    marginBottom: 2,
+    justifyContent: 'flex-start',
+  },
+  badgeCaptionSlot: {
+    minHeight: 42,
+    justifyContent: 'flex-start',
+  },
+  badgeCardTitle: {
+    color: '#ffffff',
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 13,
+    lineHeight: 16,
+  },
+  badgeCardCaption: {
+    color: 'rgba(255,255,255,0.58)',
+    fontFamily: 'Geist-Regular',
+    fontSize: 12,
+    lineHeight: 14,
+  },
+  /** Progress + action: fixed rhythm so bars and Locked/Equip line up across tiles. */
+  badgeCardFooter: {
+    alignSelf: 'stretch',
+    gap: 7,
+    paddingTop: 1,
+  },
+  badgeProgressSlot: {
+    height: 34,
+    alignSelf: 'stretch',
+    justifyContent: 'flex-end',
+  },
+  badgeProgressSlotSpacer: {
+    height: 34,
+  },
+  badgeProgressBlock: {
+    alignSelf: 'stretch',
+    justifyContent: 'flex-end',
+  },
+  badgeProgressLabels: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 1,
+  },
+  badgeProgressText: {
+    color: 'rgba(255,255,255,0.65)',
+    fontFamily: 'Geist-Medium',
+    fontSize: 11,
+  },
+  badgeProgressTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    overflow: 'hidden',
+    alignSelf: 'stretch',
+  },
+  badgeProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: DAILY_ACCENT,
+  },
   badgePreviewPlate: {
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'stretch',
-    marginBottom: 8,
-    minHeight: 88,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    borderRadius: 14,
+    marginBottom: 3,
+    minHeight: 72,
+    paddingVertical: 5,
+    paddingHorizontal: 5,
+    borderRadius: 11,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(203,255,0,0.22)',
@@ -1220,8 +1220,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     borderColor: 'rgba(203,255,0,0.38)',
   },
   badgeEquipButton: {
-    marginTop: 8,
-    minHeight: 32,
+    minHeight: 34,
     borderRadius: 8,
     backgroundColor: DAILY_ACCENT,
     alignItems: 'center',
@@ -1232,13 +1231,19 @@ const getStyles = (theme: any) => StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(203,255,0,0.45)',
   },
+  badgeEquipButtonDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
   badgeEquipButtonText: {
     color: '#050505',
     fontFamily: 'Geist-SemiBold',
-    fontSize: 12,
+    fontSize: 13,
   },
   badgeEquipButtonTextEquipped: {
     color: DAILY_ACCENT,
+  },
+  badgeEquipButtonTextDisabled: {
+    color: 'rgba(255,255,255,0.45)',
   },
   charactersSection: {
     marginTop: 18,
@@ -1287,6 +1292,14 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
+  },
+  characterMetaRowEnd: {
+    justifyContent: 'flex-end',
+  },
+  characterPriceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   characterPrice: {
     color: DAILY_ACCENT,
