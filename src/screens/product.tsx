@@ -31,6 +31,7 @@ import {
 import { fetchSessionUser } from '../utils'
 import { getDbProductByHandle } from '../utils'
 import type { ShopifyMoney, ShopifyProduct } from '../../types'
+import { SHOW_PEACH_CHECKOUT } from '../../constants'
 
 const CHECKOUT_ACCENT = '#CBFF00'
 const CHECKOUT_FILL = '#000000'
@@ -274,11 +275,17 @@ export function Product({ route, navigation }: any) {
       deliveryMethod === 'pudo'
         ? 'Pudo locker delivery includes R70.00 shipping in your total.'
         : 'Courier: R150 per single box, R200 per whole set (included in your total).'
-    Alert.alert('Payment method', `${shipNote}\nHow would you like to pay?`, [
+    const payMessage = SHOW_PEACH_CHECKOUT
+      ? `${shipNote}\nHow would you like to pay?`
+      : `${shipNote}\nPay with bank transfer (EFT).`
+    const payButtons = [
       { text: 'EFT (bank transfer)', onPress: () => runCheckout('eft') },
-      { text: 'Peach (card)', onPress: () => runCheckout('peach') },
-      { text: 'Cancel', style: 'cancel' },
-    ])
+      ...(SHOW_PEACH_CHECKOUT
+        ? [{ text: 'Peach (card)', onPress: () => runCheckout('peach') }]
+        : []),
+      { text: 'Cancel', style: 'cancel' as const },
+    ]
+    Alert.alert('Payment method', payMessage, payButtons)
   }
 
   function onBuyNowPress() {

@@ -77,3 +77,6 @@ export const IMAGE_MODELS = {
   nanoBanana: { name: 'Nano Banana (Gemini Flash Image)', label: 'nanoBanana' },
   nanoBananaPro: { name: 'Nano Banana Pro (Gemini 3 Pro)', label: 'nanoBananaPro' },
 }
+
+/** Peach card checkout — show in payment alert once gateway + server env are ready. */
+export const SHOW_PEACH_CHECKOUT = false
