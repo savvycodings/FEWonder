@@ -894,6 +894,32 @@ export async function getShopifyProductByHandle(handle: string): Promise<Shopify
   return data.product as ShopifyProduct
 }
 
+export type ShopifyCollectionSummary = {
+  id: string
+  title: string
+  handle: string
+  imageUrl: string | null
+}
+
+export async function listShopifyCollectionsByIds(ids: string[]): Promise<ShopifyCollectionSummary[]> {
+  if (!DOMAIN) {
+    throw new Error('API domain is not configured. Set EXPO_PUBLIC_DEV_API_URL.')
+  }
+  const safeIds = Array.from(
+    new Set((Array.isArray(ids) ? ids : []).map((id) => String(id || '').trim()).filter(Boolean))
+  )
+  if (!safeIds.length) return []
+
+  const url = new URL(`${DOMAIN}/shopify/collections/by-ids`)
+  url.searchParams.set('ids', safeIds.join(','))
+  const response = await fetch(url.toString())
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to load collections')
+  }
+  return (data.collections || []) as ShopifyCollectionSummary[]
+}
+
 export async function listDbProducts(params?: {
   first?: number
   query?: string

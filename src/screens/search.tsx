@@ -14,7 +14,7 @@ import { Feather as FeatherIcon } from '@expo/vector-icons'
 import { ProductTileImageWithHeart } from '../components'
 import { ShopifyProduct } from '../../types'
 import { ThemeContext } from '../context'
-import { listDbProducts } from '../utils'
+import { listDbProducts, listShopifyCollectionsByIds, ShopifyCollectionSummary } from '../utils'
 import { formatMoney } from '../money'
 
 const GRID_GAP = 12
@@ -47,75 +47,104 @@ const banners = [
   require('../../public/homepageimgs/searchbanner2.webp'),
   require('../../public/homepageimgs/searchbanner3.webp'),
 ]
+
+const FEATURED_COLLECTION_IDS = [
+  'gid://shopify/Collection/294309199985',
+  'gid://shopify/Collection/287599689841',
+  'gid://shopify/Collection/293150228593',
+  'gid://shopify/Collection/294309298289',
+  'gid://shopify/Collection/294309265521',
+  'gid://shopify/Collection/290448900209',
+  'gid://shopify/Collection/294309396593',
+  'gid://shopify/Collection/291556622449',
+  'gid://shopify/Collection/290058993777',
+  'gid://shopify/Collection/288153862257',
+  'gid://shopify/Collection/290535899249',
+  'gid://shopify/Collection/299407343729',
+  'gid://shopify/Collection/294309822577',
+  'gid://shopify/Collection/289047216241',
+  'gid://shopify/Collection/288797818993',
+  'gid://shopify/Collection/291791536241',
+  'gid://shopify/Collection/288153895025',
+  'gid://shopify/Collection/294309494897',
+  'gid://shopify/Collection/290676637809',
+  'gid://shopify/Collection/294309462129',
+  'gid://shopify/Collection/284024537201',
+  'gid://shopify/Collection/285040246897',
+  'gid://shopify/Collection/291451895921',
+  'gid://shopify/Collection/294309593201',
+  'gid://shopify/Collection/294309625969',
+  'gid://shopify/Collection/288892616817',
+  'gid://shopify/Collection/287199330417',
+]
 export function Search({ navigation }: { navigation: any }) {
   const [query, setQuery] = useState('')
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [activeBanner, setActiveBanner] = useState(0)
   const bannerScrollRef = useRef<ScrollView | null>(null)
   const { width } = useWindowDimensions()
   const bannerWidth = width - 32
   const [products, setProducts] = useState<ShopifyProduct[]>([])
   const [loadingProducts, setLoadingProducts] = useState(true)
+  const [collections, setCollections] = useState<ShopifyCollectionSummary[]>([])
+  const [loadingCollections, setLoadingCollections] = useState(true)
+  const [showAllCollections, setShowAllCollections] = useState(false)
   const { theme } = useContext(ThemeContext)
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return products
-    const q = query.toLowerCase()
-    return products.filter(
-      item =>
-        String(item.title || '').toLowerCase().includes(q) ||
-        String(item.productType || '').toLowerCase().includes(q)
-    )
+  const productNameSuggestions = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return []
+    return products
+      .filter((item) => String(item.title || '').toLowerCase().includes(q))
+      .slice(0, 6)
   }, [query, products])
-  const displayProducts = useMemo(
-    () => (filtered.length ? filtered : products),
-    [filtered, products]
-  )
-  const topSellers = useMemo(() => displayProducts.slice(0, 2), [displayProducts])
-  const newArrivals = useMemo(() => displayProducts.slice(2, 4), [displayProducts])
+  const topSellers = useMemo(() => products.slice(0, 2), [products])
+  const newArrivals = useMemo(() => products.slice(2, 4), [products])
   const cardW = (width - 32 - GRID_GAP) / 2
+  const collectionCardW = (width - 32 - GRID_GAP) / 2
+  const visibleCollections = useMemo(
+    () => (showAllCollections ? collections : collections.slice(0, 4)),
+    [showAllCollections, collections]
+  )
   const gridStyles = useMemo(() => getProductGridStyles(theme), [theme])
 
   useEffect(() => {
     let cancelled = false
-    const q = query.trim()
-    const timeout = setTimeout(() => {
-      ;(async () => {
-        setLoadingProducts(true)
-        try {
-          console.log('[Search] loading DB products…', { q })
-          const fetched = await listDbProducts({ first: 24, query: q || undefined })
-          if (!cancelled && fetched.length) {
-            console.log('[Search] DB products loaded', {
-              q,
-              count: fetched.length,
-              first: {
-                id: fetched[0]?.id,
-                title: fetched[0]?.title,
-                handle: fetched[0]?.handle,
-                featuredImageUrl: fetched[0]?.featuredImageUrl,
-              },
-            })
-            setProducts(fetched)
-          } else if (!cancelled) {
-            console.log('[Search] DB products empty', { q })
-            setProducts([])
-          }
-        } catch (error: any) {
-          if (!cancelled) {
-            console.log('[Search] DB products failed', { q, message: error?.message })
-            setProducts([])
-          }
-        } finally {
-          if (!cancelled) setLoadingProducts(false)
-        }
-      })()
-    }, 250)
+    ;(async () => {
+      setLoadingCollections(true)
+      try {
+        const fetched = await listShopifyCollectionsByIds(FEATURED_COLLECTION_IDS)
+        if (!cancelled) setCollections(fetched)
+      } catch {
+        if (!cancelled) setCollections([])
+      } finally {
+        if (!cancelled) setLoadingCollections(false)
+      }
+    })()
 
     return () => {
       cancelled = true
-      clearTimeout(timeout)
     }
-  }, [query])
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      setLoadingProducts(true)
+      try {
+        const fetched = await listDbProducts({ first: 24 })
+        if (!cancelled) setProducts(fetched)
+      } catch {
+        if (!cancelled) setProducts([])
+      } finally {
+        if (!cancelled) setLoadingProducts(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -190,25 +219,111 @@ export function Search({ navigation }: { navigation: any }) {
         style={styles.scroll}
       >
         <View style={styles.hero}>
-          <View style={styles.searchBar}>
-            <FeatherIcon name="search" size={16} color="#8e97ad" />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search"
-              placeholderTextColor="#a2a9bb"
-              style={styles.searchInput}
-            />
-            {query.length > 0 && (
-              <Pressable onPress={() => setQuery('')} hitSlop={8}>
-                <FeatherIcon name="x" size={16} color="#8e97ad" />
-              </Pressable>
-            )}
+          <View style={styles.searchWrap}>
+            <View style={styles.searchBar}>
+              <FeatherIcon name="search" size={16} color="#8e97ad" />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
+                placeholder="Search"
+                placeholderTextColor="#a2a9bb"
+                style={styles.searchInput}
+              />
+              {query.length > 0 && (
+                <Pressable onPress={() => setQuery('')} hitSlop={8}>
+                  <FeatherIcon name="x" size={16} color="#8e97ad" />
+                </Pressable>
+              )}
+            </View>
+            {isSearchFocused && query.trim().length > 0 ? (
+              <View
+                style={[
+                  styles.searchDropdown,
+                  {
+                    backgroundColor: theme.secondaryBackgroundColor || theme.appBackgroundColor || '#1a1f2e',
+                    borderColor: theme.tileBorderColor || theme.borderColor || '#2b3145',
+                  },
+                ]}
+              >
+                {productNameSuggestions.length ? (
+                  productNameSuggestions.map((item) => (
+                    <Pressable
+                      key={`search-suggestion-${item.id || item.handle || item.title}`}
+                      style={styles.searchDropdownRow}
+                      onPress={() => {
+                        setQuery(item.title)
+                        navigation.navigate('Product', { product: item })
+                      }}
+                    >
+                      <Text
+                        style={[styles.searchDropdownText, { color: theme.headingColor || theme.textColor || '#ffffff' }]}
+                        numberOfLines={1}
+                      >
+                        {item.title}
+                      </Text>
+                      <FeatherIcon
+                        name="arrow-up-right"
+                        size={14}
+                        color={theme.mutedForegroundColor || '#b3bdd8'}
+                      />
+                    </Pressable>
+                  ))
+                ) : (
+                  <View style={styles.searchDropdownEmptyRow}>
+                    <Text style={[styles.searchDropdownEmptyText, { color: theme.mutedForegroundColor || '#b3bdd8' }]}>
+                      No matching products
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : null}
           </View>
 
         </View>
 
         <View style={styles.body}>
+          <View style={styles.collectionsSection}>
+            <View style={styles.resultsHeader}>
+              <Text style={[styles.resultsTitleMontserrat, { color: theme.textColor }]}>Collections</Text>
+              {collections.length > 4 ? (
+                <Pressable onPress={() => setShowAllCollections((prev) => !prev)} hitSlop={8}>
+                  <Text style={[styles.seeAllButtonText, { color: theme.textColor }]}>
+                    {showAllCollections ? 'See less' : 'See all'}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {loadingCollections ? (
+              <Text style={[styles.loadingText, { color: theme.mutedForegroundColor }]}>Loading collections…</Text>
+            ) : (
+              <View style={styles.collectionsGrid}>
+                {visibleCollections.map((collection) => (
+                  <Pressable
+                    key={collection.id}
+                    style={[
+                      styles.collectionCard,
+                      {
+                        width: collectionCardW,
+                        backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+                        borderColor: theme.tileBorderColor || theme.borderColor,
+                      },
+                    ]}
+                    onPress={() => setQuery(collection.title)}
+                  >
+                    <Text
+                      style={[styles.collectionTitle, { color: theme.headingColor || theme.textColor }]}
+                      numberOfLines={2}
+                    >
+                      {collection.title}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </View>
+
           {loadingProducts ? (
             <Text style={[styles.loadingText, { color: theme.mutedForegroundColor }]}>Loading products…</Text>
           ) : !products.length ? (
@@ -231,7 +346,7 @@ export function Search({ navigation }: { navigation: any }) {
                   key={index}
                   style={[styles.searchBannerSlide, { width: bannerWidth }]}
                   onPress={() => {
-                    const first = (filtered.length ? filtered : products)[0]
+                    const first = products[0]
                     if (first) navigation.navigate('Product', { product: first })
                   }}
                 >
@@ -385,6 +500,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 18,
+    zIndex: 20,
+  },
+  searchWrap: {
+    position: 'relative',
+    zIndex: 30,
   },
   searchBar: {
     borderRadius: 12,
@@ -393,7 +513,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginBottom: 14,
+    marginBottom: 0,
+  },
+  searchDropdown: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 60,
+    backgroundColor: '#11131b',
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+    zIndex: 200,
+    elevation: 10,
+  },
+  searchDropdownRow: {
+    minHeight: 46,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(194, 206, 238, 0.15)',
+  },
+  searchDropdownText: {
+    flex: 1,
+    marginRight: 10,
+    color: '#f1f4ff',
+    fontFamily: 'Geist-Medium',
+    fontSize: 14,
+  },
+  searchDropdownEmptyRow: {
+    minHeight: 46,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+  },
+  searchDropdownEmptyText: {
+    color: '#b3bdd8',
+    fontFamily: 'Geist-Medium',
+    fontSize: 13,
   },
   searchInput: {
     flex: 1,
@@ -447,6 +606,31 @@ const styles = StyleSheet.create({
   },
   productSection: {
     marginBottom: 22,
+  },
+  collectionsSection: {
+    marginBottom: 18,
+  },
+  collectionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: GRID_GAP,
+  },
+  collectionCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    minHeight: 62,
+    justifyContent: 'center',
+  },
+  collectionTitle: {
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  seeAllButtonText: {
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 13,
   },
   resultsHeader: {
     flexDirection: 'row',
