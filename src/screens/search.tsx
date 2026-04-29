@@ -81,6 +81,7 @@ export function Search({ navigation }: { navigation: any }) {
   const [query, setQuery] = useState('')
   const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [activeBanner, setActiveBanner] = useState(0)
+  const [carouselIndex, setCarouselIndex] = useState(0)
   const bannerScrollRef = useRef<ScrollView | null>(null)
   const { width } = useWindowDimensions()
   const bannerWidth = width - 32
@@ -90,6 +91,7 @@ export function Search({ navigation }: { navigation: any }) {
   const [loadingCollections, setLoadingCollections] = useState(true)
   const [showAllCollections, setShowAllCollections] = useState(false)
   const { theme } = useContext(ThemeContext)
+  const bannerSlides = useMemo(() => [...banners, banners[0]], [])
 
   const productNameSuggestions = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -148,12 +150,17 @@ export function Search({ navigation }: { navigation: any }) {
 
   useEffect(() => {
     const id = setInterval(() => {
-      setActiveBanner((prev) => {
-        const next = (prev + 1) % banners.length
+      setCarouselIndex((prev) => {
+        const next = prev + 1
         bannerScrollRef.current?.scrollTo({
           x: next * bannerWidth,
           animated: true,
         })
+        if (next >= banners.length) {
+          setActiveBanner(0)
+        } else {
+          setActiveBanner(next)
+        }
         return next
       })
     }, 3500)
@@ -284,46 +291,6 @@ export function Search({ navigation }: { navigation: any }) {
         </View>
 
         <View style={styles.body}>
-          <View style={styles.collectionsSection}>
-            <View style={styles.resultsHeader}>
-              <Text style={[styles.resultsTitleMontserrat, { color: theme.textColor }]}>Collections</Text>
-              {collections.length > 4 ? (
-                <Pressable onPress={() => setShowAllCollections((prev) => !prev)} hitSlop={8}>
-                  <Text style={[styles.seeAllButtonText, { color: theme.textColor }]}>
-                    {showAllCollections ? 'See less' : 'See all'}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-            {loadingCollections ? (
-              <Text style={[styles.loadingText, { color: theme.mutedForegroundColor }]}>Loading collections…</Text>
-            ) : (
-              <View style={styles.collectionsGrid}>
-                {visibleCollections.map((collection) => (
-                  <Pressable
-                    key={collection.id}
-                    style={[
-                      styles.collectionCard,
-                      {
-                        width: collectionCardW,
-                        backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
-                        borderColor: theme.tileBorderColor || theme.borderColor,
-                      },
-                    ]}
-                    onPress={() => setQuery(collection.title)}
-                  >
-                    <Text
-                      style={[styles.collectionTitle, { color: theme.headingColor || theme.textColor }]}
-                      numberOfLines={2}
-                    >
-                      {collection.title}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-          </View>
-
           {loadingProducts ? (
             <Text style={[styles.loadingText, { color: theme.mutedForegroundColor }]}>Loading products…</Text>
           ) : !products.length ? (
@@ -338,10 +305,19 @@ export function Search({ navigation }: { navigation: any }) {
               decelerationRate="fast"
               onMomentumScrollEnd={(e) => {
                 const nextIndex = Math.round(e.nativeEvent.contentOffset.x / bannerWidth)
+                if (nextIndex >= banners.length) {
+                  setCarouselIndex(0)
+                  setActiveBanner(0)
+                  requestAnimationFrame(() => {
+                    bannerScrollRef.current?.scrollTo({ x: 0, animated: false })
+                  })
+                  return
+                }
+                setCarouselIndex(nextIndex)
                 setActiveBanner(nextIndex)
               }}
             >
-              {banners.map((banner, index) => (
+              {bannerSlides.map((banner, index) => (
                 <Pressable
                   key={index}
                   style={[styles.searchBannerSlide, { width: bannerWidth }]}
@@ -369,6 +345,51 @@ export function Search({ navigation }: { navigation: any }) {
                 />
               ))}
             </View>
+          </View>
+
+          <View style={styles.collectionsSection}>
+            <View style={styles.resultsHeader}>
+              <Text style={[styles.resultsTitleMontserrat, { color: theme.textColor }]}>Collections</Text>
+              {collections.length > 4 ? (
+                <Pressable onPress={() => setShowAllCollections((prev) => !prev)} hitSlop={8}>
+                  <Text style={[styles.seeAllButtonText, { color: theme.textColor }]}>
+                    {showAllCollections ? 'See less' : 'See all'}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {loadingCollections ? (
+              <Text style={[styles.loadingText, { color: theme.mutedForegroundColor }]}>Loading collections…</Text>
+            ) : (
+              <View style={styles.collectionsGrid}>
+                {visibleCollections.map((collection) => (
+                  <Pressable
+                    key={collection.id}
+                    style={[
+                      styles.collectionCard,
+                      {
+                        width: collectionCardW,
+                        backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+                        borderColor: theme.tileBorderColor || theme.borderColor,
+                      },
+                    ]}
+                    onPress={() =>
+                      navigation.navigate('CategoryProducts', {
+                        slug: collection.handle,
+                        title: collection.title,
+                      })
+                    }
+                  >
+                    <Text
+                      style={[styles.collectionTitle, { color: theme.headingColor || theme.textColor }]}
+                      numberOfLines={2}
+                    >
+                      {collection.title}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
           </View>
 
           {topSellers.length > 0 ? (

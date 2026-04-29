@@ -901,6 +901,17 @@ export type ShopifyCollectionSummary = {
   imageUrl: string | null
 }
 
+export type DbCategoryWithProductsResponse = {
+  category: {
+    shopifyId: string
+    handle: string
+    title: string
+    imageUrl: string | null
+    description: string | null
+  }
+  products: ShopifyProduct[]
+}
+
 export async function listShopifyCollectionsByIds(ids: string[]): Promise<ShopifyCollectionSummary[]> {
   if (!DOMAIN) {
     throw new Error('API domain is not configured. Set EXPO_PUBLIC_DEV_API_URL.')
@@ -918,6 +929,19 @@ export async function listShopifyCollectionsByIds(ids: string[]): Promise<Shopif
     throw new Error(data?.error || 'Unable to load collections')
   }
   return (data.collections || []) as ShopifyCollectionSummary[]
+}
+
+export async function getDbCategoryBySlug(slug: string): Promise<DbCategoryWithProductsResponse> {
+  if (!DOMAIN) {
+    throw new Error('API domain is not configured. Set EXPO_PUBLIC_DEV_API_URL.')
+  }
+  const safeSlug = String(slug || '').trim()
+  const response = await fetch(`${DOMAIN}/categories/${encodeURIComponent(safeSlug)}`)
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to load category')
+  }
+  return data as DbCategoryWithProductsResponse
 }
 
 export async function listDbProducts(params?: {

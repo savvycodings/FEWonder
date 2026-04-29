@@ -13,6 +13,7 @@ import {
   Cart,
   Saved,
   Product,
+  CategoryProducts,
   Chat,
   Settings,
   ProfileAccountSettings,
@@ -633,6 +634,19 @@ export function Main() {
       )}
       <Stack.Screen name="Cart" component={Cart} />
       <Stack.Screen name="Product" component={Product} />
+      <Stack.Screen
+        name="CategoryProducts"
+        component={CategoryProducts}
+        options={{
+          headerShown: true,
+          headerBackTitle: '',
+          headerTitle: 'Category',
+          headerStyle: { backgroundColor: '#000000' },
+          headerTintColor: '#ffffff',
+          headerTitleStyle: { color: '#ffffff', fontFamily: 'Geist-Bold' },
+          headerShadowVisible: false,
+        }}
+      />
       <Stack.Screen
         name="CommunityUserProfile"
         component={CommunityUserProfile}

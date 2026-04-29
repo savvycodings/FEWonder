@@ -1,6 +1,7 @@
 export { Home } from './home'
 export { Login } from './login'
 export { Product } from './product'
+export { CategoryProducts } from './categoryProducts'
 export { Search } from './search'
 export { Profile } from './profile'
 export { ProfileHeroEdit } from './profileHeroEdit'
