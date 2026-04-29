@@ -20,7 +20,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { User, WonderJumpLeaderboardEntry } from '../../types'
 import { DailyRewardsMysteryGiftVisual } from '../components/DailyRewardsMysteryGiftVisual'
 import { ensureGiftboxSvgXml, giftboxSvgAssetUri, peekGiftboxSvgXml } from '../giftboxSvgAsset'
+import { ensureJetpackSvgXml, jetpackSvgAssetUri, peekJetpackSvgXml } from '../jetpackSvgAsset'
+import { loadWonderJumpCharacterStyle, type WonderJumpCharacterStyle } from '../wonderJumpCharacters'
 import { WonderSpinningCoin } from '../components/WonderCoin'
+import { WonderJumpCharacterSvg } from '../components/WonderJumpCharacterSvg'
 import {
   claimWonderJumpChest,
   fetchSessionUser,
@@ -208,6 +211,7 @@ const PALM_TREE_W = 44
 const PALM_TREE_H = 74
 const PALM_TREE_BASE_Y = 20
 const PALM_TREE_IMAGE = require('../../public/wonderjump/palm-tree.png')
+const GRASSLAND_BG_IMAGE = require('../../assets/wj-grassland-bg.png')
 /** Chest sits on platform tops in tropical gameplay; spawn chance per new main-chain platform. */
 const CHEST_SPAWN_P = 0.012
 const CHEST_PICKUP_W = 32
@@ -253,6 +257,7 @@ const JETPACK_PICKUP_H = 34
 const JETPACK_DURATION_MS = 1650
 const JETPACK_THRUST_VELOCITY = -11.79
 const JETPACK_END_SPIKE_GRACE_MS = 420
+const EQUIPPED_JETPACK_CENTER_OFFSET_X = -14
 /** Doodle-style: faster lateral, floaty jump, pass-through platforms */
 const BASE_SPEED = 6.85
 const GRAVITY = 0.52
@@ -1521,41 +1526,143 @@ const PLATFORM_FACE_VB_W = 100
 const PLATFORM_FACE_VB_H = 14
 const PLATFORM_FACE_GRASS_H = 5.25
 const PLATFORM_FACE_BLADE_XS = [6, 18, 30, 44, 58, 71, 85, 94]
+const PLATFORM_FACE_GRASS_TUFTS = [4, 11, 19, 27, 35, 43, 50, 58, 66, 74, 82, 90, 97]
+const PLATFORM_FACE_GRASS_STONES = [
+  { x: 8.5, y: 8.3, rx: 1.2, ry: 0.75, o: 0.3 },
+  { x: 16.5, y: 10.8, rx: 0.8, ry: 0.55, o: 0.25 },
+  { x: 27.4, y: 9.5, rx: 1.05, ry: 0.7, o: 0.28 },
+  { x: 38.2, y: 11.1, rx: 0.95, ry: 0.62, o: 0.22 },
+  { x: 49.6, y: 9.2, rx: 1.3, ry: 0.8, o: 0.31 },
+  { x: 63.5, y: 10.6, rx: 0.9, ry: 0.6, o: 0.24 },
+  { x: 76.2, y: 9.1, rx: 1.15, ry: 0.72, o: 0.27 },
+  { x: 89.7, y: 10.9, rx: 1.05, ry: 0.65, o: 0.24 },
+]
 
 /** Dirt + grass/mycelium cap paths in the 100×14 viewBox. Callers wrap these in an <Svg> or <G transform>. */
 function renderPlatformFaceShapes(surface: PlatformSurfaceKind) {
   const p = SURFACE_PALETTES[surface]
+  if (surface === 'grass') {
+    return (
+      <>
+        <Path
+          d="M0,4.95 L0,13.2 L5.7,13.95 L12.4,12.8 L19.8,13.65 L27.9,12.35 L36.7,13.9 L45.3,12.25 L54.3,13.7 L63.4,12.05 L72.5,13.35 L81.1,12.15 L89.9,13.25 L96.1,12.4 L100,12.9 L100,4.95 Z"
+          fill="#744522"
+        />
+        <Path
+          d="M0,4.95 L0,11.1 L6.1,12.35 L13.4,11.2 L21,12.1 L29.1,10.95 L37.5,12.45 L46.2,10.9 L55.1,12.25 L64.2,10.75 L73.1,11.95 L82,10.9 L90.6,12 L96.6,11.1 L100,11.45 L100,4.95 Z"
+          fill="#9f6234"
+          opacity={0.95}
+        />
+        <Path
+          d="M0,7.2 L8.5,6.35 L16.4,7.25 L24.8,6.45 L33.1,7.35 L41.8,6.55 L50.4,7.45 L59.2,6.6 L67.9,7.5 L76.4,6.6 L85.2,7.55 L93.3,6.7 L100,7.25 L100,8.3 L93.2,8.85 L85.1,7.95 L76.4,8.95 L67.8,8 L59.1,8.95 L50.3,8 L41.7,8.95 L33.1,8 L24.7,8.8 L16.3,7.95 L8.3,8.7 L0,7.9 Z"
+          fill="#633619"
+          opacity={0.7}
+        />
+        <Path
+          d="M0,9.25 L8.2,8.65 L16.5,9.55 L24.4,8.8 L32.8,9.75 L40.9,8.95 L49.1,9.9 L57.6,9.1 L65.7,10.05 L74.1,9.2 L82.5,10.1 L90.6,9.25 L100,10.05 L100,10.95 L90.5,10.2 L82.4,11.1 L74.1,10.2 L65.6,11.1 L57.5,10.2 L49,11.05 L40.8,10.2 L32.7,11.1 L24.3,10.25 L16.4,11.05 L8.1,10.2 L0,10.85 Z"
+          fill="#bb804c"
+          opacity={0.34}
+        />
+
+        <Path
+          d="M0,0.95 C3.5,0.25 6.8,-0.15 10.4,0.55 C14.1,1.2 17.5,1.05 21.1,0.45 C24.6,-0.12 28.2,-0.05 31.8,0.62 C35.2,1.25 38.8,1.18 42.4,0.52 C45.9,-0.12 49.4,-0.08 53,0.62 C56.5,1.3 60.1,1.2 63.8,0.52 C67.3,-0.12 70.9,-0.1 74.5,0.6 C78.1,1.28 81.7,1.2 85.3,0.55 C88.9,-0.1 92.4,-0.06 96,0.62 C97.5,0.92 98.8,1.02 100,0.9 L100,4.55 L0,4.55 Z"
+          fill="#95ea59"
+        />
+        <Path
+          d="M0,1.35 C4.2,0.55 8.3,0.08 12.4,0.9 C16.4,1.68 20.5,1.55 24.6,0.8 C28.6,0.08 32.7,0.08 36.8,0.9 C40.8,1.68 45,1.55 49.1,0.8 C53.1,0.08 57.2,0.08 61.3,0.9 C65.4,1.68 69.5,1.55 73.6,0.8 C77.6,0.08 81.8,0.08 85.9,0.9 C90,1.68 94.1,1.55 98.2,0.85 L100,0.82 L100,2.5 L98.2,2.75 C94.1,3.45 90,3.62 85.9,2.95 C81.8,2.25 77.6,2.3 73.6,2.98 C69.5,3.68 65.4,3.62 61.3,2.95 C57.2,2.25 53.1,2.3 49.1,2.98 C45,3.68 40.8,3.62 36.8,2.95 C32.7,2.25 28.6,2.3 24.6,2.98 C20.5,3.68 16.4,3.62 12.4,2.95 C8.3,2.25 4.2,2.35 0,3 Z"
+          fill="#78cd46"
+          opacity={0.82}
+        />
+        <Rect x="0" y="0.05" width={PLATFORM_FACE_VB_W} height={0.92} fill="#e6ffab" opacity={0.8} />
+        <Path
+          d="M0,1.15 L6.3,0.45 L12.8,1.25 L19.2,0.55 L25.8,1.35 L32.3,0.6 L38.8,1.4 L45.5,0.65 L52.2,1.45 L58.7,0.7 L65.4,1.5 L72,0.75 L78.8,1.55 L85.3,0.8 L92.2,1.65 L100,0.95 L100,2.3 L92.1,2.95 L85.2,2.1 L78.7,2.85 L72,2 L65.3,2.85 L58.6,2 L52.1,2.8 L45.4,1.95 L38.7,2.75 L32.2,1.9 L25.7,2.7 L19.1,1.85 L12.7,2.6 L6.2,1.8 L0,2.5 Z"
+          fill="#68ba37"
+          opacity={0.78}
+        />
+        <Path
+          d="M0,3.55 L4.5,2.9 L9.2,3.72 L13.8,3 L18.3,3.8 L23,3.05 L27.6,3.9 L32.3,3.08 L37.1,3.98 L41.8,3.15 L46.6,4.02 L51.2,3.2 L56,4.05 L60.6,3.2 L65.4,4.08 L70.2,3.2 L75,4.12 L79.8,3.22 L84.7,4.08 L89.4,3.2 L94.5,3.98 L100,3.28 L100,5.18 L94.4,5.66 L89.3,4.9 L84.6,5.76 L79.7,4.96 L74.9,5.8 L70.1,5 L65.3,5.86 L60.5,5 L55.9,5.85 L51.1,5 L46.5,5.79 L41.7,4.98 L37,5.74 L32.2,4.9 L27.5,5.72 L22.9,4.9 L18.2,5.66 L13.7,4.88 L9.1,5.56 L4.4,4.82 L0,5.46 Z"
+          fill="#4d972b"
+          opacity={0.92}
+        />
+        <Rect x="0" y="4.2" width={PLATFORM_FACE_VB_W} height={0.64} fill="#1f4a15" opacity={0.95} />
+        <Path d="M0,4.92 L8.5,4.25 L16.6,4.95 L24.9,4.2 L33.1,4.95 L41.4,4.2 L49.8,5.05 L58,4.2 L66.3,5.05 L74.8,4.2 L83.1,5.1 L91.4,4.25 L100,4.9" stroke="#16380f" strokeWidth={0.3} opacity={0.74} />
+        <Path d="M0,1.95 L6.9,1.3 L13.8,2.05 L20.7,1.4 L27.6,2.15 L34.5,1.45 L41.4,2.2 L48.3,1.5 L55.2,2.25 L62.1,1.5 L69,2.28 L75.9,1.55 L82.8,2.3 L89.7,1.6 L96.6,2.25" stroke="#8ee247" strokeWidth={0.24} opacity={0.62} />
+        <Path d="M1,2.7 L8,2.05 L15,2.8 L22,2.1 L29,2.85 L36,2.15 L43,2.9 L50,2.2 L57,2.95 L64,2.25 L71,2.98 L78,2.3 L85,3 L92,2.35 L99,3.05" stroke="#2f6f1b" strokeWidth={0.22} opacity={0.58} />
+
+        {PLATFORM_FACE_GRASS_TUFTS.map((cx, i) => {
+          const h = i % 3 === 0 ? 2.5 : i % 2 === 0 ? 2 : 1.65
+          return <Rect key={`tuft-${i}`} x={cx - 0.26} y={0.18 - h * 0.62} width={0.52} height={h + 0.42} rx={0.12} fill="#3f8425" opacity={0.88} />
+        })}
+        {PLATFORM_FACE_BLADE_XS.map((cx, i) => (
+          <Rect
+            key={`blade-${i}`}
+            x={cx - 0.46}
+            y={PLATFORM_FACE_GRASS_H - 1.55}
+            width={0.92}
+            height={1.75}
+            rx={0.2}
+            fill="#2f6b23"
+            opacity={0.58}
+          />
+        ))}
+
+        <Path d="M7.8 5.95 C9.2 6.75, 10.2 7.85, 10.7 9.25 C11.1 10.45, 11.4 11.45, 12.7 12.45" stroke="#3f2514" strokeWidth={0.5} strokeLinecap="round" />
+        <Path d="M14.4 5.85 C13.1 6.75, 12.3 7.95, 12 9.45 C11.6 10.7, 11.1 11.7, 9.9 12.45" stroke="#3f2514" strokeWidth={0.42} strokeLinecap="round" />
+        <Path d="M28.6 5.8 C30.2 6.65, 31.8 7.65, 32.7 9.15 C33.4 10.45, 33.6 11.35, 35.3 12.7" stroke="#3f2514" strokeWidth={0.5} strokeLinecap="round" />
+        <Path d="M45.9 5.95 C47.6 6.95, 48.6 8.25, 49.1 9.95 C49.5 11.2, 50.3 12.05, 52.1 13" stroke="#3f2514" strokeWidth={0.5} strokeLinecap="round" />
+        <Path d="M61 5.75 C59.7 6.75, 58.7 8.05, 58.2 9.75 C57.8 11.1, 56.8 12, 55.1 13" stroke="#3f2514" strokeWidth={0.48} strokeLinecap="round" />
+        <Path d="M73.9 5.85 C75.7 6.95, 77 8.1, 77.8 9.85 C78.4 11.1, 79.8 12.05, 81.7 12.95" stroke="#3f2514" strokeWidth={0.48} strokeLinecap="round" />
+        <Path d="M87 6 C85.6 7, 84.4 8.2, 84 9.85 C83.6 11.15, 82.7 12.05, 81.1 12.95" stroke="#3f2514" strokeWidth={0.44} strokeLinecap="round" />
+
+        <Path d="M30.7 8.7 C29.8 9.3, 29.2 10.2, 28.8 11.2" stroke="#ba8f60" strokeWidth={0.22} strokeLinecap="round" opacity={0.5} />
+        <Path d="M49.1 9.1 C48.2 9.8, 47.5 10.7, 47.1 11.8" stroke="#ba8f60" strokeWidth={0.22} strokeLinecap="round" opacity={0.45} />
+        <Path d="M76.9 9 C76.1 9.8, 75.3 10.6, 75 11.6" stroke="#ba8f60" strokeWidth={0.22} strokeLinecap="round" opacity={0.45} />
+
+        {PLATFORM_FACE_GRASS_STONES.map((s, i) => (
+          <G key={`stone-${i}`}>
+            <Ellipse cx={s.x} cy={s.y} rx={s.rx} ry={s.ry} fill="#78604a" opacity={s.o + 0.08} />
+            <Ellipse cx={s.x - s.rx * 0.25} cy={s.y - s.ry * 0.25} rx={Math.max(0.25, s.rx * 0.35)} ry={Math.max(0.2, s.ry * 0.35)} fill="#b39a82" opacity={0.25} />
+          </G>
+        ))}
+      </>
+    )
+  }
   return (
     <>
       <Path
         fill={p.dirtA}
-        d="M0,5.6 L0,12.6 L2.5,13.9 L7,12 L13.5,13.4 L21,11.7 L29.5,12.9 L38,11.1 L48,13 L56.5,11.4 L66,12.7 L74,11 L82.5,13.1 L90,11.6 L95.5,12.9 L100,11.8 L100,5.6 Z"
+        d="M1.2,5.15 L0.4,12.5 L4.1,13.8 L9.6,12.4 L16,13.6 L23.4,12.2 L31.3,13.7 L39.8,12.1 L48.4,13.6 L56.9,12 L65.4,13.4 L73.7,11.9 L82.2,13.3 L90.4,11.9 L96.2,12.9 L99.4,11.8 L98.5,5.15 Z"
       />
       <Path
         fill={p.dirtB}
-        d="M0,5.6 L0,11.8 L3,13.2 L9,11.5 L16,12.8 L25,10.9 L34,12.2 L44,10.6 L54,12.4 L63,10.8 L72.5,12.5 L81,11 L89.5,12.6 L96,11.2 L100,12 L100,5.6 Z"
+        d="M2,5.25 L1.5,10.9 L6.6,12.2 L13.5,10.95 L20.7,11.95 L28.8,10.8 L37.2,12.35 L45.9,10.8 L54.8,12.2 L63.9,10.65 L72.8,11.85 L81.7,10.8 L90.3,11.95 L96.1,10.95 L98.4,11.3 L97.8,5.25 Z"
+        opacity={0.96}
       />
-      <Rect x="0" y="0" width={PLATFORM_FACE_VB_W} height={PLATFORM_FACE_GRASS_H} fill={p.top} />
-      <Rect
-        x="0"
-        y={PLATFORM_FACE_GRASS_H - 0.35}
-        width={PLATFORM_FACE_VB_W}
-        height={0.55}
+      <Path
+        d="M0,0.9 C4.1,0.2 8.2,-0.16 12.3,0.66 C16.3,1.42 20.5,1.3 24.5,0.58 C28.6,-0.1 32.7,-0.1 36.8,0.72 C40.8,1.5 45,1.38 49.1,0.6 C53.1,-0.12 57.2,-0.08 61.3,0.74 C65.4,1.52 69.5,1.4 73.6,0.62 C77.6,-0.12 81.8,-0.1 85.9,0.74 C90,1.52 94.1,1.42 98.2,0.66 L100,0.62 L100,4.65 L0,4.65 Z"
+        fill={p.top}
+      />
+      <Path
+        d="M0,1.4 C4.5,0.6 8.8,0.08 13.1,0.95 C17.2,1.72 21.5,1.62 25.8,0.84 C29.9,0.1 34.2,0.1 38.5,0.95 C42.6,1.74 46.9,1.62 51.2,0.84 C55.3,0.08 59.6,0.12 63.9,0.96 C68,1.72 72.3,1.62 76.6,0.84 C80.8,0.1 85.1,0.1 89.5,0.94 C93.6,1.72 97.1,1.6 100,1.02 L100,2.72 C96.9,3.28 93.4,3.42 89.3,2.78 C85,2.12 80.8,2.16 76.5,2.84 C72.2,3.52 67.9,3.44 63.8,2.78 C59.5,2.1 55.2,2.14 51.1,2.82 C46.8,3.52 42.5,3.46 38.4,2.8 C34.1,2.12 29.8,2.14 25.7,2.82 C21.4,3.5 17.1,3.46 13,2.8 C8.7,2.14 4.4,2.2 0,2.88 Z"
         fill={p.topLine}
-        opacity={0.88}
+        opacity={0.86}
       />
-      <Rect x="0" y="0" width={PLATFORM_FACE_VB_W} height={1.15} fill={p.topHi} opacity={0.55} />
-      {PLATFORM_FACE_BLADE_XS.map((cx, i) => (
-        <Rect
-          key={i}
-          x={cx - 0.45}
-          y={PLATFORM_FACE_GRASS_H - 1.35}
-          width={0.9}
-          height={1.45}
-          rx={0.2}
-          fill={p.blade}
-          opacity={0.45}
-        />
+      <Rect x="0" y="0.05" width={PLATFORM_FACE_VB_W} height={0.95} fill={p.topHi} opacity={0.62} />
+      <Rect x="0" y="4.15" width={PLATFORM_FACE_VB_W} height={0.56} fill={p.blade} opacity={0.82} />
+      {PLATFORM_FACE_BLADE_XS.map((cx, i) => {
+        const h = i % 2 === 0 ? 1.8 : 1.45
+        return <Rect key={i} x={cx - 0.42} y={PLATFORM_FACE_GRASS_H - 1.55} width={0.84} height={h} rx={0.16} fill={p.blade} opacity={0.48} />
+      })}
+      {[
+        [10, 8.6, 1.1, 0.68, 0.24],
+        [24, 10.1, 0.9, 0.58, 0.2],
+        [38, 9.2, 1.05, 0.65, 0.22],
+        [52, 10.7, 0.95, 0.62, 0.19],
+        [66, 9.5, 1.15, 0.72, 0.23],
+        [80, 10.9, 0.9, 0.58, 0.2],
+        [92, 9.8, 0.95, 0.62, 0.19],
+      ].map(([x, y, rx, ry, o], i) => (
+        <Ellipse key={`st2-${i}`} cx={x} cy={y} rx={rx} ry={ry} fill={p.topLine} opacity={o} />
       ))}
     </>
   )
@@ -2133,6 +2240,64 @@ const WJ_DOCK_GIFT_BOX_PX = 58
 /** Hub dock: Daily Rewards stage is 236px; scale to fit `wjChestDockTile`. */
 const WJ_DOCK_GIFT_STAGE_PX = 82
 
+const WonderJumpJetpackFromAsset = memo(function WonderJumpJetpackFromAsset({
+  width,
+  height,
+}: {
+  width: number
+  height: number
+}) {
+  const uri = useMemo(() => jetpackSvgAssetUri(), [])
+  const [xml, setXml] = useState<string | null>(() => peekJetpackSvgXml())
+  useEffect(() => {
+    if (xml) return
+    let cancelled = false
+    void ensureJetpackSvgXml()
+      .then((s) => {
+        if (!cancelled) setXml(s)
+      })
+      .catch(() => {
+        if (!cancelled) setXml(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [xml])
+  if (xml) {
+    return <SvgXml xml={xml} width={width} height={height} pointerEvents="none" preserveAspectRatio="xMidYMid meet" />
+  }
+  if (uri) {
+    return <SvgUri uri={uri} width={width} height={height} pointerEvents="none" preserveAspectRatio="xMidYMid meet" />
+  }
+  return <View style={{ width, height }} pointerEvents="none" />
+})
+
+const WonderJumpJetpackGraphic = memo(function WonderJumpJetpackGraphic({
+  width,
+  height,
+}: {
+  width: number
+  height: number
+}) {
+  return (
+    <Svg pointerEvents="none" width={width} height={height} viewBox="0 0 100 100" preserveAspectRatio="none">
+      <Rect x="8" y="21" width="24" height="42" rx="3.5" fill="#6f7782" stroke="#151b22" strokeWidth="2.2" />
+      <Rect x="68" y="21" width="24" height="42" rx="3.5" fill="#6f7782" stroke="#151b22" strokeWidth="2.2" />
+      <Rect x="26" y="19" width="48" height="44" rx="3" fill="#3f4751" stroke="#171d24" strokeWidth="2.5" />
+      <Rect x="34" y="28" width="32" height="17" rx="0.8" fill="#20262e" stroke="#10151b" strokeWidth="1.9" />
+      <Rect x="37" y="31.5" width="26" height="2.1" rx="1" fill="#65707d" />
+      <Rect x="37" y="36.1" width="26" height="2.1" rx="1" fill="#65707d" />
+      <Rect x="37" y="40.7" width="26" height="2.1" rx="1" fill="#65707d" />
+      <Rect x="7" y="31" width="26" height="5.3" rx="0.6" fill="#d93232" />
+      <Rect x="67" y="31" width="26" height="5.3" rx="0.6" fill="#d93232" />
+      <Rect x="11" y="62" width="18" height="17" rx="1.2" fill="#222930" stroke="#10161c" strokeWidth="2" />
+      <Rect x="71" y="62" width="18" height="17" rx="1.2" fill="#222930" stroke="#10161c" strokeWidth="2" />
+      <Rect x="33" y="62" width="34" height="7" rx="0.8" fill="#d93232" />
+      <Rect x="40" y="9" width="20" height="8" rx="0.8" fill="#d93232" stroke="#12171d" strokeWidth="1.9" />
+    </Svg>
+  )
+})
+
 const JetpackPickupView = memo(function JetpackPickupView({
   left,
   top,
@@ -2144,31 +2309,14 @@ const JetpackPickupView = memo(function JetpackPickupView({
   width: number
   height: number
 }) {
+  const renderWidth = width * 1.56
+  const renderHeight = height * 1.56
+  const renderLeft = left - (renderWidth - width) * 0.5
+  const renderTop = top - (renderHeight - height) * 0.56
   return (
-    <Svg
-      pointerEvents="none"
-      style={{ position: 'absolute', left, top, width, height }}
-      width={width}
-      height={height}
-      viewBox="0 0 30 34"
-      preserveAspectRatio="none"
-    >
-      <Rect x="9" y="10" width="12" height="14" fill="#2a2e34" />
-      <Rect x="8" y="9" width="14" height="1" fill="#505761" />
-      <Rect x="10" y="12" width="10" height="7" fill="#3e434b" />
-      <Rect x="3" y="12" width="6" height="12" fill="#f0f2f4" />
-      <Rect x="21" y="12" width="6" height="12" fill="#f0f2f4" />
-      <Rect x="3" y="11" width="6" height="1" fill="#d91b1b" />
-      <Rect x="21" y="11" width="6" height="1" fill="#d91b1b" />
-      <Rect x="13" y="3" width="4" height="6" fill="#ef1d27" />
-      <Rect x="14" y="2" width="2" height="1" fill="#f6a6ab" />
-      <Rect x="9" y="24" width="12" height="2" fill="#cdd2d8" />
-      <Rect x="11" y="26" width="8" height="4" fill="#8d939a" />
-      <Rect x="10" y="30" width="10" height="2" fill="#121417" />
-      <Rect x="7" y="14" width="1" height="8" fill="#111318" opacity={0.35} />
-      <Rect x="22" y="14" width="1" height="8" fill="#111318" opacity={0.35} />
-      <Rect x="12" y="20" width="6" height="1" fill="#68707b" opacity={0.45} />
-    </Svg>
+    <View pointerEvents="none" style={{ position: 'absolute', left: renderLeft, top: renderTop, width: renderWidth, height: renderHeight }}>
+      <WonderJumpJetpackGraphic width={renderWidth} height={renderHeight} />
+    </View>
   )
 })
 
@@ -2303,29 +2451,64 @@ const PlayerJetpackFx = memo(function PlayerJetpackFx({
   top: number
   frame: number
 }) {
-  const flameTall = frame % 2 === 0
-  const flameLeftH = flameTall ? 22 : 17
-  const flameRightH = flameTall ? 17 : 22
+  const t = frame * 0.38
+  const pulse = (Math.sin(t) + 1) * 0.5
+  const pulseAlt = (Math.sin(t + 1.2) + 1) * 0.5
+  const smokeDrift = Math.sin(t * 0.9) * 2.3
+  const flameL = 36 + pulse * 24
+  const flameR = 36 + pulseAlt * 24
+  const flameGradId = useRef(`jpEqFlame_${Math.random().toString(36).slice(2, 9)}`).current
+  const flameCoreId = useRef(`jpEqCore_${Math.random().toString(36).slice(2, 9)}`).current
   return (
-    <View pointerEvents="none" style={{ position: 'absolute', left, top, width: 44, height: 60 }}>
-      <Svg width={44} height={60} viewBox="0 0 44 60" preserveAspectRatio="none">
-        <Rect x="10" y="11" width="14" height="16" fill="#2b2f35" />
-        <Rect x="11" y="12" width="12" height="7" fill="#40454d" />
-        <Rect x="5" y="13" width="6" height="13" fill="#f0f2f4" />
-        <Rect x="23" y="13" width="6" height="13" fill="#f0f2f4" />
-        <Rect x="5" y="12" width="6" height="1" fill="#d82020" />
-        <Rect x="23" y="12" width="6" height="1" fill="#d82020" />
-        <Rect x="15" y="4" width="4" height="7" fill="#ef1d27" />
-        <Rect x="16" y="3" width="2" height="1" fill="#f6a6ab" />
-        <Rect x="10" y="27" width="14" height="2" fill="#cfd4d9" />
-        <Rect x="13" y="29" width="8" height="2" fill="#8a8f95" />
-        <Rect x="5" y={31} width="5" height={flameLeftH} fill="#ff6b11" />
-        <Rect x="6" y={34} width="3" height={Math.max(8, flameLeftH - 6)} fill="#ffd85a" />
-        <Rect x="7" y={37} width="1" height={Math.max(5, flameLeftH - 10)} fill="#fff2c5" />
-        <Rect x="24" y={31} width="5" height={flameRightH} fill="#ff6b11" />
-        <Rect x="25" y={34} width="3" height={Math.max(8, flameRightH - 6)} fill="#ffd85a" />
-        <Rect x="26" y={37} width="1" height={Math.max(5, flameRightH - 10)} fill="#fff2c5" />
+    <View pointerEvents="none" style={{ position: 'absolute', left, top, width: 52, height: 82 }}>
+      <Svg
+        pointerEvents="none"
+        style={{ position: 'absolute', left: 0, top: 44, width: 52, height: 106 }}
+        width={52}
+        height={106}
+        viewBox="0 0 52 106"
+        preserveAspectRatio="none"
+      >
+        <Defs>
+          <LinearGradient id={flameGradId} x1="0%" y1="0%" x2="0%" y2="100%">
+            <Stop offset="0%" stopColor="#fff7d4" />
+            <Stop offset="42%" stopColor="#ffb13a" />
+            <Stop offset="100%" stopColor="#d33b10" />
+          </LinearGradient>
+          <LinearGradient id={flameCoreId} x1="0%" y1="0%" x2="0%" y2="100%">
+            <Stop offset="0%" stopColor="#ffffff" />
+            <Stop offset="60%" stopColor="#ffe08f" />
+            <Stop offset="100%" stopColor="#ff8f2e" />
+          </LinearGradient>
+        </Defs>
+        <Ellipse cx={10.4} cy={12 + pulse * 5} rx={7.9} ry={12.2} fill="#ff7f2a" opacity={0.24 + pulse * 0.17} />
+        <Ellipse cx={41.6} cy={12 + pulseAlt * 5} rx={7.9} ry={12.2} fill="#ff7f2a" opacity={0.24 + pulseAlt * 0.17} />
+        <Ellipse cx={10.4 + smokeDrift} cy={7 + pulse * 1.8} rx={5 + pulse} ry={3.5 + pulse * 0.9} fill="#59616a" opacity={0.2} />
+        <Ellipse cx={41.6 - smokeDrift} cy={7 + pulseAlt * 1.8} rx={5 + pulseAlt} ry={3.5 + pulseAlt * 0.9} fill="#59616a" opacity={0.2} />
+        <Polygon
+          points={`3.4,0 5.4,8 2.4,16 6.4,24 4.4,33 7.4,42 5.4,${46 + flameL * 0.22} 8.4,${54 + flameL * 0.35} 10.4,${flameL + 26} 12.4,${54 + flameL * 0.35} 15.4,${46 + flameL * 0.22} 13.4,42 16.4,33 14.4,24 18.4,16 15.4,8 17.4,0`}
+          fill={`url(#${flameGradId})`}
+        />
+        <Polygon
+          points={`7.4,3 8.4,10 6.9,16 8.9,23 7.9,30 9.4,37 8.4,${40 + flameL * 0.2} 9.6,${47 + flameL * 0.28} 10.4,${flameL + 16} 11.2,${47 + flameL * 0.28} 12.4,${40 + flameL * 0.2} 11.4,37 12.9,30 11.9,23 13.9,16 12.4,10 13.4,3`}
+          fill={`url(#${flameCoreId})`}
+          opacity={0.94}
+        />
+        <Polygon
+          points={`34.6,0 36.6,8 33.6,16 37.6,24 35.6,33 38.6,42 36.6,${46 + flameR * 0.22} 39.6,${54 + flameR * 0.35} 41.6,${flameR + 26} 43.6,${54 + flameR * 0.35} 46.6,${46 + flameR * 0.22} 44.6,42 47.6,33 45.6,24 49.6,16 46.6,8 48.6,0`}
+          fill={`url(#${flameGradId})`}
+        />
+        <Polygon
+          points={`38.6,3 39.6,10 38.1,16 40.1,23 39.1,30 40.6,37 39.6,${40 + flameR * 0.2} 40.8,${47 + flameR * 0.28} 41.6,${flameR + 16} 42.4,${47 + flameR * 0.28} 43.6,${40 + flameR * 0.2} 42.6,37 44.1,30 43.1,23 45.1,16 43.6,10 44.6,3`}
+          fill={`url(#${flameCoreId})`}
+          opacity={0.94}
+        />
+        <Ellipse cx={12} cy={63 + pulse * 10} rx={0.9} ry={2.1} fill="#ffd98e" opacity={0.58} />
+        <Ellipse cx={40} cy={66 + pulseAlt * 9} rx={0.9} ry={2.1} fill="#ffd98e" opacity={0.58} />
       </Svg>
+      <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: 52, height: 82 }}>
+        <WonderJumpJetpackGraphic width={52} height={82} />
+      </View>
     </View>
   )
 })
@@ -2409,25 +2592,42 @@ const WonderSkyBackdrop = memo(function WonderSkyBackdrop({
   const gradId = useRef(`wjSky_${Math.random().toString(36).slice(2, 9)}`).current
   const m = clamp(mushroomBlend, 0, 1)
   const t = clamp(tropicalBlend, 0, 1)
-  const bottom = lerp3Color(GRASSLAND_THEME.sky, MUSHROOM_THEME.sky, TROPICAL_THEME.sky, m * 0.38, t)
-  const mid = lerp3Color(GRASSLAND_THEME.sky, MUSHROOM_THEME.sky, TROPICAL_THEME.sky, m * 0.72, t)
-  const top = lerp3Color(GRASSLAND_THEME.sky, MUSHROOM_THEME.sky, TROPICAL_THEME.sky, m, t)
+  const tropicalStrong = clamp(t, 0, 1)
+  const mushroomStrong = clamp(m * (1 - tropicalStrong * 0.8), 0, 1)
+  const grassOpacity = 1
+  const mushroomOverlayOpacity = mushroomStrong * 0.62
+  const tropicalOverlayOpacity = tropicalStrong * 0.6
+  const mushroomTop = '#5f507f'
+  const mushroomMid = '#74659e'
+  const mushroomBottom = '#8b7cb4'
+  const tropicalTop = '#328792'
+  const tropicalMid = '#3f9ea9'
+  const tropicalBottom = '#4eb3bb'
   return (
-    <Svg
-      width={width}
-      height={height}
-      style={StyleSheet.absoluteFillObject}
-      pointerEvents="none"
-    >
-      <Defs>
-        <LinearGradient id={gradId} x1="0" y1="1" x2="0" y2="0">
-          <Stop offset="0" stopColor={bottom} stopOpacity={1} />
-          <Stop offset="0.52" stopColor={mid} stopOpacity={1} />
-          <Stop offset="1" stopColor={top} stopOpacity={1} />
-        </LinearGradient>
-      </Defs>
-      <Rect x={0} y={0} width={width} height={height} fill={`url(#${gradId})`} />
-    </Svg>
+    <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+      <Image
+        pointerEvents="none"
+        source={GRASSLAND_BG_IMAGE}
+        resizeMode="cover"
+        style={[StyleSheet.absoluteFillObject, { opacity: grassOpacity }]}
+      />
+      <Svg width={width} height={height} style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        <Defs>
+          <LinearGradient id={gradId} x1="0" y1="1" x2="0" y2="0">
+            <Stop offset="0" stopColor={mushroomBottom} stopOpacity={mushroomOverlayOpacity} />
+            <Stop offset="0.54" stopColor={mushroomMid} stopOpacity={mushroomOverlayOpacity} />
+            <Stop offset="1" stopColor={mushroomTop} stopOpacity={mushroomOverlayOpacity} />
+          </LinearGradient>
+          <LinearGradient id={`${gradId}_tropical`} x1="0" y1="1" x2="0" y2="0">
+            <Stop offset="0" stopColor={tropicalBottom} stopOpacity={tropicalOverlayOpacity} />
+            <Stop offset="0.54" stopColor={tropicalMid} stopOpacity={tropicalOverlayOpacity} />
+            <Stop offset="1" stopColor={tropicalTop} stopOpacity={tropicalOverlayOpacity} />
+          </LinearGradient>
+        </Defs>
+        <Rect x={0} y={0} width={width} height={height} fill={`url(#${gradId})`} />
+        <Rect x={0} y={0} width={width} height={height} fill={`url(#${gradId}_tropical)`} />
+      </Svg>
+    </View>
   )
 })
 
@@ -2445,21 +2645,41 @@ const WonderJumpAmbientDecor = memo(function WonderJumpAmbientDecor({
   playHeight,
   mushroomBlend,
   tropicalBlend,
-  sceneColors,
 }: {
   playWidth: number
   playHeight: number
   mushroomBlend: number
   tropicalBlend: number
-  sceneColors: WonderJumpSceneColors
 }) {
   return (
     <>
       <WonderSkyBackdrop width={playWidth} height={playHeight} mushroomBlend={mushroomBlend} tropicalBlend={tropicalBlend} />
-      <View style={[styles.sunGlow, { backgroundColor: sceneColors.sunCore }]} />
-      <View style={[styles.horizonLayerFar, { backgroundColor: sceneColors.hillFar }]} />
-      <View style={[styles.horizonLayerNear, { backgroundColor: sceneColors.hillNear }]} />
     </>
+  )
+})
+
+const WonderJumpPlayerVisual = memo(function WonderJumpPlayerVisual({
+  characterStyle,
+  left,
+  top,
+  width,
+  height,
+}: {
+  characterStyle: WonderJumpCharacterStyle
+  left: number
+  top: number
+  width: number
+  height: number
+}) {
+  const drawScale = characterStyle === 'classic' ? 1 : 1.42
+  const drawWidth = width * drawScale
+  const drawHeight = height * drawScale
+  const drawLeft = left - (drawWidth - width) / 2
+  const drawTop = top - (drawHeight - height) / 2
+  return (
+    <View style={{ position: 'absolute', left: drawLeft, top: drawTop, width: drawWidth, height: drawHeight }} pointerEvents="none">
+      <WonderJumpCharacterSvg variant={characterStyle} width={drawWidth} height={drawHeight} />
+    </View>
   )
 })
 
@@ -2483,9 +2703,9 @@ export function WonderJump({
   const resolvedWidth = windowWidth > 0 ? windowWidth : fallbackWindow.width || 390
   const resolvedHeight = windowHeight > 0 ? windowHeight : fallbackWindow.height || 780
 
-  const playWidth = Math.max(280, resolvedWidth - TILE_HORIZONTAL_MARGIN * 2)
-  const tileBottomSpace = insets.bottom + 88
-  const playHeight = Math.max(430, resolvedHeight - insets.top - insets.bottom - 170)
+  const playWidth = resolvedWidth
+  const tileBottomSpace = Math.max(insets.bottom + 92, 106)
+  const playHeight = Math.max(430, resolvedHeight - insets.top - tileBottomSpace)
   const panelTop = Math.max(70, playHeight * 0.24)
   /** Hub / game-over panel: fixed max height + inner scroll so footer actions stay inside the glass card. */
   const hubPanelOuterMaxHeight = useMemo(
@@ -2514,6 +2734,9 @@ export function WonderJump({
 
   const [menuStartBiome, setMenuStartBiome] = useState<WonderJumpStartBiome>(routeSeedBiome)
   const [controlScheme, setControlScheme] = useState<ControlScheme>('touchSplit')
+  const [characterStyle, setCharacterStyle] = useState<WonderJumpCharacterStyle>('classic')
+  /** Locked when a run starts; ignores store/focus updates until run ends (menu / game over). */
+  const [runCharacterLocked, setRunCharacterLocked] = useState<WonderJumpCharacterStyle>('classic')
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [leaderboardOpen, setLeaderboardOpen] = useState(false)
   const [leaderboardEntries, setLeaderboardEntries] = useState<WonderJumpLeaderboardEntry[]>([])
@@ -2584,6 +2807,22 @@ export function WonderJump({
   useEffect(() => {
     void ensureGiftboxSvgXml().catch(() => {})
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void loadWonderJumpCharacterStyle().then((style) => {
+      if (!cancelled) setCharacterStyle(style)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isFocused) return
+    if (gameState.mode === 'playing' || gameState.mode === 'paused') return
+    void loadWonderJumpCharacterStyle().then(setCharacterStyle)
+  }, [isFocused, gameState.mode])
 
   useEffect(() => {
     if (!sessionToken) {
@@ -2740,15 +2979,17 @@ export function WonderJump({
             y += fallingVelocityY
           }
 
-          return {
-            ...platform,
-            x,
-            y,
-            moveDir,
-            breakProgress,
-            isFalling,
-            fallingVelocityY,
+          if (
+            x === platform.x &&
+            y === platform.y &&
+            moveDir === platform.moveDir &&
+            breakProgress === platform.breakProgress &&
+            isFalling === platform.isFalling &&
+            fallingVelocityY === platform.fallingVelocityY
+          ) {
+            return platform
           }
+          return { ...platform, x, y, moveDir, breakProgress, isFalling, fallingVelocityY }
         })
 
         const prevById = new Map(previous.platforms.map((p) => [p.id, p]))
@@ -2778,15 +3019,19 @@ export function WonderJump({
         }
 
         if (player.onGround) {
-          const support = nextPlatforms.find((platform) => {
-            if (!isSolid(platform)) return false
+          let support: PlatformItem | null = null
+          for (const platform of nextPlatforms) {
+            if (!isSolid(platform)) continue
             const topY = platformTopY(platform)
             const closeToTop = Math.abs(player.y + player.height - topY) <= GROUND_SUPPORT_SLACK_PX
             const overlapX =
               player.x + player.width - 4 >= platform.x &&
               player.x + 4 <= platform.x + platform.width
-            return closeToTop && overlapX
-          })
+            if (closeToTop && overlapX) {
+              support = platform
+              break
+            }
+          }
           if (!support) {
             player.onGround = false
             player.groundPlatformId = null
@@ -2864,19 +3109,17 @@ export function WonderJump({
           player.groundKind = null
         }
 
-        const mutatedPlatforms = nextPlatforms.map((platform) => {
-          if (crumblePlatformId && platform.id === crumblePlatformId) {
-            return {
-              ...platform,
-              isFalling: true,
-              fallingVelocityY: 1.4,
-            }
-          }
-          if (platform.isFalling) {
-            return platform
-          }
-          return platform
-        })
+        const mutatedPlatforms = crumblePlatformId
+          ? nextPlatforms.map((platform) => {
+              if (platform.id !== crumblePlatformId) return platform
+              if (platform.isFalling && platform.fallingVelocityY === 1.4) return platform
+              return {
+                ...platform,
+                isFalling: true,
+                fallingVelocityY: 1.4,
+              }
+            })
+          : nextPlatforms
 
         const platformById = crumblePlatformId
           ? new Map(mutatedPlatforms.map((p) => [p.id, p]))
@@ -2898,12 +3141,12 @@ export function WonderJump({
           mutatedPlatforms
         )
 
-        const currentJetpacks = previous.jetpacks
-          .filter((jetpack) => !jetpack.collected)
-          .filter((jetpack) => {
-            const y = jetpack.y - previous.cameraY
-            return y > -playHeight - 170 && y < playHeight + 220
-          })
+        const currentJetpacks: JetpackPickup[] = []
+        for (const jetpack of previous.jetpacks) {
+          if (jetpack.collected) continue
+          const y = jetpack.y - previous.cameraY
+          if (y > -playHeight - 170 && y < playHeight + 220) currentJetpacks.push(jetpack)
+        }
 
         let jetpacksUsedThisRun = previous.jetpacksUsedThisRun
         const resolvedJetpacks = currentJetpacks.map((jetpack) => {
@@ -2921,12 +3164,12 @@ export function WonderJump({
           return jetpack
         })
 
-        const currentChests = (previous.chests ?? [])
-          .filter((chest) => !chest.collected)
-          .filter((chest) => {
-            const y = chest.y - previous.cameraY
-            return y > -playHeight - 170 && y < playHeight + 220
-          })
+        const currentChests: ChestPickup[] = []
+        for (const chest of previous.chests ?? []) {
+          if (chest.collected) continue
+          const y = chest.y - previous.cameraY
+          if (y > -playHeight - 170 && y < playHeight + 220) currentChests.push(chest)
+        }
         const resolvedChests = currentChests.map((chest) => {
           const hit =
             player.x < chest.x + chest.width &&
@@ -2988,7 +3231,11 @@ export function WonderJump({
             return { ...crab, localX, dir }
           })
           .filter((crab) => crab.alive || crab.deathMs < CRAB_DEATH_MS + 240)
-        const countJetpacksAlive = (list: JetpackPickup[]) => list.filter((j) => !j.collected).length
+        const countJetpacksAlive = (list: JetpackPickup[]) => {
+          let count = 0
+          for (const j of list) if (!j.collected) count += 1
+          return count
+        }
         let chainPlatform = platforms[0]
         for (let pi = 1; pi < platforms.length; pi++) {
           const p = platforms[pi]
@@ -3277,8 +3524,9 @@ export function WonderJump({
         const token = sessionTokenRef.current
         if (token) {
           const prevChests = prevSnap.chests ?? []
+          const prevChestById = new Map(prevChests.map((x) => [x.id, x]))
           for (const c of next.chests ?? []) {
-            const prevC = prevChests.find((x) => x.id === c.id)
+            const prevC = prevChestById.get(c.id)
             if (c.collected && prevC && !prevC.collected) {
               void pickupWonderJumpChest(token)
                 .then((p) => {
@@ -3499,14 +3747,20 @@ export function WonderJump({
     inputRef.current.leftPressed = false
     inputRef.current.rightPressed = false
     playingSimSnapRef.current = null
-    setGameState(createInitialState('playing', playWidth, playHeight, menuStartBiome))
+    void loadWonderJumpCharacterStyle().then((style) => {
+      setRunCharacterLocked(style)
+      setGameState(createInitialState('playing', playWidth, playHeight, menuStartBiome))
+    })
   }
   const restartRun = () => {
     setSettingsOpen(false)
     inputRef.current.leftPressed = false
     inputRef.current.rightPressed = false
     playingSimSnapRef.current = null
-    setGameState(createInitialState('playing', playWidth, playHeight, menuStartBiome))
+    void loadWonderJumpCharacterStyle().then((style) => {
+      setRunCharacterLocked(style)
+      setGameState(createInitialState('playing', playWidth, playHeight, menuStartBiome))
+    })
   }
   const pauseGame = () => {
     setSettingsOpen(false)
@@ -3692,10 +3946,9 @@ export function WonderJump({
     [playWidth, cam]
   )
 
-  const screenShellStyle = useMemo(
-    () => [styles.screen, { backgroundColor: sceneColors.screenBg }],
-    [sceneColors.screenBg]
-  )
+  const screenShellStyle = useMemo(() => [styles.screen], [])
+  const activeWonderJumpCharacter: WonderJumpCharacterStyle =
+    gameState.mode === 'playing' || gameState.mode === 'paused' ? runCharacterLocked : characterStyle
   const gameTileShellStyle = useMemo(
     () => [
       styles.gameTile,
@@ -3716,7 +3969,6 @@ export function WonderJump({
           playHeight={playHeight}
           mushroomBlend={skyBlend.mushroom}
           tropicalBlend={skyBlend.tropical}
-          sceneColors={sceneColors}
         />
 
         <View pointerEvents="box-none" style={worldRollStyle}>
@@ -3811,33 +4063,28 @@ export function WonderJump({
         })}
 
         <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
-          <View
-            style={[
-              styles.playerShadow,
-              {
-                left: snapX(gameState.player.x + 2 + jetpackShake.x),
-                top: Math.round(gameState.player.y + gameState.player.height - 3 + jetpackShake.y),
-              },
-            ]}
+          {activeWonderJumpCharacter === 'classic' ? (
+            <View
+              style={[
+                styles.playerShadow,
+                {
+                  left: snapX(gameState.player.x + 2 + jetpackShake.x),
+                  top: Math.round(gameState.player.y + gameState.player.height - 3 + jetpackShake.y),
+                },
+              ]}
+            />
+          ) : null}
+          <WonderJumpPlayerVisual
+            characterStyle={activeWonderJumpCharacter}
+            left={snapX(gameState.player.x + jetpackShake.x)}
+            top={Math.round(gameState.player.y + jetpackShake.y)}
+            width={gameState.player.width}
+            height={gameState.player.height}
           />
-          <View
-            style={[
-              styles.player,
-              {
-                left: snapX(gameState.player.x + jetpackShake.x),
-                top: Math.round(gameState.player.y + jetpackShake.y),
-                width: gameState.player.width,
-                height: gameState.player.height,
-              },
-            ]}
-          >
-            <View style={styles.playerEyeLeft} />
-            <View style={styles.playerEyeRight} />
-          </View>
           {gameState.jetpackFuelMs > 0 ? (
             <PlayerJetpackFx
-              left={snapX(gameState.player.x - 12 + jetpackShake.x)}
-              top={Math.round(gameState.player.y - 10 + jetpackShake.y)}
+              left={snapX(gameState.player.x + EQUIPPED_JETPACK_CENTER_OFFSET_X + jetpackShake.x)}
+              top={Math.round(gameState.player.y + 2 + jetpackShake.y)}
               frame={gameState.jetpackAnimTick}
             />
           ) : null}
@@ -4368,7 +4615,7 @@ export function WonderJump({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: GRASSLAND_THEME.screenBg,
+    backgroundColor: '#000000',
     paddingHorizontal: 0,
     paddingTop: 0,
   },
@@ -4480,31 +4727,6 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 4,
     backgroundColor: 'rgba(23, 46, 58, 0.32)',
-  },
-  player: {
-    position: 'absolute',
-    borderRadius: 4,
-    backgroundColor: '#ff8a3d',
-    borderWidth: 2,
-    borderColor: '#b5531d',
-  },
-  playerEyeLeft: {
-    position: 'absolute',
-    left: 6,
-    top: 7,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#1b1d26',
-  },
-  playerEyeRight: {
-    position: 'absolute',
-    right: 6,
-    top: 7,
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#1b1d26',
   },
   hud: {
     position: 'absolute',

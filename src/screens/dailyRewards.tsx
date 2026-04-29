@@ -42,10 +42,17 @@ import {
 } from '../profileHeroPreferences'
 import { WONDER_BADGE_IDS, type WonderBadgeId } from '../wonderBadgesCatalog'
 import {
+  WONDER_JUMP_CHARACTER_OPTIONS,
+  loadWonderJumpCharacterStyle,
+  saveWonderJumpCharacterStyle,
+  type WonderJumpCharacterStyle,
+} from '../wonderJumpCharacters'
+import {
   DailyRewardsGiftBoxRayBurst,
   DAILY_REWARDS_GIFT_FLOAT_LOOP_MS,
   DAILY_REWARDS_GIFT_RAY_SPIN_MS,
 } from '../components/DailyRewardsMysteryGiftVisual'
+import { WonderJumpCharacterSvg } from '../components/WonderJumpCharacterSvg'
 
 const weekDays = ['1', '2', '3', '4', '5', '6', '7']
 const weekRewards = [1, 2, 3, 4, 5, 6, 7]
@@ -61,6 +68,7 @@ const REWARD_CAROUSEL_GAP = 10
 const REWARD_CAROUSEL_PAD_RIGHT = 16
 /** Matches outer `content` `paddingHorizontal` × 2 — carousel viewport width. */
 const REWARD_CONTENT_H_PAD = 32
+const WONDER_JUMP_CHARACTER_PREVIEW_PX = 56
 /** Isolated so Wonder Store doesn’t re-render on every spin frame. */
 function RewardCarouselSpinningCoin({ color }: { color: string }): ReactElement {
   return <WonderSpinningCoin size={72} fallbackColor={color} />
@@ -68,6 +76,12 @@ function RewardCarouselSpinningCoin({ color }: { color: string }): ReactElement 
 
 function RewardStaticCoin({ size = 20 }: { size?: number }): ReactElement {
   return <WonderStaticCoin size={size} fallbackColor={DAILY_ACCENT} />
+}
+
+function WonderJumpCharacterPreview({ styleId }: { styleId: WonderJumpCharacterStyle }): ReactElement {
+  return (
+    <WonderJumpCharacterSvg variant={styleId} width={WONDER_JUMP_CHARACTER_PREVIEW_PX} height={WONDER_JUMP_CHARACTER_PREVIEW_PX} />
+  )
 }
 
 function formatDuration(totalMs: number): string {
@@ -103,6 +117,8 @@ export function DailyRewards({ navigation, route }: any) {
     initial: string
   }>({ uri: null, initial: '?' })
   const [heroBadgeSlots, setHeroBadgeSlots] = useState<ProfileHeroBadgeSlots>([null, null, null])
+  const [equippedWonderJumpCharacter, setEquippedWonderJumpCharacter] =
+    useState<WonderJumpCharacterStyle>('classic')
 
   const fallbackRewards = useMemo<DailyRewardItem[]>(
     () => weekDays.map((day, index) => ({ day: Number(day), amount: weekRewards[index], status: 'locked' })),
@@ -179,6 +195,16 @@ export function DailyRewards({ navigation, route }: any) {
 
   useEffect(() => {
     loadEquippedAvatarFrame().then(setEquippedAvatarFrame)
+  }, [])
+
+  useEffect(() => {
+    let mounted = true
+    void loadWonderJumpCharacterStyle().then((style) => {
+      if (mounted) setEquippedWonderJumpCharacter(style)
+    })
+    return () => {
+      mounted = false
+    }
   }, [])
 
   const loadPreviewUser = useCallback(async () => {
@@ -425,6 +451,12 @@ export function DailyRewards({ navigation, route }: any) {
         console.log('[dailyRewards] avatar frame server sync failed', error)
       }
     }
+  }
+
+  async function handleEquipWonderJumpCharacter(style: WonderJumpCharacterStyle) {
+    await saveWonderJumpCharacterStyle(style)
+    setEquippedWonderJumpCharacter(style)
+    setStoreMessage(`${style[0].toUpperCase()}${style.slice(1)} character equipped for WonderJump.`)
   }
 
   async function equipWonderBadge(badgeId: WonderBadgeId) {
@@ -774,6 +806,40 @@ export function DailyRewards({ navigation, route }: any) {
               </View>
             )
           })}
+        </View>
+        <View style={styles.charactersSection}>
+          <Text style={styles.sectionHeading}>Characters</Text>
+          <View style={styles.charactersGrid}>
+            {WONDER_JUMP_CHARACTER_OPTIONS.map((option) => {
+              const equipped = equippedWonderJumpCharacter === option.id
+              return (
+                <View key={option.id} style={styles.characterCard}>
+                  <View style={styles.characterPreviewPlate}>
+                    <WonderJumpCharacterPreview styleId={option.id} />
+                  </View>
+                  <Text style={styles.characterName}>{option.label}</Text>
+                  <Text style={styles.characterBlurb}>{option.blurb}</Text>
+                  <View style={styles.characterMetaRow}>
+                    <Text style={styles.characterPrice}>FREE</Text>
+                    <Pressable
+                      style={[styles.characterEquipButton, equipped ? styles.characterEquipButtonEquipped : null]}
+                      disabled={equipped}
+                      onPress={() => void handleEquipWonderJumpCharacter(option.id)}
+                    >
+                      <Text
+                        style={[
+                          styles.characterEquipButtonText,
+                          equipped ? styles.characterEquipButtonTextEquipped : null,
+                        ]}
+                      >
+                        {equipped ? 'Equipped' : 'Equip'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+              )
+            })}
+          </View>
         </View>
         {storeMessage ? <Text style={styles.infoText}>{storeMessage}</Text> : null}
       </View>
@@ -1172,6 +1238,80 @@ const getStyles = (theme: any) => StyleSheet.create({
     fontSize: 12,
   },
   badgeEquipButtonTextEquipped: {
+    color: DAILY_ACCENT,
+  },
+  charactersSection: {
+    marginTop: 18,
+  },
+  charactersGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 11,
+  },
+  characterCard: {
+    flexBasis: '31%',
+    minWidth: 120,
+    flexGrow: 1,
+    backgroundColor: DAILY_FILL,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(203,255,0,0.28)',
+    padding: 10,
+  },
+  characterPreviewPlate: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(203,255,0,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    minHeight: 92,
+    marginBottom: 8,
+  },
+  characterName: {
+    color: '#ffffff',
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 13,
+  },
+  characterBlurb: {
+    marginTop: 3,
+    minHeight: 30,
+    color: 'rgba(255,255,255,0.68)',
+    fontFamily: 'Geist-Regular',
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  characterMetaRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  characterPrice: {
+    color: DAILY_ACCENT,
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 11,
+  },
+  characterEquipButton: {
+    minHeight: 30,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    backgroundColor: DAILY_ACCENT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  characterEquipButtonEquipped: {
+    backgroundColor: 'rgba(203,255,0,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(203,255,0,0.45)',
+  },
+  characterEquipButtonText: {
+    color: '#050505',
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 12,
+  },
+  characterEquipButtonTextEquipped: {
     color: DAILY_ACCENT,
   },
   framesSection: {
