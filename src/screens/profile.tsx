@@ -68,6 +68,7 @@ export function Profile({
   const [orderTotalCount, setOrderTotalCount] = useState(0)
   const [heroPrefs, setHeroPrefs] = useState<ProfileHeroPreferences | null>(null)
   const { frameId: avatarFrameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
+  const avatarInitial = (user.fullName?.trim() || user.email?.split('@')[0] || '?').charAt(0).toUpperCase()
 
   const loadWalletBalance = useCallback(async () => {
     if (!sessionToken) return
@@ -172,7 +173,7 @@ export function Profile({
                     frameId={avatarFrameId}
                     size={PROFILE_HERO_PROFILE_AVATAR}
                     fit="default"
-                    innerBackgroundColor={user.profilePicture ? 'transparent' : '#000000'}
+                    innerBackgroundColor={user.profilePicture ? 'transparent' : '#FFFFFF'}
                   >
                     {user.profilePicture ? (
                       <Image
@@ -182,11 +183,7 @@ export function Profile({
                       />
                     ) : (
                       <View style={styles.profileHeroAvatarPlaceholder}>
-                        <FeatherIcon
-                          name="user"
-                          size={Math.round(PROFILE_HERO_PROFILE_AVATAR * 0.45)}
-                          color="#A8A8A8"
-                        />
+                        <Text style={styles.profileHeroAvatarInitial}>{avatarInitial}</Text>
                       </View>
                     )}
                   </AvatarFrameWrapper>
@@ -484,9 +481,16 @@ const getStyles = (theme: any) => StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 999,
-    backgroundColor: '#000000',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  profileHeroAvatarInitial: {
+    color: '#111111',
+    fontFamily: 'Montserrat_700Bold',
+    fontSize: Math.round(PROFILE_HERO_PROFILE_AVATAR * 0.42),
+    lineHeight: Math.round(PROFILE_HERO_PROFILE_AVATAR * 0.42),
+    textAlign: 'center',
   },
   profileHeroName: {
     color: '#ffffff',

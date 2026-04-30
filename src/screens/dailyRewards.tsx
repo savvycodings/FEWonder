@@ -72,6 +72,7 @@ function wonderBadgeCardMeta(
   claimedCount: number,
   loginStreak: number,
   paidOrders: number,
+  wonderJumpRank: number | null,
 ): WonderBadgeCardMeta {
   const entry = WONDER_BADGE_CATALOG[id]
   switch (id) {
@@ -154,6 +155,30 @@ function wonderBadgeCardMeta(
         progressLabel: null,
         fillRatio: 1,
       }
+    case 'badge:wj_top100':
+    case 'badge:wj_top50':
+    case 'badge:wj_top10':
+    case 'badge:wj_top3':
+    case 'badge:wj_top2':
+    case 'badge:wj_top1': {
+      const targetById: Record<string, number> = {
+        'badge:wj_top100': 100,
+        'badge:wj_top50': 50,
+        'badge:wj_top10': 10,
+        'badge:wj_top3': 3,
+        'badge:wj_top2': 2,
+        'badge:wj_top1': 1,
+      }
+      const target = targetById[id]
+      const rank = typeof wonderJumpRank === 'number' && wonderJumpRank > 0 ? Math.floor(wonderJumpRank) : null
+      return {
+        earned: rank !== null && rank <= target,
+        label: entry.label,
+        caption: entry.acquire,
+        progressLabel: rank === null ? 'Unranked' : `Rank #${rank}`,
+        fillRatio: rank !== null && rank <= target ? 1 : 0,
+      }
+    }
     default:
       return {
         earned: false,
@@ -176,6 +201,7 @@ const REWARD_CAROUSEL_PAD_RIGHT = 16
 /** Matches outer `content` `paddingHorizontal` × 2 — carousel viewport width. */
 const REWARD_CONTENT_H_PAD = 32
 const WONDER_JUMP_CHARACTER_PREVIEW_PX = 56
+const TEMP_WHITE_PREVIEW_OWNER_KEY = 'wonderport-debug-white-preview-owner-user-id'
 /** Isolated so Wonder Store doesn’t re-render on every spin frame. */
 function RewardCarouselSpinningCoin({ color }: { color: string }): ReactElement {
   return <WonderSpinningCoin size={72} fallbackColor={color} />
@@ -206,6 +232,7 @@ export function DailyRewards({ navigation, route }: any) {
     uri: string | null
     initial: string
   }>({ uri: null, initial: '?' })
+  const [useWhiteFramePreviewFallback, setUseWhiteFramePreviewFallback] = useState(false)
   const [heroBadgeSlots, setHeroBadgeSlots] = useState<ProfileHeroBadgeSlots>([null, null, null])
   const [equippedWonderJumpCharacter, setEquippedWonderJumpCharacter] =
     useState<WonderJumpCharacterStyle>('classic')
@@ -232,6 +259,10 @@ export function DailyRewards({ navigation, route }: any) {
       ? Math.max(0, Math.floor(rewardStatus.currentStreakDays))
       : claimedCount
   const paidOrderCount = rewardStatus?.paidOrderCount ?? 0
+  const wonderJumpRank =
+    typeof rewardStatus?.wonderJumpRank === 'number' && Number.isFinite(rewardStatus.wonderJumpRank)
+      ? Math.max(1, Math.floor(rewardStatus.wonderJumpRank))
+      : null
   const walletBalance = rewardStatus?.walletBalance || 0
   const availableCoins = walletBalance
   const rewardCarouselViewportW = screenWidth - REWARD_CONTENT_H_PAD
@@ -292,6 +323,19 @@ export function DailyRewards({ navigation, route }: any) {
       const initial = (u.fullName || 'U').trim().slice(0, 1).toUpperCase() || '?'
       const uri = u.profilePicture?.trim() ? String(u.profilePicture) : null
       setFramePreviewUser({ uri, initial })
+      const currentUserId = String(u.id || '').trim()
+      if (!currentUserId) {
+        setUseWhiteFramePreviewFallback(false)
+        return
+      }
+      const pinnedOwnerId = String((await AsyncStorage.getItem(TEMP_WHITE_PREVIEW_OWNER_KEY)) || '').trim()
+      if (!pinnedOwnerId) {
+        // Temporary local debug helper: pin this override to the first account that loads the store.
+        await AsyncStorage.setItem(TEMP_WHITE_PREVIEW_OWNER_KEY, currentUserId)
+        setUseWhiteFramePreviewFallback(true)
+      } else {
+        setUseWhiteFramePreviewFallback(pinnedOwnerId === currentUserId)
+      }
     } catch {
       /* ignore */
     }
@@ -435,10 +479,32 @@ export function DailyRewards({ navigation, route }: any) {
     setStoreMessage('')
     try {
       const status = await purchaseWonderStoreItem(sessionToken, itemId)
-      setRewardStatus(status)
-      if (afterSuccess) await afterSuccess(status)
+      const mergedOwned = Array.isArray(status.ownedStoreItemIds)
+        ? status.ownedStoreItemIds
+        : []
+      const hasOwned = mergedOwned.some((s) => String(s).toLowerCase() === itemId.toLowerCase())
+      const nextStatus: DailyRewardStatus = hasOwned
+        ? status
+        : {
+            ...status,
+            ownedStoreItemIds: [...mergedOwned, itemId],
+          }
+      setRewardStatus(nextStatus)
+      if (afterSuccess) await afterSuccess(nextStatus)
     } catch (e: any) {
-      setStoreMessage(String(e?.message || 'Could not complete purchase.'))
+      const msg = String(e?.message || 'Could not complete purchase.')
+      if (msg.toLowerCase().includes('already purchased')) {
+        try {
+          const fresh = await getDailyRewardStatus(sessionToken)
+          setRewardStatus(fresh)
+          if (afterSuccess) await afterSuccess(fresh)
+          setStoreMessage('Already owned. You can equip it now.')
+        } catch {
+          setStoreMessage('Already owned. Please reopen Wonder Store to refresh.')
+        }
+      } else {
+        setStoreMessage(msg)
+      }
     } finally {
       setPurchasingItemId(null)
     }
@@ -682,8 +748,7 @@ export function DailyRewards({ navigation, route }: any) {
           {WONDER_BADGE_IDS.map((id) => {
             const slotMatches = (s: string | null) => (migrateWonderBadgeSlotId(s) ?? s) === id
             const equipped = heroBadgeSlots.some((s) => slotMatches(s))
-            const meta = wonderBadgeCardMeta(id, claimedCount, currentStreak, paidOrderCount)
-            const dimmed = !meta.earned
+            const meta = wonderBadgeCardMeta(id, claimedCount, currentStreak, paidOrderCount, wonderJumpRank)
             return (
               <View
                 key={id}
@@ -691,7 +756,6 @@ export function DailyRewards({ navigation, route }: any) {
                   styles.badgeStoreCard,
                   { width: badgeStoreCardWidth },
                   equipped ? styles.badgeStoreCardEquipped : null,
-                  dimmed ? styles.badgeStoreCardLocked : null,
                 ]}
               >
                 <View style={styles.badgeCardBody}>
@@ -853,6 +917,8 @@ export function DailyRewards({ navigation, route }: any) {
                 }}
                 previewUri={framePreviewUser.uri}
                 previewInitial={framePreviewUser.initial}
+                previewFallbackBackgroundColor={useWhiteFramePreviewFallback ? '#FFFFFF' : undefined}
+                previewFallbackTextColor={useWhiteFramePreviewFallback ? '#111111' : undefined}
               />
             )
           })}
@@ -1137,9 +1203,6 @@ const getStyles = (theme: any) => StyleSheet.create({
   badgeStoreCardEquipped: {
     backgroundColor: 'rgba(0,0,0,0.62)',
     borderColor: 'rgba(203,255,0,0.45)',
-  },
-  badgeStoreCardLocked: {
-    opacity: 0.55,
   },
   badgeTitleSlot: {
     minHeight: 32,

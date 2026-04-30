@@ -43,6 +43,7 @@ export function ProfileHeroEdit({
   const [busy, setBusy] = useState(false)
   const [photoBusy, setPhotoBusy] = useState(false)
   const [photoError, setPhotoError] = useState('')
+  const avatarInitial = (user.fullName?.trim() || user.email?.split('@')[0] || '?').charAt(0).toUpperCase()
 
   const reload = useCallback(async () => {
     const local = await loadProfileHeroPreferences()
@@ -224,17 +225,13 @@ export function ProfileHeroEdit({
                     frameId={avatarFrameId}
                     size={PROFILE_HERO_PROFILE_AVATAR}
                     fit="default"
-                    innerBackgroundColor={user.profilePicture ? 'transparent' : '#000000'}
+                    innerBackgroundColor={user.profilePicture ? 'transparent' : '#FFFFFF'}
                   >
                     {user.profilePicture ? (
                       <Image source={{ uri: user.profilePicture }} style={styles.avatarImage} resizeMode="cover" />
                     ) : (
                       <View style={styles.avatarPlaceholder}>
-                        <FeatherIcon
-                          name="user"
-                          size={Math.round(PROFILE_HERO_PROFILE_AVATAR * 0.45)}
-                          color="#A8A8A8"
-                        />
+                        <Text style={styles.avatarInitial}>{avatarInitial}</Text>
                       </View>
                     )}
                   </AvatarFrameWrapper>
@@ -423,9 +420,16 @@ function getStyles(theme: any) {
       width: '100%',
       height: '100%',
       borderRadius: 999,
-      backgroundColor: '#000000',
+      backgroundColor: '#FFFFFF',
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    avatarInitial: {
+      color: '#111111',
+      fontFamily: 'Montserrat_700Bold',
+      fontSize: Math.round(PROFILE_HERO_PROFILE_AVATAR * 0.42),
+      lineHeight: Math.round(PROFILE_HERO_PROFILE_AVATAR * 0.42),
+      textAlign: 'center',
     },
     heroNameBadgesRow: {
       flexDirection: 'row',

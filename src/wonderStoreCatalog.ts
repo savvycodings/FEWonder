@@ -12,6 +12,8 @@ export const AVATAR_FRAME_SHOP_COSTS: Record<string, number> = {
   meridian: 7,
   hex: 12,
   shard: 12,
+  rune: 12,
+  sentinel: 12,
 }
 
 export function avatarFrameStoreItemId(frameId: string): string {

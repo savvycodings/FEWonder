@@ -71,6 +71,8 @@ export interface DailyRewardStatus {
   currentStreakDays: number
   /** Lifetime count of orders with status `paid` (for box badges). */
   paidOrderCount: number
+  /** Current WonderJump leaderboard rank (1 = first place); null when unranked. */
+  wonderJumpRank: number | null
   canClaim: boolean
   nextUnlockAt: string | null
   rewards: DailyRewardItem[]
@@ -80,6 +82,8 @@ export interface DailyRewardStatus {
 export interface WonderJumpProgress {
   highScore: number
   unlockedBiomes: string[]
+  /** True when a chest has been picked up and is waiting in the dock. */
+  chestDocked: boolean
   /** ISO time when tropical chest becomes openable; null if no chest in progress. */
   chestUnlocksAt: string | null
 }

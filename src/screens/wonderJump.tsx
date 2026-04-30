@@ -31,6 +31,7 @@ import {
   fetchWonderJumpProgress,
   pickupWonderJumpChest,
   saveWonderJumpProgress,
+  startWonderJumpChestOpen,
 } from '../utils'
 
 type RunMode = 'menu' | 'playing' | 'paused' | 'gameOver'
@@ -2750,7 +2751,9 @@ export function WonderJump({
   const playingSimSnapRef = useRef<GameState | null>(null)
   const prevRunModeForProgressSyncRef = useRef<RunMode>(gameState.mode)
   const sessionTokenRef = useRef<string | undefined>(sessionToken)
+  const wonderJumpChestDockedRef = useRef(false)
   const wonderJumpChestUnlocksAtRef = useRef<string | null>(null)
+  const [serverChestDocked, setServerChestDocked] = useState(false)
   const [serverChestUnlocksAt, setServerChestUnlocksAt] = useState<string | null>(null)
   const [chestHubTick, setChestHubTick] = useState(0)
   const [chestClaimBusy, setChestClaimBusy] = useState(false)
@@ -2790,7 +2793,9 @@ export function WonderJump({
   useEffect(() => {
     if (!sessionToken) {
       setUnlockedBiomes([...DEFAULT_WONDER_JUMP_UNLOCKED])
+      wonderJumpChestDockedRef.current = false
       wonderJumpChestUnlocksAtRef.current = null
+      setServerChestDocked(false)
       setServerChestUnlocksAt(null)
       return
     }
@@ -2803,6 +2808,8 @@ export function WonderJump({
           x === 'grassland' || x === 'mushroom' || x === 'tropical'
         )
         setUnlockedBiomes(next.length > 0 ? next : [...DEFAULT_WONDER_JUMP_UNLOCKED])
+        wonderJumpChestDockedRef.current = p.chestDocked === true
+        setServerChestDocked(p.chestDocked === true)
         wonderJumpChestUnlocksAtRef.current = p.chestUnlocksAt ?? null
         setServerChestUnlocksAt(p.chestUnlocksAt ?? null)
       })
@@ -2825,6 +2832,8 @@ export function WonderJump({
     gameOverChestPickupPostedRef.current = true
     void pickupWonderJumpChest(sessionToken)
       .then((p) => {
+        wonderJumpChestDockedRef.current = p.chestDocked === true
+        setServerChestDocked(p.chestDocked === true)
         wonderJumpChestUnlocksAtRef.current = p.chestUnlocksAt ?? null
         setServerChestUnlocksAt(p.chestUnlocksAt ?? null)
         setGameState((s) => ({
@@ -2851,6 +2860,8 @@ export function WonderJump({
           x === 'grassland' || x === 'mushroom' || x === 'tropical'
         )
         if (next.length > 0) setUnlockedBiomes(next)
+        wonderJumpChestDockedRef.current = p.chestDocked === true
+        setServerChestDocked(p.chestDocked === true)
         wonderJumpChestUnlocksAtRef.current = p.chestUnlocksAt ?? null
         setServerChestUnlocksAt(p.chestUnlocksAt ?? null)
       })
@@ -2863,6 +2874,8 @@ export function WonderJump({
     const id = setTimeout(() => {
       void fetchWonderJumpProgress(sessionToken)
         .then((p) => {
+          wonderJumpChestDockedRef.current = p.chestDocked === true
+          setServerChestDocked(p.chestDocked === true)
           wonderJumpChestUnlocksAtRef.current = p.chestUnlocksAt ?? null
           setServerChestUnlocksAt(p.chestUnlocksAt ?? null)
         })
@@ -2916,7 +2929,9 @@ export function WonderJump({
         const tropicalBlendTick = getTropicalBlend(previous.heightScore, previous.startBiome)
         const tokenForChest = sessionTokenRef.current
         const allowServerChest =
-          Boolean(tokenForChest && tokenForChest.length > 0) && wonderJumpChestUnlocksAtRef.current == null
+          Boolean(tokenForChest && tokenForChest.length > 0) &&
+          !wonderJumpChestDockedRef.current &&
+          wonderJumpChestUnlocksAtRef.current == null
         const speed = BASE_SPEED + difficulty * 1.5
         const nextPlatforms = previous.platforms.map((platform) => {
           let x = platform.x
@@ -3492,6 +3507,8 @@ export function WonderJump({
             if (c.collected && prevC && !prevC.collected) {
               void pickupWonderJumpChest(token)
                 .then((p) => {
+                  wonderJumpChestDockedRef.current = p.chestDocked === true
+                  setServerChestDocked(p.chestDocked === true)
                   wonderJumpChestUnlocksAtRef.current = p.chestUnlocksAt ?? null
                   setServerChestUnlocksAt(p.chestUnlocksAt ?? null)
                   setGameState((s) => ({
@@ -3802,7 +3819,9 @@ export function WonderJump({
     try {
       const res = await claimWonderJumpChest(sessionToken)
       if (res.ok) {
+        wonderJumpChestDockedRef.current = false
         wonderJumpChestUnlocksAtRef.current = null
+        setServerChestDocked(false)
         setServerChestUnlocksAt(null)
         if (onUserUpdated) {
           try {
@@ -3836,6 +3855,22 @@ export function WonderJump({
     hubChestGiftPop,
     hubChestGiftOpacity,
   ])
+
+  const beginHubChestOpenTimer = useCallback(async () => {
+    if (!sessionToken || chestClaimBusy || !serverChestDocked || serverChestUnlocksAt) return
+    setChestClaimBusy(true)
+    try {
+      const p = await startWonderJumpChestOpen(sessionToken)
+      wonderJumpChestDockedRef.current = p.chestDocked === true
+      setServerChestDocked(p.chestDocked === true)
+      wonderJumpChestUnlocksAtRef.current = p.chestUnlocksAt ?? null
+      setServerChestUnlocksAt(p.chestUnlocksAt ?? null)
+    } catch {
+      /* ignore: hub UI will keep current state and refresh on next progress sync */
+    } finally {
+      setChestClaimBusy(false)
+    }
+  }, [sessionToken, chestClaimBusy, serverChestDocked, serverChestUnlocksAt])
 
   const wjChestReadyToOpen = useMemo(() => {
     if (!isHubPanel || !serverChestUnlocksAt) return false
@@ -4235,19 +4270,29 @@ export function WonderJump({
               <View style={styles.wjChestHubRow}>
                 {!sessionToken ? (
                   giftDockEmptyTile
-                ) : serverChestUnlocksAt ? (
-                  wjChestReadyToOpen ? (
-                    <Pressable
-                      onPress={() => void beginHubChestReveal()}
-                      disabled={chestClaimBusy || hubChestRevealPhase !== null}
-                      style={[styles.wjChestDockTile, styles.wjChestDockTileReady]}
-                    >
-                      <DailyRewardsMysteryGiftVisual maxStageSize={WJ_DOCK_GIFT_STAGE_PX} ready />
-                    </Pressable>
+                ) : serverChestDocked ? (
+                  serverChestUnlocksAt ? (
+                    wjChestReadyToOpen ? (
+                      <Pressable
+                        onPress={() => void beginHubChestReveal()}
+                        disabled={chestClaimBusy || hubChestRevealPhase !== null}
+                        style={[styles.wjChestDockTile, styles.wjChestDockTileReady]}
+                      >
+                        <DailyRewardsMysteryGiftVisual maxStageSize={WJ_DOCK_GIFT_STAGE_PX} ready />
+                      </Pressable>
+                    ) : (
+                      <View style={styles.wjChestDockTile}>
+                        <DailyRewardsMysteryGiftVisual maxStageSize={WJ_DOCK_GIFT_STAGE_PX} ready={false} />
+                      </View>
+                    )
                   ) : (
-                    <View style={styles.wjChestDockTile}>
+                    <Pressable
+                      onPress={() => void beginHubChestOpenTimer()}
+                      disabled={chestClaimBusy || hubChestRevealPhase !== null}
+                      style={styles.wjChestDockTile}
+                    >
                       <DailyRewardsMysteryGiftVisual maxStageSize={WJ_DOCK_GIFT_STAGE_PX} ready={false} />
-                    </View>
+                    </Pressable>
                   )
                 ) : (
                   giftDockEmptyTile
@@ -4256,13 +4301,17 @@ export function WonderJump({
                   <Text style={styles.wjChestHubTitle}>Gift dock</Text>
                   {!sessionToken ? (
                     <Text style={styles.wjChestHubMeta}>Sign in to stash Keys gifts.</Text>
-                  ) : serverChestUnlocksAt ? (
-                    wjChestReadyToOpen ? (
-                      <Text style={styles.wjChestHubMeta}>Tap to open.</Text>
+                  ) : serverChestDocked ? (
+                    serverChestUnlocksAt ? (
+                      wjChestReadyToOpen ? (
+                        <Text style={styles.wjChestHubMeta}>Tap to open.</Text>
+                      ) : (
+                        <Text style={styles.wjChestHubMeta}>
+                          Opens <Text style={styles.wjChestHubCountdown}>{wjChestCountdownText}</Text>
+                        </Text>
+                      )
                     ) : (
-                      <Text style={styles.wjChestHubMeta}>
-                        Opens <Text style={styles.wjChestHubCountdown}>{wjChestCountdownText}</Text>
-                      </Text>
+                      <Text style={styles.wjChestHubMeta}>Tap Open to start a 6-hour unlock timer.</Text>
                     )
                   ) : (
                     <Text style={styles.wjChestHubMeta}>Empty. Run Keys for drops.</Text>

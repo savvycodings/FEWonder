@@ -8,6 +8,12 @@ export const WONDER_BADGE_IDS = [
   'badge:order5',
   'badge:order10',
   'badge:heart',
+  'badge:wj_top100',
+  'badge:wj_top50',
+  'badge:wj_top10',
+  'badge:wj_top3',
+  'badge:wj_top2',
+  'badge:wj_top1',
 ] as const
 
 export type WonderBadgeId = (typeof WONDER_BADGE_IDS)[number]
@@ -54,6 +60,36 @@ export const WONDER_BADGE_CATALOG: Record<WonderBadgeId, WonderBadgeCatalogEntry
     file: 'Heartbadge.png',
     label: 'Spread the love!',
     acquire: 'Community badge for kindness on Wonderport.',
+  },
+  'badge:wj_top100': {
+    file: 'Top100.svg',
+    label: 'WonderJump top 100',
+    acquire: 'Reach top 100 on the WonderJump leaderboard.',
+  },
+  'badge:wj_top50': {
+    file: 'Top50.svg',
+    label: 'WonderJump top 50',
+    acquire: 'Reach top 50 on the WonderJump leaderboard.',
+  },
+  'badge:wj_top10': {
+    file: 'Top10.svg',
+    label: 'WonderJump top 10',
+    acquire: 'Reach top 10 on the WonderJump leaderboard.',
+  },
+  'badge:wj_top3': {
+    file: 'Top3.svg',
+    label: 'WonderJump top 3',
+    acquire: 'Reach top 3 on the WonderJump leaderboard.',
+  },
+  'badge:wj_top2': {
+    file: 'Top2.svg',
+    label: 'WonderJump top 2',
+    acquire: 'Reach rank #2 on the WonderJump leaderboard.',
+  },
+  'badge:wj_top1': {
+    file: 'Top1.svg',
+    label: 'WonderJump champion',
+    acquire: 'Reach rank #1 on the WonderJump leaderboard.',
   },
 }
 

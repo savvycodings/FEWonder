@@ -33,6 +33,8 @@ export type BorderFrameId =
   | 'meridian'
   | 'hex'
   | 'shard'
+  | 'rune'
+  | 'sentinel'
 
 export type AvatarFrameId = 'none' | BorderFrameId
 
@@ -44,6 +46,8 @@ const BORDER_FRAME_IDS: BorderFrameId[] = [
   'meridian',
   'hex',
   'shard',
+  'rune',
+  'sentinel',
 ]
 
 export const AVATAR_FRAME_SHOP: { id: BorderFrameId; name: string; tagline: string }[] = [
@@ -54,6 +58,8 @@ export const AVATAR_FRAME_SHOP: { id: BorderFrameId; name: string; tagline: stri
   { id: 'meridian', name: 'Meridian flare', tagline: 'Sunset ring with a wide violet band' },
   { id: 'hex', name: 'Hex forge', tagline: 'Faceted metal halo' },
   { id: 'shard', name: 'Crystal crown', tagline: 'Five glass peaks' },
+  { id: 'rune', name: 'Rune lattice', tagline: 'Arcane diamond brackets' },
+  { id: 'sentinel', name: 'Sentinel array', tagline: 'Corner pylons and linked rails' },
 ]
 
 /** Old shop / tab ids that are not avatar frames (never map to `gold` frame). */
@@ -144,6 +150,8 @@ const FRAME_HOLE_ASSET_FRAC: Record<BorderFrameId, number> = {
   meridian: 0.7277,
   hex: 0.7277,
   shard: 0.7277,
+  rune: 0.7277,
+  sentinel: 0.7277,
 }
 
 const NEON_HOLE_ASSET_FRAC = FRAME_HOLE_ASSET_FRAC.neon
@@ -169,6 +177,14 @@ const PHOTO_DISC_INSET_CHAT = 1.26
  * instead of the screen showing through.
  */
 const PHOTO_HOLE_COVER_BLEED = 1.075
+
+function photoHoleCoverBleedForFrame(frameId: BorderFrameId): number {
+  if (frameId === 'hex') {
+    // Hex corners extend farther than a circle; push photo farther out so corner gaps disappear.
+    return 1.3
+  }
+  return PHOTO_HOLE_COVER_BLEED
+}
 
 function photoContentScale(): number {
   return 1
@@ -396,9 +412,9 @@ function HexVectorFrame({ side, photoDiameter }: { side: number; photoDiameter: 
   const c = side / 2
   const stroke = Math.max(4.1, side * 0.086)
   const pr = photoDiameter / 2
-  // Hex circumscribed on the photo circle (flat sides tangent) + hairline clearance — minimizes vertex scallops.
+  // Keep enough headroom so top/bottom vertices are never clipped by stroke thickness.
   const Rtan = pr / Math.cos(Math.PI / 6)
-  const R = Math.min(c - stroke * 0.32, Rtan + Math.max(0.25, stroke * 0.035))
+  const R = Math.min(c - stroke / 2 - 1.2, Rtan + Math.max(0.32, stroke * 0.05))
   let d = ''
   for (let i = 0; i < 6; i += 1) {
     const a = -Math.PI / 2 + (i * Math.PI) / 3
@@ -407,9 +423,6 @@ function HexVectorFrame({ side, photoDiameter }: { side: number; photoDiameter: 
     d += i === 0 ? `M${x} ${y}` : `L${x} ${y}`
   }
   d += 'Z'
-  const glowStroke = stroke * 1.55
-  const scallopR = pr + stroke * 0.1
-
   return (
     <Svg width={side} height={side} viewBox={`0 0 ${side} ${side}`}>
       <Defs>
@@ -425,48 +438,21 @@ function HexVectorFrame({ side, photoDiameter }: { side: number; photoDiameter: 
           <Stop offset="100%" stopColor="#FFFFFF" stopOpacity={0.35} />
         </LinearGradient>
       </Defs>
-      <Circle
-        cx={c}
-        cy={c}
-        r={scallopR}
-        fill="none"
-        stroke="#5A7CA8"
-        strokeOpacity={0.38}
-        strokeWidth={stroke * 1.35}
-      />
-      <Circle
-        cx={c}
-        cy={c}
-        r={scallopR}
-        fill="none"
-        stroke="#8FA8C8"
-        strokeOpacity={0.22}
-        strokeWidth={stroke * 0.55}
-      />
-      <Path
-        d={d}
-        fill="none"
-        stroke="#4A6FA8"
-        strokeOpacity={0.35}
-        strokeWidth={glowStroke}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
       <Path
         d={d}
         fill="none"
         stroke={`url(#${gradId})`}
         strokeWidth={stroke}
-        strokeLinejoin="round"
-        strokeLinecap="round"
+        strokeLinejoin="miter"
+        strokeLinecap="butt"
       />
       <Path
         d={d}
         fill="none"
         stroke={`url(#${shineId})`}
         strokeWidth={Math.max(1, stroke * 0.22)}
-        strokeLinejoin="round"
-        strokeLinecap="round"
+        strokeLinejoin="miter"
+        strokeLinecap="butt"
       />
     </Svg>
   )
@@ -561,6 +547,71 @@ function ShardVectorFrame({ side, photoDiameter }: { side: number; photoDiameter
   )
 }
 
+function RuneVectorFrame({ side, photoDiameter }: { side: number; photoDiameter: number }) {
+  const c = side / 2
+  // Keep rune thickness tied to both container and hole size so it scales cleanly in profile/chat/preview.
+  const stroke = Math.max(2.9, Math.min(side * 0.078, photoDiameter * 0.16))
+  const photoR = photoDiameter / 2
+  const ringR = Math.min(c - stroke * 0.65, photoR + stroke * 0.28)
+  const dR = ringR + stroke * 0.5
+  const b = ringR + stroke * 0.04
+  const k = stroke * 1.75
+  const engraveInner = ringR - stroke * 0.25
+  const engraveOuter = ringR + stroke * 0.24
+  const mkEngrave = (a: number) => {
+    const ux = Math.cos(a)
+    const uy = Math.sin(a)
+    return `M${c + engraveInner * ux} ${c + engraveInner * uy}L${c + engraveOuter * ux} ${c + engraveOuter * uy}`
+  }
+  return (
+    <Svg width={side} height={side} viewBox={`0 0 ${side} ${side}`}>
+      <Circle cx={c} cy={c} r={ringR} fill="none" stroke="#4C1D95" strokeOpacity={0.22} strokeWidth={stroke * 0.9} />
+      <Circle cx={c} cy={c} r={ringR} fill="none" stroke="#6D28D9" strokeWidth={Math.max(1.1, stroke * 0.66)} />
+      <Path d={mkEngrave(-Math.PI / 4)} fill="none" stroke="#D8B4FE" strokeOpacity={0.95} strokeWidth={Math.max(1.2, stroke * 0.31)} strokeLinecap="round" />
+      <Path d={mkEngrave(Math.PI / 4)} fill="none" stroke="#D8B4FE" strokeOpacity={0.95} strokeWidth={Math.max(1.2, stroke * 0.31)} strokeLinecap="round" />
+      <Path d={mkEngrave((3 * Math.PI) / 4)} fill="none" stroke="#D8B4FE" strokeOpacity={0.95} strokeWidth={Math.max(1.2, stroke * 0.31)} strokeLinecap="round" />
+      <Path d={mkEngrave((-3 * Math.PI) / 4)} fill="none" stroke="#D8B4FE" strokeOpacity={0.95} strokeWidth={Math.max(1.2, stroke * 0.31)} strokeLinecap="round" />
+      <Path d={`M${c - b} ${c - b - k}L${c - b} ${c - b}L${c - b - k} ${c - b}`} fill="none" stroke="#F3E8FF" strokeWidth={Math.max(1.1, stroke * 0.3)} strokeLinecap="round" />
+      <Path d={`M${c + b} ${c - b - k}L${c + b} ${c - b}L${c + b + k} ${c - b}`} fill="none" stroke="#F3E8FF" strokeWidth={Math.max(1.1, stroke * 0.3)} strokeLinecap="round" />
+      <Path d={`M${c - b} ${c + b + k}L${c - b} ${c + b}L${c - b - k} ${c + b}`} fill="none" stroke="#F3E8FF" strokeWidth={Math.max(1.1, stroke * 0.3)} strokeLinecap="round" />
+      <Path d={`M${c + b} ${c + b + k}L${c + b} ${c + b}L${c + b + k} ${c + b}`} fill="none" stroke="#F3E8FF" strokeWidth={Math.max(1.1, stroke * 0.3)} strokeLinecap="round" />
+    </Svg>
+  )
+}
+
+function SentinelVectorFrame({ side, photoDiameter }: { side: number; photoDiameter: number }) {
+  const c = side / 2
+  // Same scaling rule as other premium frames: stable on small chat avatars and large profile avatars.
+  const stroke = Math.max(2.8, Math.min(side * 0.076, photoDiameter * 0.155))
+  const photoR = photoDiameter / 2
+  const railR = Math.min(c - stroke * 0.8, photoR + stroke * 0.3)
+  const pylonR = Math.min(c - stroke * 0.45, railR + stroke * 1.6)
+  const pylonW = stroke * 1.08
+  const pylonH = stroke * 1.92
+  const pylons = [
+    { x: c, y: c - pylonR, rot: 0 },
+    { x: c + pylonR, y: c, rot: 90 },
+    { x: c, y: c + pylonR, rot: 180 },
+    { x: c - pylonR, y: c, rot: 270 },
+  ]
+  return (
+    <Svg width={side} height={side} viewBox={`0 0 ${side} ${side}`} overflow="visible">
+      <Circle cx={c} cy={c} r={railR} fill="none" stroke="#34D399" strokeWidth={Math.max(1.3, stroke * 0.58)} />
+      <Circle cx={c} cy={c} r={railR - Math.max(0.6, stroke * 0.34)} fill="none" stroke="#BBF7D0" strokeOpacity={0.95} strokeWidth={Math.max(0.9, stroke * 0.2)} />
+      {pylons.map((p, i) => (
+        <Path
+          key={`p_${i}`}
+          d={`M${p.x - pylonW / 2} ${p.y + pylonH / 2}L${p.x} ${p.y - pylonH / 2}L${p.x + pylonW / 2} ${p.y + pylonH / 2}Z`}
+          fill="#052E2B"
+          stroke="#6EE7B7"
+          strokeWidth={Math.max(1, stroke * 0.25)}
+          transform={`rotate(${p.rot} ${p.x} ${p.y})`}
+        />
+      ))}
+    </Svg>
+  )
+}
+
 function VectorFrameById({
   frameId,
   side,
@@ -585,6 +636,10 @@ function VectorFrameById({
       return <HexVectorFrame side={side} photoDiameter={photoDiameter} />
     case 'shard':
       return <ShardVectorFrame side={side} photoDiameter={photoDiameter} />
+    case 'rune':
+      return <RuneVectorFrame side={side} photoDiameter={photoDiameter} />
+    case 'sentinel':
+      return <SentinelVectorFrame side={side} photoDiameter={photoDiameter} />
     default:
       return null
   }
@@ -596,10 +651,11 @@ function BorderFrameLayer({ size, frameId, fit = 'default', innerBackgroundColor
   const imgSide = snapToPixel(size * base * holeMatch)
   const offset = snapToPixel((size - imgSide) / 2)
   const inset = fit === 'preview' ? PHOTO_DISC_INSET_PREVIEW : fit === 'chat' ? PHOTO_DISC_INSET_CHAT : PHOTO_DISC_INSET
+  const frameCoverBleed = photoHoleCoverBleedForFrame(frameId)
   // Neon-matched hole + slight bleed so photo fills soft PNG edges (see PHOTO_HOLE_COVER_BLEED).
   const photoD = snapToPixel(Math.max(
     14,
-    Math.min(size - 1, size * base * NEON_HOLE_ASSET_FRAC * inset * PHOTO_HOLE_COVER_BLEED),
+    Math.min(size - 1, size * base * NEON_HOLE_ASSET_FRAC * inset * frameCoverBleed),
   ))
   const photoOffset = snapToPixel((size - photoD) / 2)
   const contentScale = photoContentScale()
@@ -725,6 +781,8 @@ type AvatarFramePreviewTileProps = {
   onPrimaryPress: () => void
   previewUri?: string | null
   previewInitial?: string
+  previewFallbackBackgroundColor?: string
+  previewFallbackTextColor?: string
 }
 
 export function AvatarFramePreviewTile({
@@ -738,6 +796,8 @@ export function AvatarFramePreviewTile({
   onPrimaryPress,
   previewUri,
   previewInitial = '?',
+  previewFallbackBackgroundColor,
+  previewFallbackTextColor,
 }: AvatarFramePreviewTileProps) {
   const { theme } = useContext(ThemeContext)
   const ACCENT = '#CBFF00'
@@ -753,7 +813,7 @@ export function AvatarFramePreviewTile({
       style={[
         styles.tilePreviewFallback,
         {
-          backgroundColor: theme.appBackgroundColor || '#c5cad6',
+          backgroundColor: previewFallbackBackgroundColor || theme.appBackgroundColor || '#c5cad6',
         },
       ]}
     >
@@ -761,7 +821,7 @@ export function AvatarFramePreviewTile({
         style={[
           styles.tilePreviewInitial,
           {
-            color: theme.textColor,
+            color: previewFallbackTextColor || theme.textColor,
           },
         ]}
       >

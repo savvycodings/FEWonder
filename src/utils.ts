@@ -45,6 +45,11 @@ export function normalizeDailyRewardStatus(status: DailyRewardStatus): void {
     const claimed = typeof status.claimedCount === 'number' && Number.isFinite(status.claimedCount) ? status.claimedCount : 0
     status.currentStreakDays = Math.max(0, Math.floor(claimed))
   }
+  if (typeof status.wonderJumpRank !== 'number' || !Number.isFinite(status.wonderJumpRank) || status.wonderJumpRank <= 0) {
+    status.wonderJumpRank = null
+  } else {
+    status.wonderJumpRank = Math.floor(status.wonderJumpRank)
+  }
 }
 
 export async function readDailyRewardsCache(): Promise<DailyRewardStatus | null> {
@@ -475,9 +480,10 @@ export async function fetchWonderJumpProgress(sessionToken: string): Promise<Won
   const unlockedBiomes = Array.isArray(data.unlockedBiomes)
     ? data.unlockedBiomes.filter((x: unknown) => typeof x === 'string')
     : []
+  const chestDocked = data.chestDocked === true
   const chestUnlocksAt =
     typeof data.chestUnlocksAt === 'string' && data.chestUnlocksAt.length > 0 ? data.chestUnlocksAt : null
-  return { highScore, unlockedBiomes, chestUnlocksAt }
+  return { highScore, unlockedBiomes, chestDocked, chestUnlocksAt }
 }
 
 export async function saveWonderJumpProgress(
@@ -509,9 +515,10 @@ export async function saveWonderJumpProgress(
   const unlockedBiomes = Array.isArray(data.unlockedBiomes)
     ? data.unlockedBiomes.filter((x: unknown) => typeof x === 'string')
     : []
+  const chestDocked = data.chestDocked === true
   const chestUnlocksAt =
     typeof data.chestUnlocksAt === 'string' && data.chestUnlocksAt.length > 0 ? data.chestUnlocksAt : null
-  return { highScore, unlockedBiomes, chestUnlocksAt }
+  return { highScore, unlockedBiomes, chestDocked, chestUnlocksAt }
 }
 
 export async function pickupWonderJumpChest(sessionToken: string): Promise<WonderJumpProgress> {
@@ -535,9 +542,37 @@ export async function pickupWonderJumpChest(sessionToken: string): Promise<Wonde
   const unlockedBiomes = Array.isArray(data.unlockedBiomes)
     ? data.unlockedBiomes.filter((x: unknown) => typeof x === 'string')
     : []
+  const chestDocked = data.chestDocked === true
   const chestUnlocksAt =
     typeof data.chestUnlocksAt === 'string' && data.chestUnlocksAt.length > 0 ? data.chestUnlocksAt : null
-  return { highScore, unlockedBiomes, chestUnlocksAt }
+  return { highScore, unlockedBiomes, chestDocked, chestUnlocksAt }
+}
+
+export async function startWonderJumpChestOpen(sessionToken: string): Promise<WonderJumpProgress> {
+  const response = await fetch(`${DOMAIN}/auth/wonder-jump-chest/start`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${sessionToken}`,
+    },
+  })
+  const raw = await response.text()
+  let data: any = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    data = { raw }
+  }
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to start chest timer')
+  }
+  const highScore = typeof data.highScore === 'number' && Number.isFinite(data.highScore) ? data.highScore : 0
+  const unlockedBiomes = Array.isArray(data.unlockedBiomes)
+    ? data.unlockedBiomes.filter((x: unknown) => typeof x === 'string')
+    : []
+  const chestDocked = data.chestDocked === true
+  const chestUnlocksAt =
+    typeof data.chestUnlocksAt === 'string' && data.chestUnlocksAt.length > 0 ? data.chestUnlocksAt : null
+  return { highScore, unlockedBiomes, chestDocked, chestUnlocksAt }
 }
 
 export async function claimWonderJumpChest(sessionToken: string): Promise<WonderJumpChestClaimResult> {
@@ -594,11 +629,19 @@ export async function purchaseWonderStoreItem(
     data = { raw }
   }
 
-  if ((response.status === 409 || response.status === 402) && data?.rewards?.length) {
+  if (response.status === 409 && data?.rewards?.length) {
+    // "Already purchased" is a valid owned state; return fresh status so UI can switch to Equip.
     const status = data as DailyRewardStatus
     normalizeDailyRewardStatus(status)
     await writeDailyRewardsCache(status)
-    throw new Error(String(data?.error || (response.status === 402 ? 'Not enough coins' : 'Already purchased')))
+    return status
+  }
+
+  if (response.status === 402 && data?.rewards?.length) {
+    const status = data as DailyRewardStatus
+    normalizeDailyRewardStatus(status)
+    await writeDailyRewardsCache(status)
+    throw new Error(String(data?.error || 'Not enough coins'))
   }
 
   if (!response.ok) {
