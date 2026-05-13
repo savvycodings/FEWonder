@@ -29,14 +29,12 @@ import {
 } from '../ordersApi'
 import { fetchSessionUser } from '../utils'
 import { SHOW_PEACH_CHECKOUT } from '../../constants'
+import { brandAccentRgba } from '../brandAccent'
 
-const CHECKOUT_ACCENT = '#CBFF00'
 const CHECKOUT_FILL = '#000000'
-const HOME_ACCENT_BG = '#CBFF00'
 const HOME_CHIP_FILL = '#000000'
 const HOME_ACCENT_TEXT = '#000000'
 const PRODUCT_SURFACE_BG = '#111111'
-const PRODUCT_SURFACE_BORDER = 'rgba(203,255,0,0.3)'
 const PRODUCT_TEXT_PRIMARY = '#ffffff'
 const PRODUCT_TEXT_MUTED = 'rgba(255,255,255,0.72)'
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
@@ -293,7 +291,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
             activeOpacity={0.8}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <FeatherIcon name="chevron-left" size={20} color={HOME_ACCENT_BG} />
+            <FeatherIcon name="chevron-left" size={20} color={theme.brandAccent} />
           </TouchableOpacity>
           <Text style={styles.navTitle}>Checkout</Text>
         </View>
@@ -478,7 +476,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
                     style={styles.copyBtn}
                     onPress={() => copyLabelValue('Order reference', eftReference)}
                   >
-                    <FeatherIcon name="copy" size={18} color={CHECKOUT_ACCENT} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                     <Text style={styles.copyBtnText}>Copy</Text>
                   </TouchableOpacity>
                 </View>
@@ -493,7 +491,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
                     style={styles.copyBtn}
                     onPress={() => copyLabelValue('Amount', eftTotalLabel)}
                   >
-                    <FeatherIcon name="copy" size={18} color={CHECKOUT_ACCENT} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                     <Text style={styles.copyBtnText}>Copy</Text>
                   </TouchableOpacity>
                 </View>
@@ -516,7 +514,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
                         style={styles.copyBtn}
                         onPress={() => copyLabelValue(String(label), String(val))}
                       >
-                        <FeatherIcon name="copy" size={18} color={CHECKOUT_ACCENT} />
+                        <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                         <Text style={styles.copyBtnText}>Copy</Text>
                       </TouchableOpacity>
                     </View>
@@ -565,6 +563,8 @@ export function CartCheckout({ navigation }: { navigation: any }) {
 }
 
 function getStyles(theme: any) {
+  const L = (a: number) => brandAccentRgba(theme, a)
+  const surfaceBorder = L(0.3)
   return StyleSheet.create({
     page: { flex: 1, backgroundColor: '#000000' },
     safeTop: { backgroundColor: '#000000' },
@@ -582,7 +582,7 @@ function getStyles(theme: any) {
       justifyContent: 'center',
       backgroundColor: HOME_CHIP_FILL,
       borderWidth: 1,
-      borderColor: PRODUCT_SURFACE_BORDER,
+      borderColor: surfaceBorder,
     },
     navTitle: {
       fontFamily: HOME_MONTSERRAT_BOLD,
@@ -604,7 +604,7 @@ function getStyles(theme: any) {
       maxHeight: '92%',
       backgroundColor: PRODUCT_SURFACE_BG,
       borderWidth: 1,
-      borderColor: PRODUCT_SURFACE_BORDER,
+      borderColor: surfaceBorder,
     },
     deliveryTitle: {
       fontFamily: HOME_MONTSERRAT_BOLD,
@@ -627,13 +627,13 @@ function getStyles(theme: any) {
       alignItems: 'center',
       backgroundColor: HOME_CHIP_FILL,
       borderWidth: 1,
-      borderColor: 'rgba(203,255,0,0.3)',
+      borderColor: L(0.3),
     },
-    deliveryChipActive: { borderWidth: 2, borderColor: HOME_ACCENT_BG },
+    deliveryChipActive: { borderWidth: 2, borderColor: theme.brandAccent },
     deliveryChipText: {
       fontFamily: theme.semiBoldFont,
       fontSize: 12,
-      color: HOME_ACCENT_BG,
+      color: theme.brandAccent,
       textAlign: 'center',
     },
     deliveryChipTextActive: { fontFamily: theme.boldFont },
@@ -647,7 +647,7 @@ function getStyles(theme: any) {
     },
     deliveryInput: {
       borderWidth: 1,
-      borderColor: PRODUCT_SURFACE_BORDER,
+      borderColor: surfaceBorder,
       borderRadius: 12,
       paddingHorizontal: 12,
       paddingVertical: 10,
@@ -665,7 +665,7 @@ function getStyles(theme: any) {
       borderRadius: 12,
       alignItems: 'center',
       borderWidth: 1,
-      borderColor: PRODUCT_SURFACE_BORDER,
+      borderColor: surfaceBorder,
       backgroundColor: HOME_CHIP_FILL,
     },
     deliveryCancelText: {
@@ -678,7 +678,7 @@ function getStyles(theme: any) {
       paddingVertical: 14,
       borderRadius: 12,
       alignItems: 'center',
-      backgroundColor: HOME_ACCENT_BG,
+      backgroundColor: theme.brandAccent,
     },
     deliveryContinueText: { fontFamily: theme.boldFont, fontSize: 14, color: HOME_ACCENT_TEXT },
     checkoutBackdrop: {
@@ -694,7 +694,7 @@ function getStyles(theme: any) {
     checkoutTitle: {
       fontFamily: theme.boldFont,
       fontSize: 20,
-      color: CHECKOUT_ACCENT,
+      color: theme.brandAccent,
       marginBottom: 8,
     },
     checkoutSubtitle: {
@@ -707,14 +707,14 @@ function getStyles(theme: any) {
     checkoutSection: {
       fontFamily: theme.boldFont,
       fontSize: 14,
-      color: CHECKOUT_ACCENT,
+      color: theme.brandAccent,
       marginTop: 8,
       marginBottom: 10,
     },
     checkoutLabel: {
       fontFamily: theme.mediumFont,
       fontSize: 11,
-      color: 'rgba(203,255,0,0.65)',
+      color: L(0.65),
       textTransform: 'uppercase',
       letterSpacing: 0.6,
       marginBottom: 4,
@@ -738,7 +738,7 @@ function getStyles(theme: any) {
       borderRadius: 12,
       backgroundColor: 'rgba(255,255,255,0.06)',
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: 'rgba(203,255,0,0.25)',
+      borderColor: L(0.25),
     },
     copyTextCol: { flex: 1, minWidth: 0 },
     copyBtn: {
@@ -748,11 +748,11 @@ function getStyles(theme: any) {
       paddingVertical: 8,
       paddingHorizontal: 10,
       borderRadius: 10,
-      backgroundColor: 'rgba(203,255,0,0.12)',
+      backgroundColor: L(0.12),
     },
-    copyBtnText: { fontFamily: theme.semiBoldFont, fontSize: 13, color: CHECKOUT_ACCENT },
+    copyBtnText: { fontFamily: theme.semiBoldFont, fontSize: 13, color: theme.brandAccent },
     checkoutPrimaryBtn: {
-      backgroundColor: CHECKOUT_ACCENT,
+      backgroundColor: theme.brandAccent,
       borderRadius: 14,
       paddingVertical: 14,
       alignItems: 'center',
@@ -763,7 +763,7 @@ function getStyles(theme: any) {
     checkoutGhostBtnText: {
       fontFamily: theme.semiBoldFont,
       fontSize: 15,
-      color: 'rgba(203,255,0,0.85)',
+      color: L(0.85),
     },
     peachPage: { flex: 1, backgroundColor: CHECKOUT_FILL },
     peachHeaderBar: {
@@ -774,7 +774,7 @@ function getStyles(theme: any) {
       paddingVertical: 14,
       paddingTop: 18,
       borderBottomWidth: 2,
-      borderBottomColor: CHECKOUT_ACCENT,
+      borderBottomColor: theme.brandAccent,
       backgroundColor: CHECKOUT_FILL,
     },
     peachWeb: { flex: 1, backgroundColor: '#0a0a0a' },

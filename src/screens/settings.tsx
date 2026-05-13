@@ -4,12 +4,12 @@ import { useNavigation } from '@react-navigation/native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { ThemeContext } from '../context'
 import { User } from '../../types'
+import { brandAccentRgba } from '../brandAccent'
 
 /** Keep code paths available for future use, but hidden in UI for now. */
 const SHOW_THEME_SECTION = false
 const SHOW_CHAT_MODEL_SECTION = false
 const SHOW_IMAGE_MODEL_SECTION = false
-const ACCENT = '#CBFF00'
 
 type SettingsProps = {
   user: User
@@ -123,14 +123,16 @@ export function Settings({ user, sessionToken, onUserUpdated, onLogout }: Settin
         <Text style={styles.mainText}>Session</Text>
       </View>
       <Pressable style={styles.logoutButton} onPress={() => void onLogout()}>
-        <FeatherIcon name="log-out" size={16} color={ACCENT} />
+        <FeatherIcon name="log-out" size={16} color={theme.brandAccent} />
         <Text style={styles.logoutText}>Log out</Text>
       </Pressable>
     </ScrollView>
   )
 }
 
-const getStyles = (theme:any) => StyleSheet.create({
+const getStyles = (theme:any) => {
+  const L = (a: number) => brandAccentRgba(theme, a)
+  return StyleSheet.create({
   buttonContainer: {
     marginBottom: 20
   },
@@ -156,7 +158,7 @@ const getStyles = (theme:any) => StyleSheet.create({
     width: 62,
     height: 4,
     borderRadius: 999,
-    backgroundColor: ACCENT,
+    backgroundColor: theme.brandAccent,
     marginBottom: 14,
   },
   contentContainer: {
@@ -175,7 +177,7 @@ const getStyles = (theme:any) => StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.28)',
+    borderColor: L(0.28),
     marginBottom: 18,
   },
   chatTypeText: {
@@ -191,7 +193,7 @@ const getStyles = (theme:any) => StyleSheet.create({
     borderRadius: 14,
     backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
     borderWidth: 2,
-    borderColor: 'rgba(203,255,0,0.32)',
+    borderColor: L(0.32),
     padding: 12,
     marginBottom: 10,
   },
@@ -204,14 +206,14 @@ const getStyles = (theme:any) => StyleSheet.create({
     minHeight: 48,
     backgroundColor: 'transparent',
     borderWidth: 1.5,
-    borderColor: ACCENT,
+    borderColor: theme.brandAccent,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   logoutText: {
-    color: ACCENT,
+    color: theme.brandAccent,
     fontFamily: 'Geist-SemiBold',
     fontSize: 15,
   },
@@ -219,7 +221,7 @@ const getStyles = (theme:any) => StyleSheet.create({
     minHeight: 64,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.24)',
+    borderColor: L(0.24),
     backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -263,3 +265,4 @@ const getStyles = (theme:any) => StyleSheet.create({
     marginTop: 1,
   },
 })
+}

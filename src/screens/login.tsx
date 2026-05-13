@@ -6,9 +6,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemeContext } from '../context'
 import { loginUser, registerUser } from '../utils'
 import { AuthPayload } from '../../types'
+import { brandAccentRgba } from '../brandAccent'
 
-/** Align with `home.tsx` — lime accent, black chips; no gradient cards */
-const HOME_ACCENT_BG = '#CBFF00'
+/** Align with `home.tsx` — equipped accent, black chips; no gradient cards */
 const HOME_CHIP_FILL = '#000000'
 const HOME_ACCENT_TEXT = '#000000'
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
@@ -204,7 +204,7 @@ export function Login({ onAuthSuccess }: Props) {
                 <FeatherIcon
                   name={showOptionalSignup ? 'chevron-down' : 'chevron-right'}
                   size={18}
-                  color={HOME_ACCENT_BG}
+                  color={theme.brandAccent}
                   style={styles.optionalChevron}
                 />
                 <Text style={styles.optionalToggleText}>
@@ -305,8 +305,9 @@ export function Login({ onAuthSuccess }: Props) {
   )
 }
 
-const getStyles = (theme: any) =>
-  StyleSheet.create({
+const getStyles = (theme: any) => {
+  const L = (a: number) => brandAccentRgba(theme, a)
+  return StyleSheet.create({
     safe: {
       flex: 1,
       backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
@@ -338,7 +339,7 @@ const getStyles = (theme: any) =>
       width: 44,
       height: 3,
       borderRadius: 2,
-      backgroundColor: HOME_ACCENT_BG,
+      backgroundColor: theme.brandAccent,
       marginTop: 4,
       marginBottom: 2,
     },
@@ -356,7 +357,7 @@ const getStyles = (theme: any) =>
       borderRadius: 16,
       padding: 4,
       borderWidth: 1,
-      borderColor: 'rgba(203,255,0,0.28)',
+      borderColor: L(0.28),
       marginBottom: 4,
       gap: 4,
     },
@@ -368,12 +369,12 @@ const getStyles = (theme: any) =>
       justifyContent: 'center',
     },
     modeSegmentActive: {
-      backgroundColor: HOME_ACCENT_BG,
+      backgroundColor: theme.brandAccent,
     },
     modeSegmentText: {
       fontFamily: theme.semiBoldFont,
       fontSize: 13,
-      color: HOME_ACCENT_BG,
+      color: theme.brandAccent,
       opacity: 0.82,
     },
     modeSegmentTextActive: {
@@ -428,7 +429,7 @@ const getStyles = (theme: any) =>
     fieldLabel: {
       fontFamily: theme.boldFont,
       fontSize: 11,
-      color: HOME_ACCENT_BG,
+      color: theme.brandAccent,
       letterSpacing: 0.6,
       textTransform: 'uppercase',
       marginTop: 4,
@@ -436,7 +437,7 @@ const getStyles = (theme: any) =>
     },
     submitButton: {
       marginTop: 8,
-      backgroundColor: HOME_ACCENT_BG,
+      backgroundColor: theme.brandAccent,
       borderRadius: 14,
       alignItems: 'center',
       justifyContent: 'center',
@@ -457,3 +458,4 @@ const getStyles = (theme: any) =>
       lineHeight: 18,
     },
   })
+}

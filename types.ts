@@ -9,6 +9,9 @@ export interface IThemeContext {
   theme: any
   setTheme: Dispatch<SetStateAction<string>>
   themeName: string
+  /** Wonder Store color accent id: `default` (lime) or a purchased theme id. */
+  brandAccentId: string
+  setBrandAccentId: (id: string) => void
 }
 
 export interface Model {

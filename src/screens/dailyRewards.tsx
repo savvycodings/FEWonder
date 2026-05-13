@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import {
+  Image,
   Platform,
   Pressable,
   ScrollView,
@@ -37,6 +38,7 @@ import {
 } from '../components/AvatarFrame'
 import type { AvatarFrameId } from '../components/AvatarFrame'
 import { ThemeContext } from '../context'
+import { brandAccentRgba, normalizeBrandAccentId } from '../brandAccent'
 import { WonderBadgeImage, WonderSpinningCoin, WonderStaticCoin } from '../components'
 import {
   isProfileBadgeSlotFreeForWonderEquip,
@@ -192,8 +194,26 @@ function wonderBadgeCardMeta(
 
 const weekDays = ['1', '2', '3', '4', '5', '6', '7']
 const weekRewards = [1, 2, 3, 4, 5, 6, 7]
-const DAILY_ACCENT = '#CBFF00'
 const DAILY_FILL = '#000000'
+const THEME_STORE_OWNED_KEY = 'wonderport-theme-store-owned-ids'
+const THEME_STORE_ITEMS = [
+  { id: 'midnight', name: 'Midnight', cost: 5, image: require('../../assets/dailyrewards/midnight.png') },
+  { id: 'sunset', name: 'Sunset', cost: 5, image: require('../../assets/dailyrewards/sunset.png') },
+  { id: 'mint', name: 'Mint', cost: 5, image: require('../../assets/dailyrewards/mint.png') },
+  { id: 'royal', name: 'Royal', cost: 5, image: require('../../assets/dailyrewards/royal.png') },
+  { id: 'peach', name: 'Peach', cost: 5, image: require('../../assets/dailyrewards/peach.png') },
+  { id: 'forest', name: 'Forest', cost: 5, image: require('../../assets/dailyrewards/forest.png') },
+] as const
+
+function normalizeThemeStoreId(id: string): string {
+  return String(id || '').trim().toLowerCase()
+}
+
+function isThemeStoreIdOwned(ownedIds: string[], themeId: string): boolean {
+  const t = normalizeThemeStoreId(themeId)
+  return ownedIds.some((x) => normalizeThemeStoreId(x) === t)
+}
+
 /** Horizontal gap between reward cards (must match `rewardCarousel` `gap`). */
 const REWARD_CAROUSEL_GAP = 10
 /** Matches `rewardCarousel` `paddingRight`. */
@@ -207,8 +227,8 @@ function RewardCarouselSpinningCoin({ color }: { color: string }): ReactElement 
   return <WonderSpinningCoin size={72} fallbackColor={color} />
 }
 
-function RewardStaticCoin({ size = 20 }: { size?: number }): ReactElement {
-  return <WonderStaticCoin size={size} fallbackColor={DAILY_ACCENT} />
+function RewardStaticCoin({ size = 20, color }: { size?: number; color: string }): ReactElement {
+  return <WonderStaticCoin size={size} fallbackColor={color} />
 }
 
 function WonderJumpCharacterPreview({ styleId }: { styleId: WonderJumpCharacterStyle }): ReactElement {
@@ -218,14 +238,16 @@ function WonderJumpCharacterPreview({ styleId }: { styleId: WonderJumpCharacterS
 }
 
 export function DailyRewards({ navigation, route }: any) {
-  const { theme } = useContext(ThemeContext)
-  const styles = useMemo(() => getStyles(theme), [theme])
+  const { theme, brandAccentId, setBrandAccentId } = useContext(ThemeContext)
+  const styles = useMemo(() => buildDailyRewardStyles(theme), [theme])
   const { width: screenWidth } = useWindowDimensions()
   const [sessionToken, setSessionToken] = useState(String(route?.params?.sessionToken || ''))
   const [rewardStatus, setRewardStatus] = useState<DailyRewardStatus | null>(null)
   const [loadingRewards, setLoadingRewards] = useState(true)
   const [claimingReward, setClaimingReward] = useState(false)
   const [rewardsError, setRewardsError] = useState('')
+  const [showAllBadges, setShowAllBadges] = useState(false)
+  const [ownedThemeIds, setOwnedThemeIds] = useState<string[]>([])
   const [storeMessage, setStoreMessage] = useState('')
   const [equippedAvatarFrame, setEquippedAvatarFrame] = useState<AvatarFrameId>('none')
   const [framePreviewUser, setFramePreviewUser] = useState<{
@@ -276,6 +298,10 @@ export function DailyRewards({ navigation, route }: any) {
   const [carouselScrollX, setCarouselScrollX] = useState(0)
 
   const rewardCarouselStep = rewardCardWidth + REWARD_CAROUSEL_GAP
+  const visibleBadgeIds = useMemo(
+    () => (showAllBadges ? WONDER_BADGE_IDS : WONDER_BADGE_IDS.slice(0, 4)),
+    [showAllBadges],
+  )
   const rewardCarouselContentW = useMemo(() => {
     const n = rewards.length
     if (n <= 0) return 0
@@ -312,6 +338,40 @@ export function DailyRewards({ navigation, route }: any) {
       mounted = false
     }
   }, [])
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const rawOwned = await AsyncStorage.getItem(THEME_STORE_OWNED_KEY)
+        if (!mounted) return
+        const parsedOwned = rawOwned ? JSON.parse(rawOwned) : []
+        const nextOwned = Array.isArray(parsedOwned)
+          ? parsedOwned.map((v) => normalizeThemeStoreId(String(v))).filter(Boolean)
+          : []
+        setOwnedThemeIds(nextOwned)
+      } catch {
+        /* ignore theme store cache errors */
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  /** Pull theme ownership from the server's wonder-store owned ids whenever rewardStatus changes. */
+  useEffect(() => {
+    const serverOwned = (rewardStatus?.ownedStoreItemIds ?? [])
+      .map((s) => normalizeThemeStoreId(String(s)))
+      .filter((s) => THEME_STORE_ITEMS.some((t) => t.id === s))
+    if (!serverOwned.length) return
+    setOwnedThemeIds((prev) => {
+      const merged = [...prev, ...serverOwned].filter((v, i, a) => a.indexOf(v) === i)
+      if (merged.length === prev.length && merged.every((v, i) => v === prev[i])) return prev
+      void AsyncStorage.setItem(THEME_STORE_OWNED_KEY, JSON.stringify(merged)).catch(() => {})
+      return merged
+    })
+  }, [rewardStatus?.ownedStoreItemIds])
 
   const loadPreviewUser = useCallback(async () => {
     try {
@@ -510,6 +570,81 @@ export function DailyRewards({ navigation, route }: any) {
     }
   }
 
+  async function handleEquipAccentTheme(themeId: 'default' | string) {
+    setStoreMessage('')
+    const id = themeId === 'default' ? 'default' : normalizeThemeStoreId(themeId)
+    if (id !== 'default' && !isThemeStoreIdOwned(ownedThemeIds, id)) {
+      setStoreMessage('Purchase this theme in the Wonder Store first.')
+      return
+    }
+    const label =
+      id === 'default'
+        ? 'Default lime'
+        : THEME_STORE_ITEMS.find((t) => t.id === id)?.name ?? 'Theme'
+    setBrandAccentId(id === 'default' ? 'default' : normalizeBrandAccentId(id))
+    setStoreMessage(`${label} accent equipped.`)
+  }
+
+  async function handleBuyTheme(themeId: string, cost: number) {
+    const id = normalizeThemeStoreId(themeId)
+    if (isThemeStoreIdOwned(ownedThemeIds, id)) return
+    if (availableCoins < cost) {
+      setStoreMessage('Not enough coins for this theme yet.')
+      return
+    }
+    if (!sessionToken) {
+      setStoreMessage('Log in to purchase from the Wonder Store.')
+      return
+    }
+
+    /** Optimistic update: flip the button to Equip + decrement wallet immediately. */
+    const prevOwned = ownedThemeIds
+    const prevStatus = rewardStatus
+    const optimisticOwned = [...ownedThemeIds, id].filter((v, i, a) => a.indexOf(v) === i)
+    setOwnedThemeIds(optimisticOwned)
+    setRewardStatus((curr) =>
+      curr
+        ? { ...curr, walletBalance: Math.max(0, (curr.walletBalance || 0) - cost) }
+        : curr,
+    )
+    setStoreMessage('Theme purchased. Tap Equip to use this accent across the app.')
+    void AsyncStorage.setItem(THEME_STORE_OWNED_KEY, JSON.stringify(optimisticOwned)).catch(
+      () => {},
+    )
+
+    try {
+      const status = await purchaseWonderStoreItem(sessionToken, id)
+      const serverOwned = (status?.ownedStoreItemIds ?? [])
+        .map((s) => normalizeThemeStoreId(String(s)))
+        .filter((s) => THEME_STORE_ITEMS.some((t) => t.id === s))
+      const merged = [...optimisticOwned, ...serverOwned].filter(
+        (v, i, a) => a.indexOf(v) === i,
+      )
+      setOwnedThemeIds(merged)
+      setRewardStatus(status)
+      void AsyncStorage.setItem(THEME_STORE_OWNED_KEY, JSON.stringify(merged)).catch(() => {})
+    } catch (e: any) {
+      const msg = String(e?.message || 'Could not complete purchase.')
+      if (msg.toLowerCase().includes('already purchased')) {
+        try {
+          const fresh = await getDailyRewardStatus(sessionToken)
+          setRewardStatus(fresh)
+          setStoreMessage('Already owned. You can equip it now.')
+        } catch {
+          /* leave optimistic state */
+        }
+        return
+      }
+      /** Roll back the optimistic update on real failures. */
+      setOwnedThemeIds(prevOwned)
+      setRewardStatus(prevStatus)
+      void AsyncStorage.setItem(THEME_STORE_OWNED_KEY, JSON.stringify(prevOwned)).catch(
+        () => {},
+      )
+      setStoreMessage(msg)
+    }
+  }
+
   async function handleEquipAvatarFrame(id: AvatarFrameId, freshStatus?: DailyRewardStatus) {
     const prev = equippedAvatarFrame
     setStoreMessage('')
@@ -593,7 +728,7 @@ export function DailyRewards({ navigation, route }: any) {
             }
           }}
         >
-          <FeatherIcon name="chevron-left" size={20} color={DAILY_ACCENT} />
+          <FeatherIcon name="chevron-left" size={20} color={theme.brandAccent} />
         </Pressable>
         <Text style={styles.mainScreenHeading} numberOfLines={2}>
           Daily Rewards
@@ -633,7 +768,7 @@ export function DailyRewards({ navigation, route }: any) {
               {Platform.OS === 'web' ? (
                 <SvgUri uri="/homepageimgs/dailyrewards/fireicon.svg" width={30} height={30} />
               ) : (
-                <FeatherIcon name="zap" size={28} color={DAILY_ACCENT} />
+                <FeatherIcon name="zap" size={28} color={theme.brandAccent} />
               )}
               <Text style={styles.streakText}>{currentStreak} days</Text>
             </View>
@@ -698,10 +833,10 @@ export function DailyRewards({ navigation, route }: any) {
                     <WonderBadgeImage
                       badgeId="badge:day7"
                       size={day7BadgeSize}
-                      fallbackColor={DAILY_ACCENT}
+                      fallbackColor={theme.brandAccent}
                     />
                   ) : (
-                    <RewardCarouselSpinningCoin color={DAILY_ACCENT} />
+                    <RewardCarouselSpinningCoin color={theme.brandAccent} />
                   )}
                 </View>
                 <View style={styles.rewardCardFooter}>
@@ -738,14 +873,14 @@ export function DailyRewards({ navigation, route }: any) {
             Wonder Store
           </Text>
           <View style={styles.storeBalanceBadge}>
-            <RewardStaticCoin size={22} />
+            <RewardStaticCoin size={22} color={theme.brandAccent} />
             <Text style={styles.storeBalanceBadgeValue}>{availableCoins}</Text>
           </View>
         </View>
 
         <Text style={styles.badgesHeading}>Badges</Text>
         <View style={styles.badgesGrid}>
-          {WONDER_BADGE_IDS.map((id) => {
+          {visibleBadgeIds.map((id) => {
             const slotMatches = (s: string | null) => (migrateWonderBadgeSlotId(s) ?? s) === id
             const equipped = heroBadgeSlots.some((s) => slotMatches(s))
             const meta = wonderBadgeCardMeta(id, claimedCount, currentStreak, paidOrderCount, wonderJumpRank)
@@ -760,7 +895,7 @@ export function DailyRewards({ navigation, route }: any) {
               >
                 <View style={styles.badgeCardBody}>
                   <View style={[styles.badgePreviewPlate, equipped ? styles.badgePreviewPlateEquipped : null]}>
-                    <WonderBadgeImage badgeId={id} size={64} fallbackColor={DAILY_ACCENT} />
+                    <WonderBadgeImage badgeId={id} size={64} fallbackColor={theme.brandAccent} />
                   </View>
                   <View style={styles.badgeTitleSlot}>
                     <Text style={styles.badgeCardTitle} numberOfLines={2}>
@@ -817,6 +952,64 @@ export function DailyRewards({ navigation, route }: any) {
             )
           })}
         </View>
+        {WONDER_BADGE_IDS.length > 4 ? (
+          <Pressable
+            style={styles.badgesSeeAllButton}
+            onPress={() => setShowAllBadges((prev) => !prev)}
+          >
+            <Text style={styles.badgesSeeAllButtonText}>{showAllBadges ? 'Show less' : 'See all'}</Text>
+          </Pressable>
+        ) : null}
+        <View style={styles.themeSection}>
+          <Text style={styles.sectionHeading}>Themes</Text>
+          <View style={styles.themeGrid}>
+            {THEME_STORE_ITEMS.map((themeItem) => {
+              const isOwned = isThemeStoreIdOwned(ownedThemeIds, themeItem.id)
+              const canBuy = availableCoins >= themeItem.cost
+              const accentEquipped =
+                normalizeBrandAccentId(brandAccentId) === normalizeThemeStoreId(themeItem.id)
+              return (
+                <View key={themeItem.id} style={styles.themeCard}>
+                  <View style={styles.themeSwatch}>
+                    <Image source={themeItem.image} style={styles.themeSwatchImage} resizeMode="cover" />
+                  </View>
+                  <Text style={styles.themeName}>{themeItem.name}</Text>
+                  <View style={styles.themeCostRow}>
+                    <RewardStaticCoin size={14} color={theme.brandAccent} />
+                    <Text style={styles.themeCostValue}>{themeItem.cost}</Text>
+                  </View>
+                  <Pressable
+                    style={[
+                      styles.themeBuyButton,
+                      isOwned
+                        ? accentEquipped
+                          ? styles.themeBuyButtonEquipped
+                          : styles.themeBuyButtonOwned
+                        : null,
+                    ]}
+                    disabled={isOwned ? accentEquipped : !canBuy}
+                    onPress={() => {
+                      if (isOwned) void handleEquipAccentTheme(themeItem.id)
+                      else void handleBuyTheme(themeItem.id, themeItem.cost)
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.themeBuyButtonText,
+                        isOwned ? (accentEquipped ? styles.themeBuyButtonTextEquipped : styles.themeBuyButtonTextOwned) : null,
+                      ]}
+                    >
+                      {isOwned ? (accentEquipped ? 'Equipped' : 'Equip') : 'Buy'}
+                    </Text>
+                  </Pressable>
+                </View>
+              )
+            })}
+          </View>
+          <Pressable style={styles.themeDefaultRow} onPress={() => void handleEquipAccentTheme('default')}>
+            <Text style={styles.themeDefaultText}>Set to default</Text>
+          </Pressable>
+        </View>
         <View style={styles.charactersSection}>
           <Text style={styles.sectionHeading}>Wonderjump Characters</Text>
           <View style={styles.charactersGrid}>
@@ -832,16 +1025,12 @@ export function DailyRewards({ navigation, route }: any) {
                     <WonderJumpCharacterPreview styleId={option.id} />
                   </View>
                   <Text style={styles.characterName}>{option.label}</Text>
-                  <Text style={styles.characterBlurb}>{option.blurb}</Text>
                   <View
-                    style={[
-                      styles.characterMetaRow,
-                      !isGhost ? styles.characterMetaRowEnd : null,
-                    ]}
+                    style={styles.characterMetaRow}
                   >
                     {isGhost ? (
                       <View style={styles.characterPriceRow}>
-                        <RewardStaticCoin size={16} />
+                        <RewardStaticCoin size={16} color={theme.brandAccent} />
                         <Text style={styles.characterPrice}>{WONDERJUMP_GHOST_STORE_COST}</Text>
                       </View>
                     ) : null}
@@ -849,6 +1038,9 @@ export function DailyRewards({ navigation, route }: any) {
                       style={[
                         styles.characterEquipButton,
                         equipped ? styles.characterEquipButtonEquipped : null,
+                        !equipped && isGhost && !ghostOwned && (ghostBusy || !ghostCanAfford)
+                          ? styles.characterEquipButtonDisabled
+                          : null,
                       ]}
                       disabled={
                         equipped || (isGhost && !ghostOwned && (ghostBusy || !ghostCanAfford))
@@ -943,30 +1135,32 @@ export function DailyRewards({ navigation, route }: any) {
   )
 }
 
-const getStyles = (theme: any) => StyleSheet.create({
+function buildDailyRewardStyles(theme: any) {
+  const L = (a: number) => brandAccentRgba(theme, a)
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: DAILY_FILL,
   },
   content: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 120,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 110,
   },
   heroTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 12,
   },
   /** Same footprint as `backButton` so “Wonder Store” lines up with “Daily Rewards” text. */
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: DAILY_FILL,
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.35)',
+    borderColor: L(0.35),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -975,15 +1169,15 @@ const getStyles = (theme: any) => StyleSheet.create({
     minWidth: 0,
     color: '#ffffff',
     fontFamily: 'Montserrat_800ExtraBold',
-    fontSize: 34,
-    lineHeight: 38,
-    letterSpacing: -0.6,
+    fontSize: 28,
+    lineHeight: 32,
+    letterSpacing: -0.5,
   },
   wonderStoreTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
+    gap: 10,
+    marginBottom: 12,
     alignSelf: 'stretch',
     justifyContent: 'space-between',
   },
@@ -997,18 +1191,18 @@ const getStyles = (theme: any) => StyleSheet.create({
   sectionHeading: {
     color: '#ffffff',
     fontFamily: 'Montserrat_800ExtraBold',
-    fontSize: 22,
-    lineHeight: 26,
+    fontSize: 18,
+    lineHeight: 22,
     letterSpacing: -0.3,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   bannerCard: {
     backgroundColor: DAILY_FILL,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.3)',
-    padding: 14,
-    marginBottom: 14,
+    borderColor: L(0.3),
+    padding: 12,
+    marginBottom: 10,
   },
   bannerTopRow: {
     flexDirection: 'row',
@@ -1019,13 +1213,13 @@ const getStyles = (theme: any) => StyleSheet.create({
   bannerTitle: {
     color: '#ffffff',
     fontFamily: 'Geist-SemiBold',
-    fontSize: 18,
+    fontSize: 16,
   },
   bannerSubtitle: {
     color: 'rgba(255,255,255,0.72)',
     fontFamily: 'Geist-Regular',
-    fontSize: 12,
-    marginBottom: 12,
+    fontSize: 11,
+    marginBottom: 10,
   },
   daysRow: {
     flexDirection: 'row',
@@ -1038,25 +1232,25 @@ const getStyles = (theme: any) => StyleSheet.create({
   dayLabel: {
     color: 'rgba(255,255,255,0.9)',
     fontFamily: 'Geist-Medium',
-    fontSize: 12,
-    marginBottom: 6,
+    fontSize: 11,
+    marginBottom: 4,
   },
   dayCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 2,
-    borderColor: 'rgba(203,255,0,0.35)',
+    borderColor: L(0.35),
     backgroundColor: DAILY_FILL,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dayCircleClaimed: {
-    borderColor: DAILY_ACCENT,
-    backgroundColor: DAILY_ACCENT,
+    borderColor: theme.brandAccent,
+    backgroundColor: theme.brandAccent,
   },
   streakRow: {
-    marginTop: 12,
+    marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1064,44 +1258,44 @@ const getStyles = (theme: any) => StyleSheet.create({
   streakLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   streakText: {
-    color: DAILY_ACCENT,
+    color: theme.brandAccent,
     fontFamily: 'Geist-SemiBold',
-    fontSize: 32,
+    fontSize: 26,
   },
   rewardCarousel: {
     paddingRight: REWARD_CAROUSEL_PAD_RIGHT,
   },
   rewardCarouselWrap: {
-    marginBottom: 14,
+    marginBottom: 10,
   },
   carouselNavRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 8,
     paddingHorizontal: 2,
   },
   carouselNavButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   rewardCard: {
-    minHeight: 320,
+    minHeight: 280,
     backgroundColor: DAILY_FILL,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.3)',
-    padding: 14,
+    borderColor: L(0.3),
+    padding: 12,
   },
   rewardCardDay: {
     color: '#ffffff',
     fontFamily: 'Geist-SemiBold',
-    fontSize: 16,
+    fontSize: 14,
   },
   rewardCardCoinWrap: {
     flex: 1,
@@ -1109,25 +1303,25 @@ const getStyles = (theme: any) => StyleSheet.create({
     justifyContent: 'center',
   },
   rewardCardFooter: {
-    paddingTop: 10,
+    paddingTop: 8,
   },
   rewardCardCoins: {
-    color: DAILY_ACCENT,
+    color: theme.brandAccent,
     fontFamily: 'Geist-Bold',
-    fontSize: 22,
-    marginBottom: 10,
+    fontSize: 18,
+    marginBottom: 8,
     textAlign: 'center',
   },
   rewardCardCoinsDay7: {
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 18,
   },
   rewardClaimButton: {
-    minHeight: 40,
-    borderRadius: 10,
+    minHeight: 34,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: DAILY_ACCENT,
+    backgroundColor: theme.brandAccent,
   },
   rewardClaimButtonDisabled: {
     backgroundColor: '#9fb4d8',
@@ -1135,62 +1329,74 @@ const getStyles = (theme: any) => StyleSheet.create({
   rewardClaimButtonText: {
     color: '#050505',
     fontFamily: 'Geist-SemiBold',
-    fontSize: 14,
+    fontSize: 13,
   },
   rewardStatusPill: {
-    minHeight: 40,
-    borderRadius: 10,
+    minHeight: 34,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.35)',
+    borderColor: L(0.35),
     backgroundColor: 'rgba(255,255,255,0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   rewardStatusClaimed: {
-    borderColor: DAILY_ACCENT,
-    backgroundColor: 'rgba(203,255,0,0.14)',
+    borderColor: theme.brandAccent,
+    backgroundColor: L(0.14),
   },
   rewardStatusText: {
     color: 'rgba(255,255,255,0.72)',
     fontFamily: 'Geist-SemiBold',
-    fontSize: 13,
+    fontSize: 12,
   },
   rewardStatusTextClaimed: {
-    color: DAILY_ACCENT,
+    color: theme.brandAccent,
   },
   infoText: {
-    marginTop: 10,
+    marginTop: 8,
     color: 'rgba(255,255,255,0.74)',
     fontFamily: 'Geist-Medium',
-    fontSize: 12,
+    fontSize: 11,
   },
   errorText: {
-    marginTop: 10,
+    marginTop: 8,
     color: '#dc2626',
     fontFamily: 'Geist-Medium',
-    fontSize: 12,
+    fontSize: 11,
   },
   storeSection: {
-    marginTop: 18,
+    marginTop: 14,
   },
   badgesHeading: {
     color: '#ffffff',
     fontFamily: 'Montserrat_800ExtraBold',
-    fontSize: 20,
-    marginBottom: 10,
+    fontSize: 17,
+    marginBottom: 8,
   },
   badgesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 11,
+    gap: 8,
     alignItems: 'stretch',
+  },
+  badgesSeeAllButton: {
+    alignSelf: 'center',
+    marginTop: 8,
+    marginBottom: 2,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+  },
+  badgesSeeAllButtonText: {
+    color: theme.brandAccent,
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 12,
   },
   badgeStoreCard: {
     backgroundColor: DAILY_FILL,
-    borderRadius: 11,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.28)',
-    padding: 8,
+    borderColor: L(0.28),
+    padding: 7,
     alignItems: 'stretch',
     alignSelf: 'stretch',
     flexDirection: 'column',
@@ -1202,15 +1408,15 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   badgeStoreCardEquipped: {
     backgroundColor: 'rgba(0,0,0,0.62)',
-    borderColor: 'rgba(203,255,0,0.45)',
+    borderColor: L(0.45),
   },
   badgeTitleSlot: {
-    minHeight: 32,
+    minHeight: 28,
     marginBottom: 2,
     justifyContent: 'flex-start',
   },
   badgeCaptionSlot: {
-    minHeight: 42,
+    minHeight: 36,
     justifyContent: 'flex-start',
   },
   badgeCardTitle: {
@@ -1222,22 +1428,22 @@ const getStyles = (theme: any) => StyleSheet.create({
   badgeCardCaption: {
     color: 'rgba(255,255,255,0.58)',
     fontFamily: 'Geist-Regular',
-    fontSize: 12,
-    lineHeight: 14,
+    fontSize: 11,
+    lineHeight: 13,
   },
   /** Progress + action: fixed rhythm so bars and Locked/Equip line up across tiles. */
   badgeCardFooter: {
     alignSelf: 'stretch',
-    gap: 7,
+    gap: 5,
     paddingTop: 1,
   },
   badgeProgressSlot: {
-    height: 34,
+    height: 28,
     alignSelf: 'stretch',
     justifyContent: 'flex-end',
   },
   badgeProgressSlotSpacer: {
-    height: 34,
+    height: 28,
   },
   badgeProgressBlock: {
     alignSelf: 'stretch',
@@ -1251,10 +1457,10 @@ const getStyles = (theme: any) => StyleSheet.create({
   badgeProgressText: {
     color: 'rgba(255,255,255,0.65)',
     fontFamily: 'Geist-Medium',
-    fontSize: 11,
+    fontSize: 10,
   },
   badgeProgressTrack: {
-    height: 6,
+    height: 5,
     borderRadius: 3,
     backgroundColor: 'rgba(255,255,255,0.12)',
     overflow: 'hidden',
@@ -1263,36 +1469,31 @@ const getStyles = (theme: any) => StyleSheet.create({
   badgeProgressFill: {
     height: '100%',
     borderRadius: 3,
-    backgroundColor: DAILY_ACCENT,
+    backgroundColor: theme.brandAccent,
   },
   badgePreviewPlate: {
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'stretch',
     marginBottom: 3,
-    minHeight: 72,
-    paddingVertical: 5,
-    paddingHorizontal: 5,
-    borderRadius: 11,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(203,255,0,0.22)',
+    minHeight: 60,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
   },
   badgePreviewPlateEquipped: {
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderColor: 'rgba(203,255,0,0.38)',
+    
   },
   badgeEquipButton: {
-    minHeight: 34,
-    borderRadius: 8,
-    backgroundColor: DAILY_ACCENT,
+    minHeight: 30,
+    borderRadius: 7,
+    backgroundColor: theme.brandAccent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   badgeEquipButtonEquipped: {
-    backgroundColor: 'rgba(203,255,0,0.22)',
+    backgroundColor: L(0.22),
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.45)',
+    borderColor: L(0.45),
   },
   badgeEquipButtonDisabled: {
     backgroundColor: 'rgba(255,255,255,0.12)',
@@ -1300,98 +1501,173 @@ const getStyles = (theme: any) => StyleSheet.create({
   badgeEquipButtonText: {
     color: '#050505',
     fontFamily: 'Geist-SemiBold',
-    fontSize: 13,
+    fontSize: 12,
   },
   badgeEquipButtonTextEquipped: {
-    color: DAILY_ACCENT,
+    color: theme.brandAccent,
   },
   badgeEquipButtonTextDisabled: {
     color: 'rgba(255,255,255,0.45)',
   },
+  themeSection: {
+    marginTop: 14,
+  },
+  themeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  themeCard: {
+    width: '48.5%',
+    backgroundColor: DAILY_FILL,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: L(0.28),
+    padding: 8,
+  },
+  themeSwatch: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    marginBottom: 6,
+  },
+  themeSwatchImage: {
+    width: '100%',
+    height: '100%',
+    transform: [{ scale: 1.1 }],
+  },
+  themeName: {
+    color: '#ffffff',
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  themeCostRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
+  themeCostValue: {
+    color: theme.brandAccent,
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 11,
+  },
+  themeBuyButton: {
+    minHeight: 30,
+    borderRadius: 7,
+    backgroundColor: theme.brandAccent,
+    paddingVertical: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  themeBuyButtonOwned: {
+    backgroundColor: theme.brandAccent,
+  },
+  themeBuyButtonEquipped: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: theme.brandAccent,
+  },
+  themeBuyButtonText: {
+    color: '#050505',
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 12,
+  },
+  themeBuyButtonTextOwned: {
+    color: '#050505',
+  },
+  themeBuyButtonTextEquipped: {
+    color: theme.brandAccent,
+  },
+  themeDefaultRow: {
+    marginTop: 8,
+    alignSelf: 'center',
+    paddingVertical: 5,
+    paddingHorizontal: 2,
+  },
+  themeDefaultText: {
+    color: theme.brandAccent,
+    fontFamily: 'Geist-SemiBold',
+    fontSize: 12,
+  },
   charactersSection: {
-    marginTop: 18,
+    marginTop: 14,
   },
   charactersGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 11,
+    gap: 8,
   },
   characterCard: {
     flexBasis: '31%',
-    minWidth: 120,
+    minWidth: 108,
     flexGrow: 1,
     backgroundColor: DAILY_FILL,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.28)',
-    padding: 10,
+    borderColor: L(0.28),
+    padding: 8,
+    minHeight: 152,
   },
   characterPreviewPlate: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(203,255,0,0.22)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    minHeight: 92,
-    marginBottom: 8,
+    minHeight: 76,
+    marginBottom: 6,
   },
   characterName: {
     color: '#ffffff',
     fontFamily: 'Geist-SemiBold',
     fontSize: 13,
-  },
-  characterBlurb: {
-    marginTop: 3,
-    minHeight: 30,
-    color: 'rgba(255,255,255,0.68)',
-    fontFamily: 'Geist-Regular',
-    fontSize: 11,
-    lineHeight: 14,
+    minHeight: 16,
   },
   characterMetaRow: {
-    marginTop: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  characterMetaRowEnd: {
-    justifyContent: 'flex-end',
+    marginTop: 'auto',
+    alignItems: 'stretch',
+    gap: 6,
   },
   characterPriceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    justifyContent: 'flex-start',
+    gap: 4,
   },
   characterPrice: {
-    color: DAILY_ACCENT,
+    color: theme.brandAccent,
     fontFamily: 'Geist-SemiBold',
-    fontSize: 11,
+    fontSize: 10,
   },
   characterEquipButton: {
     minHeight: 30,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    backgroundColor: DAILY_ACCENT,
+    width: '100%',
+    borderRadius: 7,
+    backgroundColor: theme.brandAccent,
+    paddingVertical: 5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   characterEquipButtonEquipped: {
-    backgroundColor: 'rgba(203,255,0,0.22)',
+    backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.45)',
+    borderColor: theme.brandAccent,
+  },
+  characterEquipButtonDisabled: {
+    opacity: 0.5,
   },
   characterEquipButtonText: {
     color: '#050505',
     fontFamily: 'Geist-SemiBold',
-    fontSize: 12,
+    fontSize: 10,
   },
   characterEquipButtonTextEquipped: {
-    color: DAILY_ACCENT,
+    color: theme.brandAccent,
   },
   framesSection: {
-    marginTop: 22,
+    marginTop: 16,
   },
   framesGrid: {
     flexDirection: 'row',
@@ -1399,34 +1675,35 @@ const getStyles = (theme: any) => StyleSheet.create({
     justifyContent: 'space-between',
   },
   plainFrameRow: {
-    marginTop: 4,
-    paddingVertical: 10,
+    marginTop: 3,
+    paddingVertical: 8,
     alignItems: 'center',
   },
   plainFrameText: {
     color: 'rgba(255,255,255,0.74)',
     fontFamily: 'Geist-Medium',
-    fontSize: 13,
+    fontSize: 12,
   },
   plainFrameTextActive: {
-    color: DAILY_ACCENT,
+    color: theme.brandAccent,
     fontFamily: 'Geist-SemiBold',
   },
   storeBalanceBadge: {
     flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     borderRadius: 999,
     backgroundColor: DAILY_FILL,
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.35)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    borderColor: L(0.35),
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   storeBalanceBadgeValue: {
-    color: DAILY_ACCENT,
+    color: theme.brandAccent,
     fontFamily: 'Geist-SemiBold',
-    fontSize: 16,
+    fontSize: 14,
   },
 })
+}

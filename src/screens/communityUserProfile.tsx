@@ -14,7 +14,6 @@ import {
 } from '../profileHeroLayout'
 
 /** Temporary banner fill (Discord-ish); swap for image URL when the API supports it. */
-const COMMUNITY_PROFILE_ACCENT = '#CBFF00'
 const COMMUNITY_PROFILE_FILL = '#000000'
 const COMMUNITY_PROFILE_HERO_TILE_BG = '#262626'
 
@@ -180,7 +179,7 @@ function getStyles(theme: any) {
     },
     profileHeroBanner: {
       width: '100%',
-      backgroundColor: COMMUNITY_PROFILE_ACCENT,
+      backgroundColor: theme.brandAccent,
       borderTopLeftRadius: 14,
       borderTopRightRadius: 14,
       overflow: 'hidden',

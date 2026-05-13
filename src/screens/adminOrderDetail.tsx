@@ -200,7 +200,7 @@ export function AdminOrderDetail({ route }: any) {
             <View style={styles.copyRow}>
               <Text style={styles.bodyFlex}>{u.email}</Text>
               <TouchableOpacity style={styles.copyBtn} onPress={() => adminCopy('Email', u.email)}>
-                <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
               </TouchableOpacity>
             </View>
           ) : null}
@@ -208,7 +208,7 @@ export function AdminOrderDetail({ route }: any) {
             <View style={styles.copyRow}>
               <Text style={styles.bodyFlex}>{u.phone}</Text>
               <TouchableOpacity style={styles.copyBtn} onPress={() => adminCopy('Phone', u.phone)}>
-                <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
               </TouchableOpacity>
             </View>
           ) : null}
@@ -217,7 +217,7 @@ export function AdminOrderDetail({ route }: any) {
             <View style={styles.copyRow}>
               <Text style={styles.bodyFlex}>{o.contactEmail}</Text>
               <TouchableOpacity style={styles.copyBtn} onPress={() => adminCopy('Order email', o.contactEmail)}>
-                <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
               </TouchableOpacity>
             </View>
           ) : null}
@@ -225,7 +225,7 @@ export function AdminOrderDetail({ route }: any) {
             <View style={styles.copyRow}>
               <Text style={styles.bodyFlex}>{o.contactPhone}</Text>
               <TouchableOpacity style={styles.copyBtn} onPress={() => adminCopy('Order phone', o.contactPhone)}>
-                <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
               </TouchableOpacity>
             </View>
           ) : null}
@@ -241,7 +241,7 @@ export function AdminOrderDetail({ route }: any) {
               style={styles.copyBtn}
               onPress={() => adminCopy('Shipping line 1', o.shippingSnapshot?.line1)}
             >
-              <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+              <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
             </TouchableOpacity>
           </View>
           {o.shippingSnapshot?.line2 ? (
@@ -251,7 +251,7 @@ export function AdminOrderDetail({ route }: any) {
                 style={styles.copyBtn}
                 onPress={() => adminCopy('Shipping line 2', o.shippingSnapshot?.line2)}
               >
-                <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
               </TouchableOpacity>
             </View>
           ) : null}
@@ -265,7 +265,7 @@ export function AdminOrderDetail({ route }: any) {
                     style={styles.copyBtn}
                     onPress={() => adminCopy('Pudo locker name', o.pudoLockerName)}
                   >
-                    <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -276,7 +276,7 @@ export function AdminOrderDetail({ route }: any) {
                     style={styles.copyBtn}
                     onPress={() => adminCopy('Pudo address', o.pudoLockerAddress)}
                   >
-                    <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -292,7 +292,7 @@ export function AdminOrderDetail({ route }: any) {
                     style={styles.copyBtn}
                     onPress={() => adminCopy('Customer account name', o.customerEftAccountName)}
                   >
-                    <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -303,7 +303,7 @@ export function AdminOrderDetail({ route }: any) {
                     style={styles.copyBtn}
                     onPress={() => adminCopy('Customer bank', o.customerEftBankName)}
                   >
-                    <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -314,7 +314,7 @@ export function AdminOrderDetail({ route }: any) {
                     style={styles.copyBtn}
                     onPress={() => adminCopy('Customer account number', o.customerEftAccountNumber)}
                   >
-                    <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -330,7 +330,7 @@ export function AdminOrderDetail({ route }: any) {
                     style={styles.copyBtn}
                     onPress={() => adminCopy('Profile EFT name', u.eftBankAccountName)}
                   >
-                    <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -338,7 +338,7 @@ export function AdminOrderDetail({ route }: any) {
                 <View style={styles.copyRow}>
                   <Text style={styles.bodyFlex}>{u.eftBankName}</Text>
                   <TouchableOpacity style={styles.copyBtn} onPress={() => adminCopy('Profile bank', u.eftBankName)}>
-                    <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -349,7 +349,7 @@ export function AdminOrderDetail({ route }: any) {
                     style={styles.copyBtn}
                     onPress={() => adminCopy('Profile account no.', u.eftBankAccountNumber)}
                   >
-                    <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -365,7 +365,7 @@ export function AdminOrderDetail({ route }: any) {
                     style={styles.copyBtn}
                     onPress={() => adminCopy('Profile Pudo name', u.pudoLockerName)}
                   >
-                    <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -376,7 +376,7 @@ export function AdminOrderDetail({ route }: any) {
                     style={styles.copyBtn}
                     onPress={() => adminCopy('Profile Pudo address', u.pudoLockerAddress)}
                   >
-                    <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -391,7 +391,7 @@ export function AdminOrderDetail({ route }: any) {
                   style={styles.copyBtn}
                   onPress={() => adminCopy('Peach checkout id', o.peachCheckoutId)}
                 >
-                  <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                  <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                 </TouchableOpacity>
               </View>
               {o.peachResourcePath ? (
@@ -401,7 +401,7 @@ export function AdminOrderDetail({ route }: any) {
                     style={styles.copyBtn}
                     onPress={() => adminCopy('Peach path', o.peachResourcePath)}
                   >
-                    <FeatherIcon name="copy" size={18} color={theme.tintColor || '#CBFF00'} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                   </TouchableOpacity>
                 </View>
               ) : null}
@@ -498,13 +498,13 @@ const getStyles = (theme: any) =>
     hint: { fontFamily: theme.mediumFont, fontSize: 12, color: theme.mutedForegroundColor, marginTop: 6 },
     bodyMuted: { fontFamily: theme.mediumFont, fontSize: 12, color: theme.mutedForegroundColor, marginTop: 4 },
     linkBtn: { marginTop: 10, alignSelf: 'flex-start' },
-    linkText: { fontFamily: theme.semiBoldFont, color: theme.tintColor || '#CBFF00', fontSize: 14 },
+    linkText: { fontFamily: theme.semiBoldFont, color: theme.brandAccent, fontSize: 14 },
     acceptBtn: {
       marginTop: 16,
       paddingVertical: 14,
       paddingHorizontal: 16,
       borderRadius: 10,
-      backgroundColor: theme.tintColor || '#CBFF00',
+      backgroundColor: theme.brandAccent,
       alignItems: 'center',
     },
     acceptBtnDisabled: { opacity: 0.6 },
@@ -535,12 +535,12 @@ const getStyles = (theme: any) =>
       borderRadius: 12,
       backgroundColor: theme.tileBackgroundColor || '#1f1f1f',
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.tintColor || '#CBFF00',
+      borderColor: theme.brandAccent,
     },
     actionTitle: {
       fontFamily: theme.boldFont,
       fontSize: 16,
-      color: theme.tintColor || '#CBFF00',
+      color: theme.brandAccent,
       marginBottom: 6,
     },
     actionHint: {
@@ -575,7 +575,7 @@ const getStyles = (theme: any) =>
     label: {
       fontFamily: theme.boldFont,
       fontSize: 13,
-      color: theme.tintColor || '#CBFF00',
+      color: theme.brandAccent,
       marginTop: 16,
       marginBottom: 4,
     },

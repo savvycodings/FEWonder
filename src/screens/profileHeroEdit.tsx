@@ -14,6 +14,7 @@ import {
   type ProfileHeroPreferences,
 } from '../profileHeroPreferences'
 import { getProfileHero, updateProfileHero, uploadProfileBanner, uploadProfilePicture } from '../utils'
+import { brandAccentRgba } from '../brandAccent'
 import {
   PROFILE_HERO_BANNER_H,
   PROFILE_HERO_PROFILE_AVATAR,
@@ -21,7 +22,6 @@ import {
   profileHeroProfileOverlapMarginTop,
 } from '../profileHeroLayout'
 
-const PROFILE_ACCENT = '#CBFF00'
 const PROFILE_FILL = '#000000'
 const PROFILE_HERO_TILE_BG = '#262626'
 
@@ -169,7 +169,7 @@ export function ProfileHeroEdit({
   if (!prefs) {
     return (
       <View style={[styles.page, styles.centered]}>
-        <ActivityIndicator color={PROFILE_ACCENT} />
+        <ActivityIndicator color={theme.brandAccent} />
       </View>
     )
   }
@@ -274,13 +274,13 @@ export function ProfileHeroEdit({
         style={styles.secondaryRow}
         onPress={() => navigation.navigate('ProfileAccountSettings')}
       >
-        <FeatherIcon name="user" size={18} color={PROFILE_ACCENT} />
+        <FeatherIcon name="user" size={18} color={theme.brandAccent} />
         <Text style={styles.secondaryRowText}>Edit name & email</Text>
         <FeatherIcon name="chevron-right" size={18} color="rgba(255,255,255,0.45)" />
       </Pressable>
 
       <Pressable style={styles.storeRow} onPress={goWonderStore}>
-        <FeatherIcon name="shopping-bag" size={18} color={PROFILE_ACCENT} />
+        <FeatherIcon name="shopping-bag" size={18} color={theme.brandAccent} />
         <Text style={styles.storeRowText}>Wonder Store (themes, frames & badges soon)</Text>
         <FeatherIcon name="chevron-right" size={18} color="rgba(255,255,255,0.45)" />
       </Pressable>
@@ -289,6 +289,7 @@ export function ProfileHeroEdit({
 }
 
 function getStyles(theme: any) {
+  const L = (a: number) => brandAccentRgba(theme, a)
   return StyleSheet.create({
     page: {
       flex: 1,
@@ -321,7 +322,7 @@ function getStyles(theme: any) {
     bannerPress: {},
     banner: {
       width: '100%',
-      backgroundColor: PROFILE_ACCENT,
+      backgroundColor: theme.brandAccent,
       borderTopLeftRadius: 14,
       borderTopRightRadius: 14,
       overflow: 'hidden',
@@ -350,7 +351,7 @@ function getStyles(theme: any) {
       alignItems: 'center',
     },
     resetBannerText: {
-      color: PROFILE_ACCENT,
+      color: theme.brandAccent,
       fontFamily: theme.mediumFont,
       fontSize: 12,
     },
@@ -470,7 +471,7 @@ function getStyles(theme: any) {
       borderRadius: 14,
       backgroundColor: theme.tileBackgroundColor || 'rgba(255,255,255,0.06)',
       borderWidth: 1,
-      borderColor: 'rgba(203,255,0,0.22)',
+      borderColor: L(0.22),
       marginBottom: 10,
     },
     secondaryRowText: {
@@ -488,7 +489,7 @@ function getStyles(theme: any) {
       borderRadius: 14,
       backgroundColor: theme.tileBackgroundColor || 'rgba(255,255,255,0.06)',
       borderWidth: 1,
-      borderColor: 'rgba(203,255,0,0.22)',
+      borderColor: L(0.22),
     },
     storeRowText: {
       flex: 1,

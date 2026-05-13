@@ -31,17 +31,17 @@ import { ShopifyProduct } from '../../types'
 import { formatMoney } from '../money'
 
 /** Home row chips — each maps to DB-backed lists (see load effect). */
-const HOME_CHIPS = ['New', 'Pops', 'Figures', 'Brands'] as const
+const HOME_CHIPS = ['New', 'Pops', 'Plushies', 'Brands'] as const
 
 /** If no collection title matches, search title/type/vendor/tags via API `q`. */
 const CHIP_SEARCH_FALLBACK: Record<string, string> = {
   Pops: 'pop',
-  Figures: 'figure',
+  Plushies: 'plush',
 }
 
 const COLLECTION_MATCHERS: Record<string, (c: DbCategorySummary) => boolean> = {
   Pops: (c) => /pop|funko|vinyl/i.test(`${c.handle} ${c.title}`),
-  Figures: (c) => /figure|figur|statue|nendoroid|model/i.test(`${c.handle} ${c.title}`),
+  Plushies: (c) => /plush|plushie|stuffed|soft toy|cuddle/i.test(`${c.handle} ${c.title}`),
 }
 
 function matchCollectionHandle(chip: string, categories: DbCategorySummary[]): string | undefined {
@@ -85,8 +85,7 @@ function productToSavePayload(item: ShopifyProduct) {
 
 const GRID_GAP = 12
 
-/** Category chips: neon lime border + text on black fill; price pill keeps lime bg + black label */
-const HOME_ACCENT_BG = '#CBFF00'
+/** Category chips: accent border + text on black fill; price pill uses equipped accent + black label */
 const HOME_CHIP_FILL = '#000000'
 const HOME_ACCENT_TEXT = '#000000'
 
@@ -475,7 +474,7 @@ const getStyles = (theme: any) =>
       justifyContent: 'center',
     },
     chipText: {
-      color: HOME_ACCENT_BG,
+      color: theme.brandAccent,
       fontFamily: HOME_CHIP_MONTSERRAT,
       fontSize: 13,
       lineHeight: 16,
@@ -554,7 +553,7 @@ const getStyles = (theme: any) =>
       letterSpacing: -0.15,
     },
     pricePill: {
-      backgroundColor: HOME_ACCENT_BG,
+      backgroundColor: theme.brandAccent,
       borderRadius: 999,
       paddingVertical: 7,
       paddingHorizontal: 12,
@@ -630,7 +629,7 @@ const getStyles = (theme: any) =>
     brandCountPill: {
       alignSelf: 'flex-start',
       marginTop: 8,
-      backgroundColor: HOME_ACCENT_BG,
+      backgroundColor: theme.brandAccent,
       paddingHorizontal: 12,
       paddingVertical: 5,
       borderRadius: 999,

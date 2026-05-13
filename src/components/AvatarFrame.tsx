@@ -20,6 +20,7 @@ import Svg, {
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useContext } from 'react'
 import { ThemeContext } from '../context'
+import { brandAccentRgba } from '../brandAccent'
 import { WonderStaticCoin } from './WonderCoin'
 
 const STORAGE_KEY = 'wonderport-avatar-frame-id'
@@ -800,7 +801,7 @@ export function AvatarFramePreviewTile({
   previewFallbackTextColor,
 }: AvatarFramePreviewTileProps) {
   const { theme } = useContext(ThemeContext)
-  const ACCENT = '#CBFF00'
+  const accent = theme.brandAccent
   const meta = AVATAR_FRAME_SHOP.find((f) => f.id === frameId)
   const uri = previewUri?.trim() ? previewUri : null
   const primaryDisabled = busy || equipped || (!owned && !canAfford)
@@ -836,7 +837,7 @@ export function AvatarFramePreviewTile({
         styles.tile,
         {
           backgroundColor: '#000000',
-          borderColor: 'rgba(203,255,0,0.28)',
+          borderColor: brandAccentRgba(theme, 0.28),
         },
       ]}
     >
@@ -846,23 +847,20 @@ export function AvatarFramePreviewTile({
         </AvatarFrameWrapper>
       </View>
       <Text style={[styles.tileName, { color: '#ffffff' }]}>{meta?.name}</Text>
-      <Text style={[styles.tileTagline, { color: 'rgba(255,255,255,0.72)' }]} numberOfLines={2}>
-        {meta?.tagline}
-      </Text>
       <View style={styles.tilePriceRow}>
-        <WonderStaticCoin size={14} fallbackColor={ACCENT} />
-        <Text style={[styles.tilePrice, { color: ACCENT }]}>{priceCoins}</Text>
+        <WonderStaticCoin size={14} fallbackColor={accent} />
+        <Text style={[styles.tilePrice, { color: accent }]}>{priceCoins}</Text>
       </View>
       <Pressable
         style={[
           styles.tileButton,
           {
-            backgroundColor: ACCENT,
+            backgroundColor: accent,
           },
           equipped
             ? {
                 backgroundColor: 'transparent',
-                borderColor: ACCENT,
+                borderColor: accent,
               }
             : null,
         ]}
@@ -873,7 +871,7 @@ export function AvatarFramePreviewTile({
           style={[
             styles.tileButtonText,
             { color: '#050505' },
-            equipped ? { color: ACCENT } : null,
+            equipped ? { color: accent } : null,
           ]}
         >
           {primaryLabel}
@@ -962,16 +960,8 @@ const styles = StyleSheet.create({
   tileName: {
     color: '#111111',
     fontFamily: 'Geist-SemiBold',
-    fontSize: 12,
+    fontSize: 14,
     marginBottom: 2,
-  },
-  tileTagline: {
-    color: '#6c768f',
-    fontFamily: 'Geist-Regular',
-    fontSize: 10,
-    lineHeight: 14,
-    minHeight: 28,
-    marginBottom: 6,
   },
   tilePriceRow: {
     flexDirection: 'row',

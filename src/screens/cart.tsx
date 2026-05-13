@@ -5,12 +5,12 @@ import { useRoute } from '@react-navigation/native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppContext, ThemeContext } from '../context'
 import { formatMoney, parseMoneyToNumber } from '../money'
+import { brandAccentRgba } from '../brandAccent'
 
 const SHIPPING_SINGLE_ZAR = 150
 const SHIPPING_WHOLE_SET_ZAR = 200
 const CART_CURRENCY = 'ZAR'
 
-const ACCENT = '#CBFF00'
 const ACCENT_TEXT = '#000000'
 const HEADING_FONT = 'Montserrat_700Bold' as const
 
@@ -88,7 +88,7 @@ export function Cart({ navigation }: any) {
         </View>
         <View style={[styles.emptyBody, { paddingBottom: 24 + insets.bottom }]}>
           <View style={styles.emptyIconWrap}>
-            <FeatherIcon name="shopping-bag" size={28} color={ACCENT} />
+            <FeatherIcon name="shopping-bag" size={28} color={theme.brandAccent} />
           </View>
           <Text style={styles.emptyTitle}>Your cart is empty</Text>
           <Text style={styles.emptySub}>Add products from Home, Search, or Product page.</Text>
@@ -189,8 +189,9 @@ export function Cart({ navigation }: any) {
   )
 }
 
-const getStyles = (theme: any) =>
-  StyleSheet.create({
+const getStyles = (theme: any) => {
+  const L = (a: number) => brandAccentRgba(theme, a)
+  return StyleSheet.create({
     container: {
       backgroundColor: theme.appBackgroundColor || theme.backgroundColor || '#000000',
     },
@@ -242,7 +243,7 @@ const getStyles = (theme: any) =>
       letterSpacing: -0.25,
     },
     clearText: {
-      color: ACCENT,
+      color: theme.brandAccent,
       fontFamily: theme.semiBoldFont,
       fontSize: 13,
     },
@@ -302,7 +303,7 @@ const getStyles = (theme: any) =>
       marginBottom: 4,
     },
     itemPrice: {
-      color: ACCENT,
+      color: theme.brandAccent,
       fontFamily: theme.boldFont,
       fontSize: 14,
       marginBottom: 8,
@@ -365,19 +366,19 @@ const getStyles = (theme: any) =>
       letterSpacing: -0.2,
     },
     totalValue: {
-      color: ACCENT,
+      color: theme.brandAccent,
       fontFamily: theme.boldFont,
       fontSize: 18,
     },
     checkoutButton: {
       marginTop: 10,
-      backgroundColor: ACCENT,
+      backgroundColor: theme.brandAccent,
       borderRadius: 999,
       paddingVertical: 12,
       alignItems: 'center',
     },
     checkoutText: {
-      color: ACCENT_TEXT,
+      color: theme.brandAccent_TEXT,
       fontFamily: theme.boldFont,
       fontSize: 15,
     },
@@ -393,7 +394,7 @@ const getStyles = (theme: any) =>
       borderRadius: 39,
       backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor || '#1a1a1a',
       borderWidth: 2,
-      borderColor: 'rgba(203, 255, 0, 0.35)',
+      borderColor: L(0.35),
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: 12,
@@ -414,3 +415,4 @@ const getStyles = (theme: any) =>
       textAlign: 'center',
     },
   })
+}

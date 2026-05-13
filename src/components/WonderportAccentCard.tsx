@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient'
 import type { ReactNode } from 'react'
-import { useEffect, useState } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
 import Animated, {
   Easing,
@@ -9,20 +9,11 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated'
+import { ThemeContext } from '../context'
+import { BRAND_ACCENT_LIME_HEX, hexToRgbString } from '../brandAccent'
 
-/** Brand lime used in the border gradient (full opacity). */
-export const WONDERPORT_ACCENT_HEX = '#CBFF00'
-
-const CB = { r: 203, g: 255, b: 0 }
-
-const BORDER_GRADIENT_COLORS = [
-  `rgba(${CB.r},${CB.g},${CB.b},1)`,
-  `rgba(${CB.r},${CB.g},${CB.b},0)`,
-  `rgba(${CB.r},${CB.g},${CB.b},1)`,
-  `rgba(${CB.r},${CB.g},${CB.b},0)`,
-] as const
-
-const BORDER_GRADIENT_LOCATIONS = [0, 0.33, 0.66, 1] as const
+/** @deprecated Use `theme.brandAccent` from context; kept for imports that expect a constant. */
+export const WONDERPORT_ACCENT_HEX = BRAND_ACCENT_LIME_HEX
 
 type WonderportAccentCardProps = {
   children: ReactNode
@@ -65,6 +56,27 @@ export function WonderportAccentCard({
   animatedBorder = false,
   borderRotationDurationMs = 10_000,
 }: WonderportAccentCardProps) {
+  const { theme } = useContext(ThemeContext)
+  const borderRgb = useMemo(() => {
+    const s = theme?.brandAccentRgb ?? hexToRgbString(BRAND_ACCENT_LIME_HEX)
+    const parts = s.split(',').map((p) => parseInt(p.trim(), 10))
+    const r = Number.isFinite(parts[0]) ? parts[0] : 203
+    const g = Number.isFinite(parts[1]) ? parts[1] : 255
+    const b = Number.isFinite(parts[2]) ? parts[2] : 0
+    return { r, g, b }
+  }, [theme?.brandAccentRgb])
+
+  const borderGradientColors = useMemo(
+    () =>
+      [
+        `rgba(${borderRgb.r},${borderRgb.g},${borderRgb.b},1)`,
+        `rgba(${borderRgb.r},${borderRgb.g},${borderRgb.b},0)`,
+        `rgba(${borderRgb.r},${borderRgb.g},${borderRgb.b},1)`,
+        `rgba(${borderRgb.r},${borderRgb.g},${borderRgb.b},0)`,
+      ] as const,
+    [borderRgb.r, borderRgb.g, borderRgb.b],
+  )
+
   const innerRadius = Math.max(0, borderRadius - borderWidth)
   const [layout, setLayout] = useState({ w: 0, h: 0 })
   const rotationDeg = useSharedValue(0)
@@ -107,8 +119,8 @@ export function WonderportAccentCard({
           style={[StyleSheet.absoluteFillObject, spinStyle]}
         >
           <LinearGradient
-            colors={[...BORDER_GRADIENT_COLORS]}
-            locations={[...BORDER_GRADIENT_LOCATIONS]}
+            colors={[...borderGradientColors]}
+            locations={[0, 0.33, 0.66, 1]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={{
@@ -123,8 +135,8 @@ export function WonderportAccentCard({
       ) : (
         <LinearGradient
           pointerEvents="none"
-          colors={[...BORDER_GRADIENT_COLORS]}
-          locations={[...BORDER_GRADIENT_LOCATIONS]}
+          colors={[...borderGradientColors]}
+          locations={[0, 0.33, 0.66, 1]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFillObject}

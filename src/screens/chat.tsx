@@ -40,15 +40,14 @@ import Animated, {
 } from 'react-native-reanimated'
 import * as ImagePicker from 'expo-image-picker'
 import { AvatarFrameWrapper, coerceAvatarFrameId, useEquippedAvatarFrame } from '../components'
+import { brandAccentRgba } from '../brandAccent'
 
 const REF_ITEM_PREFIX = '__REF_ITEM__:'
 
-/** Community chat palette: black canvas, lime-framed incoming bubbles, grey own bubbles + composer */
-const CHAT_LIME = '#CBFF00'
+/** Community chat palette: black canvas, accent-framed incoming bubbles, grey own bubbles + composer */
 const CHAT_BLACK = '#000000'
 const CHAT_TILE_GREY = '#2d2d2d'
 const CHAT_SURFACE = '#111111'
-const CHAT_BORDER = 'rgba(203,255,0,0.3)'
 const CHAT_TEXT_PRIMARY = '#ffffff'
 const CHAT_TEXT_MUTED = 'rgba(255,255,255,0.72)'
 
@@ -567,7 +566,7 @@ export function Chat({
       <View style={styles.chatMain}>
       {loading ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={CHAT_LIME} />
+          <ActivityIndicator color={theme.brandAccent} />
         </View>
       ) : (
         <FlatList
@@ -836,7 +835,7 @@ export function Chat({
       <View style={styles.composerDock}>
         <View style={styles.inputRow}>
           <TouchableOpacity style={styles.attachButton} onPress={openComposerActions}>
-            <FeatherIcon name="link-2" size={16} color={CHAT_LIME} />
+            <FeatherIcon name="link-2" size={16} color={theme.brandAccent} />
           </TouchableOpacity>
           <TextInput
             style={styles.input}
@@ -901,7 +900,7 @@ export function Chat({
             </Pressable>
           </View>
           <View style={styles.referenceSearchWrap}>
-            <FeatherIcon name="search" size={16} color={CHAT_LIME} />
+            <FeatherIcon name="search" size={16} color={theme.brandAccent} />
             <TextInput
               value={referenceSearch}
               onChangeText={setReferenceSearch}
@@ -1004,8 +1003,10 @@ export function Chat({
   )
 }
 
-const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
-  StyleSheet.create({
+const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
+  const L = (a: number) => brandAccentRgba(theme, a)
+  const chatBorder = L(0.3)
+  return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: CHAT_BLACK,
@@ -1081,13 +1082,13 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     otherRow: {
       alignSelf: 'flex-start',
       backgroundColor: CHAT_BLACK,
-      borderColor: CHAT_LIME,
+      borderColor: theme.brandAccent,
       borderWidth: 3,
     },
     reportSelectedMessage: {
-      borderColor: CHAT_LIME,
+      borderColor: theme.brandAccent,
       borderWidth: 3,
-      backgroundColor: 'rgba(203,255,0,0.12)',
+      backgroundColor: L(0.12),
     },
     avatarBubble: {
       width: 36,
@@ -1102,7 +1103,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       height: '100%',
     },
     avatarText: {
-      color: CHAT_LIME,
+      color: theme.brandAccent,
       fontFamily: theme.boldFont,
       fontSize: 11,
     },
@@ -1116,7 +1117,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     },
     /** Incoming bubbles sit on black — lime label matches border. */
     authorLabelOtherOnDark: {
-      color: CHAT_LIME,
+      color: theme.brandAccent,
       opacity: 0.85,
     },
     bodyText: {
@@ -1172,7 +1173,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       alignItems: 'center',
     },
     emptyTitle: {
-      color: CHAT_LIME,
+      color: theme.brandAccent,
       fontFamily: theme.semiBoldFont,
       fontSize: 16,
       marginBottom: 4,
@@ -1253,7 +1254,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       width: 38,
       height: 38,
       borderRadius: 19,
-      backgroundColor: CHAT_LIME,
+      backgroundColor: theme.brandAccent,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -1276,7 +1277,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       borderRadius: 14,
       backgroundColor: CHAT_SURFACE,
       borderWidth: 1,
-      borderColor: CHAT_BORDER,
+      borderColor: chatBorder,
       zIndex: 4,
     },
     reportBarHint: {
@@ -1296,7 +1297,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 1,
-      borderColor: CHAT_BORDER,
+      borderColor: chatBorder,
       backgroundColor: CHAT_BLACK,
     },
     reportCancelButtonText: {
@@ -1310,10 +1311,10 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       borderRadius: 999,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: CHAT_LIME,
+      backgroundColor: theme.brandAccent,
     },
     reportSubmitButtonDisabled: {
-      backgroundColor: 'rgba(203,255,0,0.35)',
+      backgroundColor: L(0.35),
     },
     reportSubmitButtonText: {
       color: CHAT_BLACK,
@@ -1345,7 +1346,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       borderRadius: 10,
       overflow: 'hidden',
       borderWidth: 1,
-      borderColor: CHAT_BORDER,
+      borderColor: chatBorder,
       backgroundColor: CHAT_SURFACE,
       paddingBottom: 6,
     },
@@ -1389,14 +1390,14 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       width: 170,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: CHAT_BORDER,
+      borderColor: chatBorder,
       overflow: 'hidden',
       backgroundColor: CHAT_SURFACE,
       marginBottom: 6,
       marginTop: 2,
     },
     referencedItemCardMe: {
-      borderColor: CHAT_BORDER,
+      borderColor: chatBorder,
       backgroundColor: CHAT_SURFACE,
     },
     referencedItemImageWrap: {
@@ -1435,20 +1436,20 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       color: '#ffffff',
     },
     referencedItemPrice: {
-      color: CHAT_LIME,
+      color: theme.brandAccent,
       fontFamily: theme.boldFont,
       fontSize: 12,
       paddingHorizontal: 8,
       paddingBottom: 7,
     },
     referencedItemPriceMe: {
-      color: CHAT_LIME,
+      color: theme.brandAccent,
     },
     referencedItemFallback: {
       maxWidth: 200,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: CHAT_BORDER,
+      borderColor: chatBorder,
       backgroundColor: CHAT_SURFACE,
       paddingHorizontal: 10,
       paddingVertical: 8,
@@ -1493,7 +1494,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
     },
     referenceSearchWrap: {
       borderWidth: 1,
-      borderColor: CHAT_BORDER,
+      borderColor: chatBorder,
       borderRadius: 12,
       backgroundColor: CHAT_SURFACE,
       paddingHorizontal: 12,
@@ -1523,7 +1524,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       overflow: 'hidden',
       backgroundColor: CHAT_SURFACE,
       borderWidth: 1,
-      borderColor: CHAT_BORDER,
+      borderColor: chatBorder,
     },
     referenceProductImageFrame: {
       width: '100%',
@@ -1552,7 +1553,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       paddingBottom: 2,
     },
     referenceProductPrice: {
-      color: CHAT_LIME,
+      color: theme.brandAccent,
       fontFamily: theme.boldFont,
       fontSize: 12,
       paddingHorizontal: 10,
@@ -1621,7 +1622,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       height: 38,
       paddingHorizontal: 14,
       borderRadius: 10,
-      backgroundColor: CHAT_LIME,
+      backgroundColor: theme.brandAccent,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -1634,3 +1635,4 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) =>
       fontSize: 13,
     },
   })
+}

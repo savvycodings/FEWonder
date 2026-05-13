@@ -3,8 +3,8 @@ import { View, Text, ScrollView, StyleSheet, Image, ActivityIndicator } from 're
 import { ThemeContext } from '../context'
 import { WonderportAccentCard } from '../components'
 import { fetchMyOrder } from '../ordersApi'
+import { brandAccentRgba } from '../brandAccent'
 
-const ACCENT = '#CBFF00'
 const CARD_FILL = '#000000'
 
 export function MyOrderDetail({ route }: any) {
@@ -40,7 +40,7 @@ export function MyOrderDetail({ route }: any) {
   if (loading && !data) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color={ACCENT} />
+        <ActivityIndicator color={theme.brandAccent} />
       </View>
     )
   }
@@ -107,33 +107,35 @@ export function MyOrderDetail({ route }: any) {
   )
 }
 
-const getStyles = (theme: any) =>
-  StyleSheet.create({
+const getStyles = (theme: any) => {
+  const L = (a: number) => brandAccentRgba(theme, a)
+  return StyleSheet.create({
     page: { flex: 1, backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
     pad: { padding: 16, paddingBottom: 40 },
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     error: { color: '#ff6b6b', marginBottom: 12, fontFamily: theme.mediumFont },
     block: { width: '100%', marginBottom: 16 },
     innerPad: { padding: 14 },
-    ref: { fontFamily: theme.boldFont, fontSize: 20, color: ACCENT, marginBottom: 6 },
-    meta: { fontFamily: theme.mediumFont, fontSize: 13, color: 'rgba(203,255,0,0.8)', marginBottom: 8 },
-    total: { fontFamily: theme.boldFont, fontSize: 18, color: ACCENT },
+    ref: { fontFamily: theme.boldFont, fontSize: 20, color: theme.brandAccent, marginBottom: 6 },
+    meta: { fontFamily: theme.mediumFont, fontSize: 13, color: L(0.8), marginBottom: 8 },
+    total: { fontFamily: theme.boldFont, fontSize: 18, color: theme.brandAccent },
     subMeta: {
       marginTop: 8,
       fontFamily: theme.mediumFont,
       fontSize: 12,
-      color: 'rgba(203,255,0,0.75)',
+      color: L(0.75),
     },
     section: {
       fontFamily: theme.boldFont,
       fontSize: 14,
-      color: ACCENT,
+      color: theme.brandAccent,
       marginTop: 12,
       marginBottom: 6,
     },
     body: { fontFamily: theme.mediumFont, fontSize: 14, color: theme.textColor, marginBottom: 2 },
     lineInner: { paddingVertical: 10, paddingHorizontal: 12 },
-    lineTitle: { fontFamily: theme.semiBoldFont, color: ACCENT, fontSize: 14 },
+    lineTitle: { fontFamily: theme.semiBoldFont, color: theme.brandAccent, fontSize: 14 },
     lineSub: { fontFamily: theme.mediumFont, fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
     proof: { width: '100%', height: 220, marginTop: 8, borderRadius: 12, backgroundColor: '#111' },
   })
+}

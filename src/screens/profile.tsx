@@ -30,8 +30,8 @@ import {
   profileHeroProfileOverlapMarginTop,
 } from '../profileHeroLayout'
 import { loadProfileHeroPreferences, type ProfileHeroPreferences } from '../profileHeroPreferences'
+import { brandAccentRgba } from '../brandAccent'
 
-const PROFILE_ACCENT = '#CBFF00'
 const PROFILE_FILL = '#000000'
 /** Hero tile body (below banner) — dark grey section on profile. */
 const PROFILE_HERO_TILE_BG = '#262626'
@@ -208,7 +208,7 @@ export function Profile({
               <View style={styles.profileHeroNameWalletRowSpacer} />
               <View style={styles.profileHeroWalletCluster} pointerEvents="box-none">
                 <Pressable style={styles.profileHeroWallet} onPress={() => setShowWalletModal(true)}>
-                  <WonderSpinningCoin size={18} fallbackColor={PROFILE_ACCENT} />
+                  <WonderSpinningCoin size={18} fallbackColor={theme.brandAccent} />
                   <Text style={styles.profileHeroWalletValue}>{walletBalance}</Text>
                 </Pressable>
               </View>
@@ -254,7 +254,7 @@ export function Profile({
           >
             <View style={styles.actionLeft}>
               <View style={styles.iconBubble}>
-                <FeatherIcon name={item.icon} size={22} color={PROFILE_ACCENT} />
+                <FeatherIcon name={item.icon} size={22} color={theme.brandAccent} />
               </View>
               <View>
                 <Text style={styles.actionLabel}>{item.label}</Text>
@@ -269,7 +269,7 @@ export function Profile({
                 </Text>
               </View>
             </View>
-            <AccountRowChevron accentColor={PROFILE_ACCENT} />
+            <AccountRowChevron accentColor={theme.brandAccent} />
           </Pressable>
         ))}
         {accountDetails.map((item, index) => (
@@ -284,14 +284,14 @@ export function Profile({
           >
             <View style={styles.actionLeft}>
               <View style={styles.iconBubble}>
-                <FeatherIcon name={item.icon} size={22} color={PROFILE_ACCENT} />
+                <FeatherIcon name={item.icon} size={22} color={theme.brandAccent} />
               </View>
               <View>
                 <Text style={styles.actionLabel}>{item.label}</Text>
                 <Text style={styles.actionValue}>{item.value}</Text>
               </View>
             </View>
-            <AccountRowChevron accentColor={PROFILE_ACCENT} />
+            <AccountRowChevron accentColor={theme.brandAccent} />
           </Pressable>
         ))}
       </View>
@@ -317,7 +317,7 @@ export function Profile({
                     resizeMode="cover"
                   />
                 ) : (
-                  <FeatherIcon name="package" size={20} color={PROFILE_ACCENT} />
+                  <FeatherIcon name="package" size={20} color={theme.brandAccent} />
                 )}
               </View>
               <View style={styles.orderTextWrap}>
@@ -376,7 +376,9 @@ export function Profile({
   )
 }
 
-const getStyles = (theme: any) => StyleSheet.create({
+const getStyles = (theme: any) => {
+  const L = (a: number) => brandAccentRgba(theme, a)
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
@@ -399,7 +401,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   profileHeroBanner: {
     width: '100%',
-    backgroundColor: PROFILE_ACCENT,
+    backgroundColor: theme.brandAccent,
     borderTopLeftRadius: 14,
     borderTopRightRadius: 14,
     overflow: 'hidden',
@@ -508,12 +510,12 @@ const getStyles = (theme: any) => StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.35)',
+    borderColor: L(0.35),
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
   profileHeroWalletValue: {
-    color: PROFILE_ACCENT,
+    color: theme.brandAccent,
     fontFamily: 'Geist-SemiBold',
     fontSize: 15,
   },
@@ -549,12 +551,12 @@ const getStyles = (theme: any) => StyleSheet.create({
     backgroundColor: PROFILE_FILL,
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.28)',
+    borderColor: L(0.28),
     paddingVertical: 12,
     alignItems: 'center',
   },
   statValue: {
-    color: PROFILE_ACCENT,
+    color: theme.brandAccent,
     fontFamily: 'Geist-Bold',
     fontSize: 22,
     marginBottom: 2,
@@ -614,7 +616,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     backgroundColor: PROFILE_FILL,
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.24)',
+    borderColor: L(0.24),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -665,7 +667,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     backgroundColor: PROFILE_FILL,
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.24)',
+    borderColor: L(0.24),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -676,7 +678,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.22)',
+    borderColor: L(0.22),
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -709,18 +711,18 @@ const getStyles = (theme: any) => StyleSheet.create({
   statusPill: {
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.35)',
+    borderColor: L(0.35),
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
   statusText: {
-    color: PROFILE_ACCENT,
+    color: theme.brandAccent,
     fontFamily: 'Geist-SemiBold',
     fontSize: 10,
   },
   orderTotal: {
-    color: PROFILE_ACCENT,
+    color: theme.brandAccent,
     fontFamily: 'Geist-Bold',
     fontSize: 15,
   },
@@ -913,3 +915,4 @@ const getStyles = (theme: any) => StyleSheet.create({
     paddingHorizontal: 12,
   },
 })
+}

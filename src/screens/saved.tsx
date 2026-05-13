@@ -4,9 +4,8 @@ import FeatherIcon from '@expo/vector-icons/Feather'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppContext, ThemeContext } from '../context'
 import { formatMoney } from '../money'
+import { brandAccentRgba } from '../brandAccent'
 
-/** Matches Home / Profile accent */
-const ACCENT = '#CBFF00'
 /** Montserrat — registered in App.tsx `useFonts` */
 const HEADING_FONT = 'Montserrat_700Bold' as const
 
@@ -44,7 +43,7 @@ export function Saved({ navigation }: any) {
         </View>
         <View style={[styles.emptyBody, { paddingBottom: 24 + insets.bottom }]}>
           <View style={styles.emptyIconWrap}>
-            <FeatherIcon name="heart" size={28} color={ACCENT} />
+            <FeatherIcon name="heart" size={28} color={theme.brandAccent} />
           </View>
           <Text style={styles.emptyTitle}>No saved items yet</Text>
           <Text style={styles.emptySub}>Tap the heart on a product page to save it here.</Text>
@@ -108,8 +107,9 @@ export function Saved({ navigation }: any) {
   )
 }
 
-const getStyles = (theme: any) =>
-  StyleSheet.create({
+const getStyles = (theme: any) => {
+  const L = (a: number) => brandAccentRgba(theme, a)
+  return StyleSheet.create({
     container: {
       backgroundColor: theme.appBackgroundColor || theme.backgroundColor || '#000000',
     },
@@ -218,7 +218,7 @@ const getStyles = (theme: any) =>
       marginBottom: 5,
     },
     itemPrice: {
-      color: ACCENT,
+      color: theme.brandAccent,
       fontFamily: theme.boldFont,
       fontSize: 14,
     },
@@ -244,7 +244,7 @@ const getStyles = (theme: any) =>
       borderRadius: 39,
       backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor || '#1a1a1a',
       borderWidth: 2,
-      borderColor: 'rgba(203, 255, 0, 0.4)',
+      borderColor: L(0.4),
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: 12,
@@ -265,3 +265,4 @@ const getStyles = (theme: any) =>
       textAlign: 'center',
     },
   })
+}

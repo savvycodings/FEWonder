@@ -19,8 +19,7 @@ import { formatMoney } from '../money'
 
 const GRID_GAP = 12
 
-/** Match home.tsx price pills: lime fill + black label */
-const HOME_ACCENT_BG = '#CBFF00'
+/** Match home.tsx price pills: accent fill + black label */
 const HOME_ACCENT_TEXT = '#000000'
 /** Unselected home category chip fill (`chipPlainOuter`) */
 const HOME_CHIP_FILL = '#000000'
@@ -379,7 +378,7 @@ export function Search({ navigation }: { navigation: any }) {
                     key={collection.id}
                     style={({ pressed }) => [
                       styles.collectionCard,
-                      { width: collectionCardW, opacity: pressed ? 0.92 : 1 },
+                      { width: collectionCardW, opacity: pressed ? 0.92 : 1, borderColor: theme.brandAccent },
                     ]}
                     onPress={() =>
                       navigation.navigate('CategoryProducts', {
@@ -388,7 +387,7 @@ export function Search({ navigation }: { navigation: any }) {
                       })
                     }
                   >
-                    <Text style={styles.collectionTitle} numberOfLines={2}>
+                    <Text style={[styles.collectionTitle, { color: theme.brandAccent }]} numberOfLines={2}>
                       {collection.title}
                     </Text>
                   </Pressable>
@@ -493,7 +492,7 @@ function getProductGridStyles(theme: any) {
       letterSpacing: -0.15,
     },
     pricePill: {
-      backgroundColor: HOME_ACCENT_BG,
+      backgroundColor: theme.brandAccent,
       borderRadius: 999,
       paddingVertical: 7,
       paddingHorizontal: 12,
@@ -645,7 +644,6 @@ const styles = StyleSheet.create({
   collectionCard: {
     borderRadius: 16,
     borderWidth: 2,
-    borderColor: HOME_ACCENT_BG,
     backgroundColor: HOME_CHIP_FILL,
     paddingHorizontal: 6,
     paddingVertical: 12,
@@ -655,7 +653,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   collectionTitle: {
-    color: HOME_ACCENT_BG,
     fontFamily: HOME_CHIP_MONTSERRAT,
     fontSize: 13,
     lineHeight: 16,

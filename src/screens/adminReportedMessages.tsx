@@ -170,7 +170,7 @@ const getStyles = (theme: any) =>
     },
     segmentActive: {
       borderWidth: 1,
-      borderColor: theme.tintColor || '#CBFF00',
+      borderColor: theme.brandAccent,
     },
     segmentText: { fontFamily: theme.mediumFont, fontSize: 13, color: theme.mutedForegroundColor },
     segmentTextActive: { color: theme.textColor, fontFamily: theme.boldFont },
@@ -205,7 +205,7 @@ const getStyles = (theme: any) =>
     cardStatus: {
       fontFamily: theme.boldFont,
       fontSize: 11,
-      color: theme.tintColor || '#CBFF00',
+      color: theme.brandAccent,
     },
     metaText: {
       fontFamily: theme.mediumFont,
@@ -245,7 +245,7 @@ const getStyles = (theme: any) =>
       minHeight: 38,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: theme.tintColor || '#CBFF00',
+      borderColor: theme.brandAccent,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: 'transparent',
@@ -253,7 +253,7 @@ const getStyles = (theme: any) =>
     keepButtonText: {
       fontFamily: theme.semiBoldFont,
       fontSize: 12,
-      color: theme.tintColor || '#CBFF00',
+      color: theme.brandAccent,
     },
     deleteButton: {
       flex: 1,

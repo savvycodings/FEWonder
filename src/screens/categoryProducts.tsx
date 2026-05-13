@@ -179,6 +179,6 @@ function getStyles(theme: any) {
     placeholderText: { fontFamily: theme.semiBoldFont, fontSize: 13, textAlign: 'center' },
     footer: { paddingHorizontal: 10, paddingTop: 8, paddingBottom: 8 },
     cardTitle: { fontFamily: theme.boldFont, fontSize: 14, lineHeight: 18 },
-    cardPrice: { marginTop: 8, fontFamily: theme.boldFont, fontSize: 13, color: '#000', backgroundColor: '#CBFF00', alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
+    cardPrice: { marginTop: 8, fontFamily: theme.boldFont, fontSize: 13, color: '#000', backgroundColor: theme.brandAccent, alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
   })
 }

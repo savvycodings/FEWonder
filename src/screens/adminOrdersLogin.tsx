@@ -14,7 +14,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemeContext } from '../context'
 import { adminOrdersLogin } from '../ordersApi'
 
-const HOME_ACCENT_BG = '#CBFF00'
 const HOME_ACCENT_TEXT = '#000000'
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
 
@@ -111,7 +110,7 @@ const getStyles = (theme: any) =>
       width: 40,
       height: 3,
       borderRadius: 2,
-      backgroundColor: HOME_ACCENT_BG,
+      backgroundColor: theme.brandAccent,
       marginTop: 8,
       marginBottom: 10,
     },
@@ -132,7 +131,7 @@ const getStyles = (theme: any) =>
     fieldLabel: {
       fontFamily: theme.boldFont,
       fontSize: 11,
-      color: HOME_ACCENT_BG,
+      color: theme.brandAccent,
       letterSpacing: 0.55,
       textTransform: 'uppercase',
       marginBottom: 8,
@@ -158,7 +157,7 @@ const getStyles = (theme: any) =>
       fontSize: 13,
     },
     button: {
-      backgroundColor: HOME_ACCENT_BG,
+      backgroundColor: theme.brandAccent,
       borderRadius: 14,
       paddingVertical: 14,
       alignItems: 'center',

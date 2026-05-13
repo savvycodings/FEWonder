@@ -13,8 +13,7 @@ import {
 import { ThemeContext } from '../context'
 import { User } from '../../types'
 import { updateProfileDetails } from '../utils'
-
-const ACCENT = '#CBFF00'
+import { brandAccentRgba } from '../brandAccent'
 
 type Props = {
   user: User
@@ -173,8 +172,9 @@ export function Payment({ user, sessionToken, onUserUpdated }: Props) {
   )
 }
 
-const getStyles = (theme: any) =>
-  StyleSheet.create({
+const getStyles = (theme: any) => {
+  const L = (a: number) => brandAccentRgba(theme, a)
+  return StyleSheet.create({
     page: {
       flex: 1,
       backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
@@ -200,14 +200,14 @@ const getStyles = (theme: any) =>
       width: 62,
       height: 4,
       borderRadius: 999,
-      backgroundColor: ACCENT,
+      backgroundColor: theme.brandAccent,
       marginBottom: 14,
     },
     card: {
       borderRadius: 14,
       backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
       borderWidth: 1,
-      borderColor: 'rgba(203,255,0,0.3)',
+      borderColor: L(0.3),
       padding: 12,
     },
     label: {
@@ -218,7 +218,7 @@ const getStyles = (theme: any) =>
     },
     input: {
       borderWidth: 1,
-      borderColor: 'rgba(203,255,0,0.22)',
+      borderColor: L(0.22),
       borderRadius: 10,
       paddingHorizontal: 12,
       paddingVertical: 10,
@@ -236,7 +236,7 @@ const getStyles = (theme: any) =>
       borderRadius: 10,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: ACCENT,
+      backgroundColor: theme.brandAccent,
       marginTop: 2,
     },
     saveButtonDisabled: { opacity: 0.45 },
@@ -256,3 +256,4 @@ const getStyles = (theme: any) =>
       marginBottom: 8,
     },
   })
+}

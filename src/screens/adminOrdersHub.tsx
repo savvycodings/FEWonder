@@ -121,10 +121,10 @@ const getStyles = (theme: any) =>
       justifyContent: 'center',
       backgroundColor: theme.tileBackgroundColor || '#1f1f1f',
       borderWidth: 1,
-      borderColor: theme.tintColor || '#CBFF00',
+      borderColor: theme.brandAccent,
     },
     manageButtonText: {
-      color: theme.tintColor || '#CBFF00',
+      color: theme.brandAccent,
       fontFamily: theme.boldFont,
       fontSize: 13,
     },
@@ -144,7 +144,7 @@ const getStyles = (theme: any) =>
     },
     segmentActive: {
       borderWidth: 1,
-      borderColor: theme.tintColor || '#CBFF00',
+      borderColor: theme.brandAccent,
     },
     segmentText: { fontFamily: theme.mediumFont, fontSize: 13, color: theme.mutedForegroundColor },
     segmentTextActive: { color: theme.textColor, fontFamily: theme.boldFont },
@@ -171,5 +171,5 @@ const getStyles = (theme: any) =>
     amount: { fontFamily: theme.semiBoldFont, fontSize: 15, color: theme.textColor },
     status: { fontFamily: theme.mediumFont, fontSize: 12, color: theme.mutedForegroundColor, marginBottom: 4 },
     email: { fontFamily: theme.mediumFont, fontSize: 13, color: theme.textColor, marginBottom: 8 },
-    userLink: { fontFamily: theme.boldFont, fontSize: 13, color: theme.tintColor || '#CBFF00' },
+    userLink: { fontFamily: theme.boldFont, fontSize: 13, color: theme.brandAccent },
   })

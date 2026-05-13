@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
@@ -33,6 +33,8 @@ import {
   saveWonderJumpProgress,
   startWonderJumpChestOpen,
 } from '../utils'
+import { ThemeContext } from '../context'
+import { brandAccentRgba, BRAND_ACCENT_LIME_HEX } from '../brandAccent'
 
 type RunMode = 'menu' | 'playing' | 'paused' | 'gameOver'
 type PlatformKind = 'normal' | 'bouncy' | 'moving' | 'breakable'
@@ -395,9 +397,6 @@ const CLASSIC_GAME_FONT_BOLD = Platform.select({
 /** WonderJump modals — same face as home (`App.tsx` `useFonts`). */
 const WONDER_JUMP_UI_BOLD = 'Montserrat_700Bold' as const
 
-/** Match Home / Daily / Chat / Settings: black cards + lime accent. */
-const APP_UI_ACCENT = '#CBFF00'
-const APP_UI_ACCENT_SOFT = 'rgba(203, 255, 0, 0.4)'
 const APP_UI_SURFACE = '#0a0a0a'
 const APP_UI_TEXT = '#ffffff'
 const APP_UI_TEXT_MUTED = 'rgba(255, 255, 255, 0.72)'
@@ -1399,6 +1398,73 @@ function createInitialState(
   }
 }
 
+/** Platform / cloud / spring SVG wrappers — no accent; module scope for memoized game tiles. */
+const wjWorldStyles = StyleSheet.create({
+  cloudRoot: {
+    position: 'absolute',
+    overflow: 'visible',
+  },
+  cloudBlob: {
+    position: 'absolute',
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(210, 230, 250, 0.85)',
+    shadowColor: '#6ba8d6',
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  cloudShadowBase: {
+    position: 'absolute',
+    left: '10%',
+    bottom: 2,
+    height: 9,
+    borderRadius: 12,
+    backgroundColor: 'rgba(140, 180, 220, 0.35)',
+  },
+  cloudSpeck: {
+    position: 'absolute',
+    width: 5,
+    height: 4,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.75)',
+    borderWidth: 1,
+    borderColor: 'rgba(200, 220, 245, 0.5)',
+  },
+  cloudHatch: {
+    position: 'absolute',
+    height: 1,
+    backgroundColor: 'rgba(170, 200, 235, 0.35)',
+  },
+  springPadSvg: {
+    position: 'absolute',
+  },
+  platformShell: {
+    position: 'absolute',
+    overflow: 'visible',
+    backgroundColor: 'transparent',
+  },
+  platformGraphicWrap: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'visible',
+  },
+  platformTintMoving: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(90, 150, 220, 0.14)',
+  },
+  platformFalling: {
+    opacity: 0.88,
+  },
+  breakableHalfClip: {
+    position: 'absolute',
+    overflow: 'hidden',
+  },
+  breakableCrackSvg: {
+    position: 'absolute',
+  },
+})
+
 /** Doodle-style spring: wood tray + metal coil (SVG only — no `Line` primitive). */
 const DoodleSpringPad = memo(function DoodleSpringPad({ platformWidth }: { platformWidth: number }) {
   const padW = clamp(Math.max(32, platformWidth - 8), 36, 78)
@@ -1406,7 +1472,7 @@ const DoodleSpringPad = memo(function DoodleSpringPad({ platformWidth }: { platf
   return (
     <Svg
       pointerEvents="none"
-      style={[styles.springPadSvg, { width: padW, left, top: -15 }]}
+      style={[wjWorldStyles.springPadSvg, { width: padW, left, top: -15 }]}
       width={padW}
       height={17}
       viewBox="0 0 100 17"
@@ -1671,10 +1737,10 @@ const BreakableSplitPlatformFace = memo(function BreakableSplitPlatformFace({
   const crackW = gap + 9
   const crackLeft = width / 2 - crackW / 2
   return (
-    <View style={styles.platformGraphicWrap} pointerEvents="none">
+    <View style={wjWorldStyles.platformGraphicWrap} pointerEvents="none">
       <View
         style={[
-          styles.breakableHalfClip,
+          wjWorldStyles.breakableHalfClip,
           {
             left: 0,
             top: 4.5,
@@ -1687,7 +1753,7 @@ const BreakableSplitPlatformFace = memo(function BreakableSplitPlatformFace({
       </View>
       <View
         style={[
-          styles.breakableHalfClip,
+          wjWorldStyles.breakableHalfClip,
           {
             left: width / 2 + gap / 2,
             top: 7.5,
@@ -1702,7 +1768,7 @@ const BreakableSplitPlatformFace = memo(function BreakableSplitPlatformFace({
       </View>
       <Svg
         pointerEvents="none"
-        style={[styles.breakableCrackSvg, { left: crackLeft, top: 0, width: crackW, height }]}
+        style={[wjWorldStyles.breakableCrackSvg, { left: crackLeft, top: 0, width: crackW, height }]}
         width={crackW}
         height={height}
         viewBox="0 0 10 20"
@@ -1744,9 +1810,9 @@ const GrasslandPlatformGraphic = memo(function GrasslandPlatformGraphic({
     return <BreakableSplitPlatformFace width={width} height={height} surface={surface} />
   }
   return (
-    <View style={styles.platformGraphicWrap} pointerEvents="none">
+    <View style={wjWorldStyles.platformGraphicWrap} pointerEvents="none">
       <BiomePlatformFace width={width} height={height} surface={surface} />
-      {kind === 'moving' ? <View style={styles.platformTintMoving} /> : null}
+      {kind === 'moving' ? <View style={wjWorldStyles.platformTintMoving} /> : null}
     </View>
   )
 })
@@ -2124,8 +2190,8 @@ const JumpPlatformRow = memo(function JumpPlatformRow({
   return (
     <View
       style={[
-        styles.platformShell,
-        isFalling ? styles.platformFalling : null,
+        wjWorldStyles.platformShell,
+        isFalling ? wjWorldStyles.platformFalling : null,
         { left, top, width, height: shellHeight },
       ]}
       collapsable={false}
@@ -2145,7 +2211,7 @@ const JumpPlatformRow = memo(function JumpPlatformRow({
             topFlowers={topFlowers}
             topMushrooms={topMushrooms}
           />
-          {graphicKind === 'moving' ? <View style={styles.platformTintMoving} /> : null}
+          {graphicKind === 'moving' ? <View style={wjWorldStyles.platformTintMoving} /> : null}
         </>
       )}
       {topPalmTree ? (
@@ -2480,32 +2546,32 @@ const PlayerJetpackFx = memo(function PlayerJetpackFx({
 const GrasslandCloud = memo(function GrasslandCloud({ left, top, width }: { left: number; top: number; width: number }) {
   const h = 40
   return (
-    <View style={[styles.cloudRoot, { left, top, width, height: h }]} pointerEvents="none">
+    <View style={[wjWorldStyles.cloudRoot, { left, top, width, height: h }]} pointerEvents="none">
       <View
         style={[
-          styles.cloudBlob,
+          wjWorldStyles.cloudBlob,
           { width: width * 0.55, height: h * 0.52, left: width * 0.06, top: h * 0.34 },
         ]}
       />
       <View
         style={[
-          styles.cloudBlob,
+          wjWorldStyles.cloudBlob,
           { width: width * 0.42, height: h * 0.44, left: width * 0.38, top: h * 0.4 },
         ]}
       />
       <View
         style={[
-          styles.cloudBlob,
+          wjWorldStyles.cloudBlob,
           { width: width * 0.36, height: h * 0.4, left: width * 0.54, top: h * 0.26 },
         ]}
       />
       <View
         style={[
-          styles.cloudBlob,
+          wjWorldStyles.cloudBlob,
           { width: width * 0.48, height: h * 0.48, left: width * 0.14, top: h * 0.1 },
         ]}
       />
-      <View style={[styles.cloudShadowBase, { width: width * 0.72 }]} />
+      <View style={[wjWorldStyles.cloudShadowBase, { width: width * 0.72 }]} />
       {[
         [0.18, 0.38],
         [0.42, 0.52],
@@ -2517,7 +2583,7 @@ const GrasslandCloud = memo(function GrasslandCloud({ left, top, width }: { left
         <View
           key={`sp-${i}`}
           style={[
-            styles.cloudSpeck,
+            wjWorldStyles.cloudSpeck,
             {
               left: width * fx,
               top: h * fy,
@@ -2529,7 +2595,7 @@ const GrasslandCloud = memo(function GrasslandCloud({ left, top, width }: { left
         <View
           key={`ln-${i}`}
           style={[
-            styles.cloudHatch,
+            wjWorldStyles.cloudHatch,
             {
               top: 8 + i * 11,
               left: 6 + i * 5,
@@ -2661,6 +2727,11 @@ export function WonderJump({
   onUserUpdated?: (user: User) => Promise<void>
 }) {
   const isFocused = useIsFocused()
+  const { theme: wonderportTheme } = useContext(ThemeContext)
+  const styles = useMemo(
+    () => ({ ...wjWorldStyles, ...createWonderJumpStyles(wonderportTheme) }),
+    [wonderportTheme],
+  )
   const { width: windowWidth, height: windowHeight } = useWindowDimensions()
   const insets = useSafeAreaInsets()
   const fallbackWindow = Dimensions.get('screen')
@@ -3628,14 +3699,20 @@ export function WonderJump({
         ? gameOverBiomeAccent
         : gameState.startBiome
   const panelAccent = BIOME_UI_ACCENTS[activePanelBiome]
-  const primaryButtonTone = {
-    backgroundColor: APP_UI_ACCENT,
-    borderColor: APP_UI_ACCENT,
-  }
-  const panelAccentGlow = {
-    borderColor: APP_UI_ACCENT_SOFT,
-    shadowColor: APP_UI_ACCENT,
-  }
+  const primaryButtonTone = useMemo(() => {
+    const hex = wonderportTheme?.brandAccent ?? BRAND_ACCENT_LIME_HEX
+    return {
+      backgroundColor: hex,
+      borderColor: hex,
+    }
+  }, [wonderportTheme?.brandAccent])
+  const panelAccentGlow = useMemo(
+    () => ({
+      borderColor: brandAccentRgba(wonderportTheme, 0.4),
+      shadowColor: wonderportTheme?.brandAccent ?? BRAND_ACCENT_LIME_HEX,
+    }),
+    [wonderportTheme],
+  )
   const panelBiomeLabel = panelAccent.label
   const isHubPanel = gameState.mode === 'menu' || gameState.mode === 'gameOver'
 
@@ -4485,8 +4562,14 @@ export function WonderJump({
               <>
                 <Text style={styles.wjChestModalTitle}>You earned {WONDER_JUMP_CHEST_REWARD_COINS} Wonder coins</Text>
                 <View style={styles.wjChestModalCoinsRow}>
-                  <WonderSpinningCoin size={56} fallbackColor={APP_UI_ACCENT} />
-                  <WonderSpinningCoin size={56} fallbackColor={APP_UI_ACCENT} />
+                  <WonderSpinningCoin
+                    size={56}
+                    fallbackColor={wonderportTheme?.brandAccent ?? BRAND_ACCENT_LIME_HEX}
+                  />
+                  <WonderSpinningCoin
+                    size={56}
+                    fallbackColor={wonderportTheme?.brandAccent ?? BRAND_ACCENT_LIME_HEX}
+                  />
                 </View>
                 <Text style={styles.wjChestModalSub}>They are already in your wallet.</Text>
                 <Pressable onPress={closeHubChestRevealModal} style={[styles.wjChestModalButton, primaryButtonTone]}>
@@ -4495,7 +4578,10 @@ export function WonderJump({
               </>
             ) : hubChestRevealPhase === 'claiming' ? (
               <View style={styles.wjChestModalClaiming}>
-                <ActivityIndicator size="large" color={APP_UI_ACCENT} />
+                <ActivityIndicator
+                  size="large"
+                  color={wonderportTheme?.brandAccent ?? BRAND_ACCENT_LIME_HEX}
+                />
                 <Text style={styles.wjChestModalClaimingText}>Adding coins…</Text>
               </View>
             ) : (
@@ -4623,7 +4709,10 @@ export function WonderJump({
   )
 }
 
-const styles = StyleSheet.create({
+function createWonderJumpStyles(theme: any) {
+  const A = theme?.brandAccent ?? BRAND_ACCENT_LIME_HEX
+  const S = (a: number) => brandAccentRgba(theme, a)
+  return StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#000000',
@@ -4669,69 +4758,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 170,
     backgroundColor: GRASSLAND_THEME.hillNear,
   },
-  cloudRoot: {
-    position: 'absolute',
-    overflow: 'visible',
-  },
-  cloudBlob: {
-    position: 'absolute',
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    borderWidth: 1,
-    borderColor: 'rgba(210, 230, 250, 0.85)',
-    shadowColor: '#6ba8d6',
-    shadowOpacity: 0.22,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-  },
-  cloudShadowBase: {
-    position: 'absolute',
-    left: '10%',
-    bottom: 2,
-    height: 9,
-    borderRadius: 12,
-    backgroundColor: 'rgba(140, 180, 220, 0.35)',
-  },
-  cloudSpeck: {
-    position: 'absolute',
-    width: 5,
-    height: 4,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.75)',
-    borderWidth: 1,
-    borderColor: 'rgba(200, 220, 245, 0.5)',
-  },
-  cloudHatch: {
-    position: 'absolute',
-    height: 1,
-    backgroundColor: 'rgba(170, 200, 235, 0.35)',
-  },
-  springPadSvg: {
-    position: 'absolute',
-  },
-  platformShell: {
-    position: 'absolute',
-    overflow: 'visible',
-    backgroundColor: 'transparent',
-  },
-  platformGraphicWrap: {
-    ...StyleSheet.absoluteFillObject,
-    overflow: 'visible',
-  },
-  platformTintMoving: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(90, 150, 220, 0.14)',
-  },
-  platformFalling: {
-    opacity: 0.88,
-  },
-  breakableHalfClip: {
-    position: 'absolute',
-    overflow: 'hidden',
-  },
-  breakableCrackSvg: {
-    position: 'absolute',
-  },
   playerShadow: {
     position: 'absolute',
     width: 18,
@@ -4746,7 +4772,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.88)',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: APP_UI_ACCENT_SOFT,
+    borderColor: S(0.4),
     paddingHorizontal: 10,
     paddingVertical: 8,
     gap: 2,
@@ -4761,7 +4787,7 @@ const styles = StyleSheet.create({
     lineHeight: 12,
   },
   hudScoreValue: {
-    color: APP_UI_ACCENT,
+    color: A,
     fontSize: 22,
     fontFamily: CLASSIC_GAME_FONT_BOLD,
     letterSpacing: 0.15,
@@ -4784,7 +4810,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     backgroundColor: APP_UI_SURFACE,
     borderWidth: 1,
-    borderColor: APP_UI_ACCENT_SOFT,
+    borderColor: S(0.4),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -4802,7 +4828,7 @@ const styles = StyleSheet.create({
     backgroundColor: APP_UI_SURFACE,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: APP_UI_ACCENT_SOFT,
+    borderColor: S(0.4),
     paddingVertical: 18,
     paddingHorizontal: 16,
     alignItems: 'center',
@@ -4810,7 +4836,7 @@ const styles = StyleSheet.create({
   },
   panelDarkGlass: {
     backgroundColor: 'rgba(0, 0, 0, 0.94)',
-    borderColor: APP_UI_ACCENT_SOFT,
+    borderColor: S(0.4),
     shadowOpacity: 0.35,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
@@ -4886,7 +4912,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
-    borderColor: APP_UI_ACCENT_SOFT,
+    borderColor: S(0.4),
     alignItems: 'center',
   },
   gameOverHeroLabel: {
@@ -4897,7 +4923,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   gameOverHeroValue: {
-    color: APP_UI_ACCENT,
+    color: A,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 52,
     letterSpacing: -1,
@@ -4937,7 +4963,7 @@ const styles = StyleSheet.create({
   },
   gameOverNewBest: {
     marginTop: 6,
-    color: APP_UI_ACCENT,
+    color: A,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 15,
     letterSpacing: 0.25,
@@ -4958,13 +4984,13 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(203, 255, 0, 0.22)',
+    borderTopColor: S(0.22),
   },
   wjChestHubCard: {
     width: '100%',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: APP_UI_ACCENT_SOFT,
+    borderColor: S(0.4),
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
     paddingTop: 8,
     paddingBottom: 9,
@@ -4987,7 +5013,7 @@ const styles = StyleSheet.create({
     minHeight: 90,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(203, 255, 0, 0.28)',
+    borderColor: S(0.28),
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -4995,9 +5021,9 @@ const styles = StyleSheet.create({
     overflow: 'visible',
   },
   wjChestDockTileReady: {
-    borderColor: APP_UI_ACCENT,
-    backgroundColor: 'rgba(203, 255, 0, 0.12)',
-    shadowColor: APP_UI_ACCENT,
+    borderColor: A,
+    backgroundColor: S(0.12),
+    shadowColor: A,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 14,
@@ -5005,7 +5031,7 @@ const styles = StyleSheet.create({
   },
   /** Empty dock: “open slot” — same black + lime shell as the rest of the app. */
   wjChestDockTileEmptySlot: {
-    borderColor: APP_UI_ACCENT_SOFT,
+    borderColor: S(0.4),
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
   },
   wjDockEmptyComposer: {
@@ -5020,8 +5046,8 @@ const styles = StyleSheet.create({
     height: 68,
     borderRadius: 34,
     borderWidth: 2,
-    borderColor: 'rgba(203, 255, 0, 0.28)',
-    backgroundColor: 'rgba(203, 255, 0, 0.06)',
+    borderColor: S(0.28),
+    backgroundColor: S(0.06),
   },
   wjDockEmptyPad: {
     width: 44,
@@ -5029,11 +5055,11 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
-    borderColor: APP_UI_ACCENT_SOFT,
+    borderColor: S(0.4),
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,
-    shadowColor: APP_UI_ACCENT,
+    shadowColor: A,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -5041,7 +5067,7 @@ const styles = StyleSheet.create({
   },
   wjDockEmptyGlyph: {
     fontSize: 19,
-    color: 'rgba(203, 255, 0, 0.65)',
+    color: S(0.65),
     fontFamily: WONDER_JUMP_UI_BOLD,
     marginTop: -1,
   },
@@ -5242,7 +5268,7 @@ const styles = StyleSheet.create({
     maxWidth: 300,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: APP_UI_ACCENT_SOFT,
+    borderColor: S(0.4),
     backgroundColor: APP_UI_SURFACE,
     paddingVertical: 22,
     paddingHorizontal: 18,
@@ -5335,7 +5361,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: APP_UI_ACCENT_SOFT,
+    borderColor: S(0.4),
     paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -5354,7 +5380,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   panelBiome: {
-    color: APP_UI_ACCENT,
+    color: A,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 12,
     letterSpacing: 1,
@@ -5380,7 +5406,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(203, 255, 0, 0.2)',
+    borderColor: S(0.2),
     backgroundColor: 'rgba(0, 0, 0, 0.35)',
     alignItems: 'center',
   },
@@ -5394,15 +5420,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(29, 127, 117, 0.42)',
   },
   panelBiomeChipGrassActive: {
-    borderColor: APP_UI_ACCENT,
+    borderColor: A,
     backgroundColor: 'rgba(45, 106, 58, 0.22)',
   },
   panelBiomeChipMushroomActive: {
-    borderColor: APP_UI_ACCENT,
+    borderColor: A,
     backgroundColor: 'rgba(107, 61, 85, 0.22)',
   },
   panelBiomeChipTropicalActive: {
-    borderColor: APP_UI_ACCENT,
+    borderColor: A,
     backgroundColor: 'rgba(29, 127, 117, 0.22)',
   },
   panelBiomeChipText: {
@@ -5437,13 +5463,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 11,
     borderWidth: 1,
-    borderColor: APP_UI_ACCENT_SOFT,
+    borderColor: S(0.4),
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
   },
   settingsOptionChipActive: {
-    borderColor: APP_UI_ACCENT,
-    backgroundColor: 'rgba(203, 255, 0, 0.12)',
+    borderColor: A,
+    backgroundColor: S(0.12),
   },
   settingsOptionText: {
     color: APP_UI_TEXT_MUTED,
@@ -5458,10 +5484,10 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     width: '100%',
-    backgroundColor: APP_UI_ACCENT,
+    backgroundColor: A,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: APP_UI_ACCENT,
+    borderColor: A,
     paddingVertical: 12,
     alignItems: 'center',
   },
@@ -5476,7 +5502,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     borderRadius: 11,
     borderWidth: 1,
-    borderColor: APP_UI_ACCENT_SOFT,
+    borderColor: S(0.4),
     paddingVertical: 11,
     alignItems: 'center',
   },
@@ -5522,3 +5548,5 @@ const styles = StyleSheet.create({
     marginTop: -3,
   },
 })
+}
+

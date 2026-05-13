@@ -14,8 +14,8 @@ import FeatherIcon from '@expo/vector-icons/Feather'
 import { ThemeContext } from '../context'
 import { WonderportAccentCard } from '../components'
 import { fetchMyOrders } from '../ordersApi'
+import { brandAccentRgba } from '../brandAccent'
 
-const ACCENT = '#CBFF00'
 const CARD_FILL = '#000000'
 
 function formatTotal(cents: number, code: string) {
@@ -53,12 +53,12 @@ export function MyOrders({ navigation }: any) {
     <View style={styles.page}>
       {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
       {loading && !orders.length ? (
-        <ActivityIndicator style={{ marginTop: 24 }} color={ACCENT} />
+        <ActivityIndicator style={{ marginTop: 24 }} color={theme.brandAccent} />
       ) : (
         <FlatList
           data={orders}
           keyExtractor={(item) => item.id}
-          refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={ACCENT} />}
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={theme.brandAccent} />}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <Text style={styles.empty}>No orders yet. Use Buy now on a product to place an order.</Text>
@@ -82,7 +82,7 @@ export function MyOrders({ navigation }: any) {
                       />
                     ) : (
                       <View style={styles.orderThumbPlaceholder}>
-                        <FeatherIcon name="package" size={18} color={ACCENT} />
+                        <FeatherIcon name="package" size={18} color={theme.brandAccent} />
                       </View>
                     )}
                     <Text style={styles.ref}>{item.referenceCode}</Text>
@@ -97,7 +97,7 @@ export function MyOrders({ navigation }: any) {
                 <Text style={styles.date}>{String(item.createdAt).slice(0, 10)}</Text>
                 <View style={styles.chevRow}>
                   <Text style={styles.viewDetail}>Details</Text>
-                  <FeatherIcon name="chevron-right" size={18} color={ACCENT} />
+                  <FeatherIcon name="chevron-right" size={18} color={theme.brandAccent} />
                 </View>
               </WonderportAccentCard>
             </Pressable>
@@ -108,8 +108,9 @@ export function MyOrders({ navigation }: any) {
   )
 }
 
-const getStyles = (theme: any) =>
-  StyleSheet.create({
+const getStyles = (theme: any) => {
+  const L = (a: number) => brandAccentRgba(theme, a)
+  return StyleSheet.create({
     page: { flex: 1, backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
     errorBanner: {
       padding: 12,
@@ -135,7 +136,7 @@ const getStyles = (theme: any) =>
       borderRadius: 10,
       backgroundColor: 'rgba(255,255,255,0.06)',
       borderWidth: 1,
-      borderColor: 'rgba(203,255,0,0.22)',
+      borderColor: L(0.22),
     },
     orderThumbPlaceholder: {
       width: 40,
@@ -143,16 +144,17 @@ const getStyles = (theme: any) =>
       borderRadius: 10,
       backgroundColor: 'rgba(255,255,255,0.06)',
       borderWidth: 1,
-      borderColor: 'rgba(203,255,0,0.22)',
+      borderColor: L(0.22),
       alignItems: 'center',
       justifyContent: 'center',
     },
-    ref: { fontFamily: theme.boldFont, fontSize: 16, color: ACCENT, flexShrink: 1 },
-    total: { fontFamily: theme.boldFont, fontSize: 15, color: ACCENT },
+    ref: { fontFamily: theme.boldFont, fontSize: 16, color: theme.brandAccent, flexShrink: 1 },
+    total: { fontFamily: theme.boldFont, fontSize: 15, color: theme.brandAccent },
     metaRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-    meta: { fontFamily: theme.mediumFont, fontSize: 12, color: 'rgba(203,255,0,0.75)' },
-    metaDot: { marginHorizontal: 6, color: 'rgba(203,255,0,0.5)' },
+    meta: { fontFamily: theme.mediumFont, fontSize: 12, color: L(0.75) },
+    metaDot: { marginHorizontal: 6, color: L(0.5) },
     date: { fontFamily: theme.mediumFont, fontSize: 11, color: 'rgba(255,255,255,0.55)' },
     chevRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 8, gap: 4 },
-    viewDetail: { fontFamily: theme.semiBoldFont, fontSize: 13, color: ACCENT },
+    viewDetail: { fontFamily: theme.semiBoldFont, fontSize: 13, color: theme.brandAccent },
   })
+}

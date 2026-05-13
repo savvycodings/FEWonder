@@ -1,13 +1,15 @@
 import { Pressable, StyleSheet, View } from 'react-native'
+import { useContext, useMemo } from 'react'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { WonderBadgeImage } from './components/WonderBadgeImage'
 import type { ProfileHeroBadgeSlots } from './profileHeroPreferences'
 import { isWonderBadgeId, migrateWonderBadgeSlotId, type WonderBadgeId } from './wonderBadgesCatalog'
+import { ThemeContext } from './context'
+import { brandAccentRgba } from './brandAccent'
 
 const BADGE_SLOT = 38
 const BADGE_RADIUS = 10
 const BADGE_ICON = 18
-const PROFILE_ACCENT = '#CBFF00'
 
 type Mode = 'home' | 'edit'
 
@@ -25,6 +27,9 @@ export function ProfileHeroBadgeStrip({
   onEmptySlot?: (index: 0 | 1 | 2) => void
   onFilledSlot?: (index: 0 | 1 | 2) => void
 }) {
+  const { theme } = useContext(ThemeContext)
+  const styles = useMemo(() => getStripStyles(theme), [theme])
+  const accent = theme.brandAccent
   const rowStyle = [styles.row, variant === 'inline' ? styles.rowInline : null, styles.rowMinSize]
 
   if (mode === 'home') {
@@ -48,10 +53,10 @@ export function ProfileHeroBadgeStrip({
                 <WonderBadgeImage
                   badgeId={id as WonderBadgeId}
                   size={BADGE_SLOT - 8}
-                  fallbackColor={PROFILE_ACCENT}
+                  fallbackColor={accent}
                 />
               ) : (
-                <FeatherIcon name="award" size={BADGE_ICON} color={PROFILE_ACCENT} />
+                <FeatherIcon name="award" size={BADGE_ICON} color={accent} />
               )}
             </View>
           )
@@ -78,10 +83,10 @@ export function ProfileHeroBadgeStrip({
           <WonderBadgeImage
             badgeId={id as WonderBadgeId}
             size={BADGE_SLOT - 8}
-            fallbackColor={PROFILE_ACCENT}
+            fallbackColor={accent}
           />
         ) : (
-          <FeatherIcon name="award" size={BADGE_ICON} color={PROFILE_ACCENT} />
+          <FeatherIcon name="award" size={BADGE_ICON} color={accent} />
         )
 
         return (
@@ -103,7 +108,9 @@ export function ProfileHeroBadgeStrip({
   )
 }
 
-const styles = StyleSheet.create({
+function getStripStyles(theme: any) {
+  const L = (a: number) => brandAccentRgba(theme, a)
+  return StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -136,13 +143,13 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.18)',
   },
   slotFilled: {
-    backgroundColor: 'rgba(203,255,0,0.1)',
+    backgroundColor: L(0.1),
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.35)',
+    borderColor: L(0.35),
   },
   slotWonderPlate: {
     backgroundColor: 'rgba(255,255,255,0.08)',
-    borderColor: 'rgba(203,255,0,0.28)',
+    borderColor: L(0.28),
   },
   /** Profile home: badges only, no slot plate behind them. */
   slotProfileHome: {
@@ -150,3 +157,4 @@ const styles = StyleSheet.create({
     borderWidth: 0,
   },
 })
+}

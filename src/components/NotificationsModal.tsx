@@ -17,9 +17,6 @@ export type NotificationItem = {
   dismissable?: boolean
 }
 
-/** Same lime as home/search price pills — left “rail” on notification tiles. */
-const NOTIFICATION_RAIL_ACCENT = '#CBFF00'
-
 /** Feather icons are stroke-based; white reads as a light “outline” on dark rows. */
 const NOTIFICATION_ICON_COLOR = '#ffffff'
 const NOTIFICATION_ICON_SIZE = 23
@@ -409,7 +406,7 @@ function getNotificationStyles(theme: any) {
       borderWidth: 1,
       borderColor: theme.tileBorderColor || 'rgba(0,0,0,0.18)',
       borderLeftWidth: 4,
-      borderLeftColor: NOTIFICATION_RAIL_ACCENT,
+      borderLeftColor: theme.brandAccent,
       backgroundColor: theme.sheetRowBackgroundColor || theme.tileBackgroundColor || '#ffffff',
       paddingHorizontal: 10,
       paddingVertical: 9,

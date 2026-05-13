@@ -4,6 +4,7 @@ import FeatherIcon from '@expo/vector-icons/Feather'
 import { WebView } from 'react-native-webview'
 import type { WonderBadgeId } from '../wonderBadgesCatalog'
 import { wonderBadgeImageSource } from '../wonderBadgeImageSource'
+import { BRAND_ACCENT_LIME_HEX } from '../brandAccent'
 
 /**
  * Raster badge in a fixed square; `resizeMode="contain"` keeps different source dimensions
@@ -12,7 +13,7 @@ import { wonderBadgeImageSource } from '../wonderBadgeImageSource'
 export const WonderBadgeImage = memo(function WonderBadgeImage({
   badgeId,
   size,
-  fallbackColor = '#CBFF00',
+  fallbackColor = BRAND_ACCENT_LIME_HEX,
 }: {
   badgeId: WonderBadgeId
   size: number

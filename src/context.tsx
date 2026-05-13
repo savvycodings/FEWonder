@@ -5,7 +5,9 @@ import { IThemeContext, IAppContext } from '../types'
 const ThemeContext = createContext<IThemeContext>({
   theme: {},
   setTheme: () => null,
-  themeName: ''
+  themeName: '',
+  brandAccentId: 'default',
+  setBrandAccentId: () => null,
 })
 
 const AppContext = createContext<IAppContext>({

@@ -5,6 +5,11 @@ import { Main } from './src/main'
 import { useFonts } from 'expo-font'
 import { Montserrat_700Bold, Montserrat_800ExtraBold } from '@expo-google-fonts/montserrat'
 import { ThemeContext, AppContext } from './src/context'
+import {
+  BRAND_ACCENT_STORAGE_KEY,
+  mergeBrandAccentIntoTheme,
+  normalizeBrandAccentId,
+} from './src/brandAccent'
 import * as themes from './src/theme'
 import { IMAGE_MODELS, MODELS } from './constants'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -34,6 +39,7 @@ LogBox.ignoreLogs([
 
 export default function App() {
   const [theme, setTheme] = useState<string>('dark')
+  const [brandAccentId, setBrandAccentId] = useState<string>('default')
   const [chatType, setChatType] = useState<Model>(MODELS.claudeOpus)
   const [imageModel, setImageModel] = useState<string>(IMAGE_MODELS.nanoBanana.label)
   const [cartItems, setCartItems] = useState<any[]>([])
@@ -61,6 +67,8 @@ export default function App() {
     try {
       const _theme = await AsyncStorage.getItem('rnai-theme')
       if (_theme) setTheme(_theme)
+      const _accent = await AsyncStorage.getItem(BRAND_ACCENT_STORAGE_KEY)
+      if (_accent) setBrandAccentId(normalizeBrandAccentId(_accent))
       const _chatType = await AsyncStorage.getItem('rnai-chatType')
       if (_chatType) setChatType(JSON.parse(_chatType))
       const _imageModel = await AsyncStorage.getItem('rnai-imageModel')
@@ -113,6 +121,12 @@ export default function App() {
     AsyncStorage.setItem('rnai-theme', theme)
   }
 
+  function _setBrandAccentId(next: string) {
+    const id = normalizeBrandAccentId(next)
+    setBrandAccentId(id)
+    AsyncStorage.setItem(BRAND_ACCENT_STORAGE_KEY, id)
+  }
+
   function addToCart(item: any, quantity: number = 1) {
     setCartItems(prev => {
       const existingIndex = prev.findIndex(v => v.title === item.title)
@@ -157,7 +171,7 @@ export default function App() {
     setSavedItems(prev => prev.filter(item => item.title !== title))
   }
 
-  const resolvedTheme = getTheme(theme)
+  const resolvedTheme = mergeBrandAccentIntoTheme(getTheme(theme), brandAccentId)
   const bottomSheetStyles = getBottomsheetStyles(resolvedTheme)
 
   if (!fontsLoaded) return null
@@ -185,9 +199,11 @@ export default function App() {
           >
             <ThemeContext.Provider
               value={{
-                theme: getTheme(theme),
+                theme: resolvedTheme,
                 themeName: theme,
                 setTheme: _setTheme,
+                brandAccentId,
+                setBrandAccentId: _setBrandAccentId,
               }}
             >
               <ActionSheetProvider>

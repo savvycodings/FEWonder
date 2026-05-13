@@ -20,7 +20,7 @@ import Ionicons from '@expo/vector-icons/Ionicons'
 import { ThemeContext, AppContext } from '../context'
 import { WonderportAccentCard } from '../components'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { formatMoney } from '../money'
+import { formatMoney, parseMoneyToNumber } from '../money'
 import {
   createOrder,
   fetchEftInstructions,
@@ -32,17 +32,13 @@ import { fetchSessionUser } from '../utils'
 import { getDbProductByHandle } from '../utils'
 import type { ShopifyMoney, ShopifyProduct } from '../../types'
 import { SHOW_PEACH_CHECKOUT } from '../../constants'
+import { brandAccentRgba } from '../brandAccent'
 
-const CHECKOUT_ACCENT = '#CBFF00'
 const CHECKOUT_FILL = '#000000'
 const PRODUCT_PAGE_BG = '#000000'
 const PRODUCT_SURFACE_BG = '#111111'
-const PRODUCT_SURFACE_BORDER = 'rgba(203,255,0,0.3)'
 const PRODUCT_TEXT_PRIMARY = '#ffffff'
 const PRODUCT_TEXT_MUTED = 'rgba(255,255,255,0.72)'
-
-/** Match `home.tsx` — lime accent, black fills, Montserrat for hero title */
-const HOME_ACCENT_BG = '#CBFF00'
 const HOME_CHIP_FILL = '#000000'
 const HOME_ACCENT_TEXT = '#000000'
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
@@ -118,6 +114,18 @@ export function Product({ route, navigation }: any) {
     }
     return 'Price on request'
   }, [selectedUnitPrice])
+  const footerTotalText = useMemo(() => {
+    if (selectedUnitPrice?.amount == null || selectedUnitPrice.amount === '') return 'Price on request'
+    const unit = parseMoneyToNumber(selectedUnitPrice)
+    if (!Number.isFinite(unit) || unit <= 0) return 'Price on request'
+    return formatMoney(
+      {
+        amount: unit * quantity,
+        currencyCode: selectedUnitPrice.currencyCode,
+      },
+      String(selectedUnitPrice.currencyCode || 'USD'),
+    )
+  }, [selectedUnitPrice, quantity])
   const compareText = useMemo(() => {
     if (packaging === 'set') return null
     const c = product?.compareAtPrice
@@ -353,7 +361,7 @@ export function Product({ route, navigation }: any) {
             accessibilityLabel="Go back"
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <FeatherIcon name="chevron-left" size={20} color={HOME_ACCENT_BG} />
+            <FeatherIcon name="chevron-left" size={20} color={theme.brandAccent} />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -389,7 +397,7 @@ export function Product({ route, navigation }: any) {
               <Ionicons
                 name={liked ? 'heart' : 'heart-outline'}
                 size={23}
-                color={liked ? '#ff4d4f' : 'rgba(203,255,0,0.45)'}
+                color={liked ? '#ff4d4f' : brandAccentRgba(theme, 0.45)}
               />
             </TouchableOpacity>
           </View>
@@ -415,7 +423,7 @@ export function Product({ route, navigation }: any) {
               activeOpacity={0.85}
               onPress={() => setQuantity(q => Math.max(1, q - 1))}
             >
-              <FeatherIcon name="minus" size={15} color={HOME_ACCENT_BG} />
+              <FeatherIcon name="minus" size={15} color={theme.brandAccent} />
             </TouchableOpacity>
             <View style={styles.qtyValueWrap}>
               <Text style={styles.qtyValue}>{quantity}</Text>
@@ -425,7 +433,7 @@ export function Product({ route, navigation }: any) {
               activeOpacity={0.85}
               onPress={() => setQuantity(q => q + 1)}
             >
-              <FeatherIcon name="plus" size={15} color={HOME_ACCENT_BG} />
+              <FeatherIcon name="plus" size={15} color={theme.brandAccent} />
             </TouchableOpacity>
           </View>
         </View>
@@ -461,7 +469,7 @@ export function Product({ route, navigation }: any) {
       </ScrollView>
 
       <View style={[styles.footerBar, { bottom: insets.bottom + 10 }]}>
-        <Text style={styles.price}>{priceText}</Text>
+        <Text style={styles.price}>{footerTotalText}</Text>
         <View style={styles.actionsRow}>
           <TouchableOpacity
             style={styles.addButton}
@@ -665,7 +673,7 @@ export function Product({ route, navigation }: any) {
                     style={styles.copyBtn}
                     onPress={() => copyLabelValue('Order reference', eftReference)}
                   >
-                    <FeatherIcon name="copy" size={18} color={CHECKOUT_ACCENT} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                     <Text style={styles.copyBtnText}>Copy</Text>
                   </TouchableOpacity>
                 </View>
@@ -680,7 +688,7 @@ export function Product({ route, navigation }: any) {
                     style={styles.copyBtn}
                     onPress={() => copyLabelValue('Amount', eftTotalLabel)}
                   >
-                    <FeatherIcon name="copy" size={18} color={CHECKOUT_ACCENT} />
+                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                     <Text style={styles.copyBtnText}>Copy</Text>
                   </TouchableOpacity>
                 </View>
@@ -703,7 +711,7 @@ export function Product({ route, navigation }: any) {
                         style={styles.copyBtn}
                         onPress={() => copyLabelValue(String(label), String(val))}
                       >
-                        <FeatherIcon name="copy" size={18} color={CHECKOUT_ACCENT} />
+                        <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                         <Text style={styles.copyBtnText}>Copy</Text>
                       </TouchableOpacity>
                     </View>
@@ -751,7 +759,10 @@ export function Product({ route, navigation }: any) {
   )
 }
 
-const getStyles = (theme: any) => StyleSheet.create({
+const getStyles = (theme: any) => {
+  const L = (a: number) => brandAccentRgba(theme, a)
+  const surfaceBorder = L(0.3)
+  return StyleSheet.create({
   page: {
     flex: 1,
     backgroundColor: PRODUCT_PAGE_BG,
@@ -783,14 +794,14 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: PRODUCT_SURFACE_BORDER,
+    borderColor: surfaceBorder,
   },
   heroImageWrap: {
     borderRadius: 16,
     backgroundColor: PRODUCT_SURFACE_BG,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: PRODUCT_SURFACE_BORDER,
+    borderColor: surfaceBorder,
   },
   heroPlaceholder: {
     ...StyleSheet.absoluteFillObject,
@@ -831,7 +842,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.35)',
+    borderColor: L(0.35),
   },
   priceRow: {
     marginTop: 8,
@@ -841,7 +852,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     gap: 10,
   },
   inlinePrice: {
-    color: HOME_ACCENT_BG,
+    color: theme.brandAccent,
     fontFamily: theme.boldFont,
     fontSize: 22,
   },
@@ -864,11 +875,11 @@ const getStyles = (theme: any) => StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: theme.tileBorderColor || 'rgba(203,255,0,0.28)',
+    borderColor: theme.tileBorderColor || L(0.28),
   },
   metaChipText: {
     fontFamily: theme.mediumFont,
-    color: HOME_ACCENT_BG,
+    color: theme.brandAccent,
     fontSize: 11,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
@@ -881,7 +892,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: PRODUCT_SURFACE_BORDER,
+    borderColor: surfaceBorder,
   },
   optionRow: {
     flexDirection: 'row',
@@ -895,15 +906,15 @@ const getStyles = (theme: any) => StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 10,
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.28)',
+    borderColor: L(0.28),
   },
   optionButtonActive: {
     borderWidth: 2,
-    borderColor: HOME_ACCENT_BG,
+    borderColor: theme.brandAccent,
     backgroundColor: HOME_CHIP_FILL,
   },
   optionText: {
-    color: HOME_ACCENT_BG,
+    color: theme.brandAccent,
     fontFamily: theme.mediumFont,
     fontSize: 12,
     textAlign: 'center',
@@ -912,7 +923,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     opacity: 0.88,
   },
   optionTextActive: {
-    color: HOME_ACCENT_BG,
+    color: theme.brandAccent,
     opacity: 1,
     fontFamily: theme.boldFont,
   },
@@ -942,7 +953,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: 'rgba(203,255,0,0.55)',
+    borderColor: L(0.55),
   },
   qtyValueWrap: {
     minWidth: 56,
@@ -953,10 +964,10 @@ const getStyles = (theme: any) => StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 12,
     borderWidth: 3,
-    borderColor: 'rgba(203,255,0,0.55)',
+    borderColor: L(0.55),
   },
   qtyValue: {
-    color: HOME_ACCENT_BG,
+    color: theme.brandAccent,
     fontFamily: theme.boldFont,
     fontSize: 18,
   },
@@ -974,10 +985,10 @@ const getStyles = (theme: any) => StyleSheet.create({
     justifyContent: 'space-between',
     gap: 10,
     borderWidth: 2,
-    borderColor: HOME_ACCENT_BG,
+    borderColor: theme.brandAccent,
   },
   price: {
-    color: HOME_ACCENT_BG,
+    color: theme.brandAccent,
     fontFamily: theme.boldFont,
     fontSize: 20,
     minWidth: 92,
@@ -995,16 +1006,16 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: HOME_ACCENT_BG,
+    borderColor: theme.brandAccent,
   },
   addButtonText: {
-    color: HOME_ACCENT_BG,
+    color: theme.brandAccent,
     fontFamily: theme.semiBoldFont,
     fontSize: 13,
   },
   buyButton: {
     flex: 1,
-    backgroundColor: HOME_ACCENT_BG,
+    backgroundColor: theme.brandAccent,
     paddingVertical: 12,
     borderRadius: 999,
     alignItems: 'center',
@@ -1028,7 +1039,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     maxHeight: '92%',
     backgroundColor: PRODUCT_SURFACE_BG,
     borderWidth: 1,
-    borderColor: PRODUCT_SURFACE_BORDER,
+    borderColor: surfaceBorder,
   },
   deliveryTitle: {
     fontFamily: HOME_MONTSERRAT_BOLD,
@@ -1055,16 +1066,16 @@ const getStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     backgroundColor: HOME_CHIP_FILL,
     borderWidth: 1,
-    borderColor: 'rgba(203,255,0,0.3)',
+    borderColor: L(0.3),
   },
   deliveryChipActive: {
     borderWidth: 2,
-    borderColor: HOME_ACCENT_BG,
+    borderColor: theme.brandAccent,
   },
   deliveryChipText: {
     fontFamily: theme.semiBoldFont,
     fontSize: 12,
-    color: HOME_ACCENT_BG,
+    color: theme.brandAccent,
     textAlign: 'center',
   },
   deliveryChipTextActive: {
@@ -1083,7 +1094,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   },
   deliveryInput: {
     borderWidth: 1,
-    borderColor: PRODUCT_SURFACE_BORDER,
+    borderColor: surfaceBorder,
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1113,7 +1124,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: PRODUCT_SURFACE_BORDER,
+    borderColor: surfaceBorder,
     backgroundColor: HOME_CHIP_FILL,
   },
   deliveryCancelText: {
@@ -1126,7 +1137,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
-    backgroundColor: HOME_ACCENT_BG,
+    backgroundColor: theme.brandAccent,
   },
   deliveryContinueText: {
     fontFamily: theme.boldFont,
@@ -1154,7 +1165,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   checkoutTitle: {
     fontFamily: theme.boldFont,
     fontSize: 20,
-    color: CHECKOUT_ACCENT,
+    color: theme.brandAccent,
     marginBottom: 8,
   },
   checkoutSubtitle: {
@@ -1167,14 +1178,14 @@ const getStyles = (theme: any) => StyleSheet.create({
   checkoutSection: {
     fontFamily: theme.boldFont,
     fontSize: 14,
-    color: CHECKOUT_ACCENT,
+    color: theme.brandAccent,
     marginTop: 8,
     marginBottom: 10,
   },
   checkoutLabel: {
     fontFamily: theme.mediumFont,
     fontSize: 11,
-    color: 'rgba(203,255,0,0.65)',
+    color: L(0.65),
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     marginBottom: 4,
@@ -1202,7 +1213,7 @@ const getStyles = (theme: any) => StyleSheet.create({
     borderRadius: 12,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(203,255,0,0.25)',
+    borderColor: L(0.25),
   },
   copyTextCol: { flex: 1, minWidth: 0 },
   copyBtn: {
@@ -1212,15 +1223,15 @@ const getStyles = (theme: any) => StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     borderRadius: 10,
-    backgroundColor: 'rgba(203,255,0,0.12)',
+    backgroundColor: L(0.12),
   },
   copyBtnText: {
     fontFamily: theme.semiBoldFont,
     fontSize: 13,
-    color: CHECKOUT_ACCENT,
+    color: theme.brandAccent,
   },
   checkoutPrimaryBtn: {
-    backgroundColor: CHECKOUT_ACCENT,
+    backgroundColor: theme.brandAccent,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
@@ -1235,7 +1246,7 @@ const getStyles = (theme: any) => StyleSheet.create({
   checkoutGhostBtnText: {
     fontFamily: theme.semiBoldFont,
     fontSize: 15,
-    color: 'rgba(203,255,0,0.85)',
+    color: L(0.85),
   },
   peachPage: { flex: 1, backgroundColor: CHECKOUT_FILL },
   peachHeaderBar: {
@@ -1246,8 +1257,9 @@ const getStyles = (theme: any) => StyleSheet.create({
     paddingVertical: 14,
     paddingTop: 18,
     borderBottomWidth: 2,
-    borderBottomColor: CHECKOUT_ACCENT,
+    borderBottomColor: theme.brandAccent,
     backgroundColor: CHECKOUT_FILL,
   },
   peachWeb: { flex: 1, backgroundColor: '#0a0a0a' },
-})
+  })
+}
