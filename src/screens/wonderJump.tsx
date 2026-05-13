@@ -252,6 +252,14 @@ const JETPACK_DURATION_MS = 1650
 const JETPACK_THRUST_VELOCITY = -11.79
 const JETPACK_END_SPIKE_GRACE_MS = 420
 const EQUIPPED_JETPACK_CENTER_OFFSET_X = -14
+const EQUIPPED_JETPACK_TOP_OFFSET_Y = 3
+const EQUIPPED_JETPACK_VISUAL_W = 58
+const EQUIPPED_JETPACK_VISUAL_H = 46
+const EQUIPPED_JETPACK_VISUAL_LEFT = -3
+const EQUIPPED_JETPACK_VISUAL_TOP = 9
+const EQUIPPED_JETPACK_LEFT_NOZZLE_X = EQUIPPED_JETPACK_VISUAL_LEFT + EQUIPPED_JETPACK_VISUAL_W * 0.18
+const EQUIPPED_JETPACK_RIGHT_NOZZLE_X = EQUIPPED_JETPACK_VISUAL_LEFT + EQUIPPED_JETPACK_VISUAL_W * 0.82
+const EQUIPPED_JETPACK_FLAME_TOP = EQUIPPED_JETPACK_VISUAL_TOP + EQUIPPED_JETPACK_VISUAL_H * 0.84
 /** Doodle-style: faster lateral, floaty jump, pass-through platforms */
 const BASE_SPEED = 6.85
 const GRAVITY = 0.52
@@ -889,6 +897,7 @@ function buildPlatformTopMushrooms(
   width: number,
   kind: PlatformKind
 ): PlatformTopMushroom[] | undefined {
+  if (kind === 'breakable') return undefined
   if (surface !== 'mushroom_grey' && surface !== 'mushroom_red') return undefined
 
   const pickKind = (): PlatformMushroomDecoKind => (Math.random() < 0.52 ? 'single' : 'group')
@@ -966,6 +975,7 @@ function maybeAttachPalmTree(
   tropicalBlend: number,
   hasSpike: boolean
 ): PlatformItem {
+  if (platform.kind === 'breakable') return { ...platform, topPalmTree: undefined }
   if (hasSpike) return { ...platform, topPalmTree: undefined }
   if (tropicalBlend < TROPICAL_GAMEPLAY_BLEND) return { ...platform, topPalmTree: undefined }
   if (platform.surface !== 'grass' && platform.surface !== 'sand') return { ...platform, topPalmTree: undefined }
@@ -1143,6 +1153,7 @@ function buildPlatformTopFlowers(
   mushroomBlend: number,
   tropicalBlend: number
 ): PlatformTopFlower[] | undefined {
+  if (kind === 'breakable') return undefined
   /* Flowers only in pure grasslands — not mushroom isles, not tropical / Sunset Keys (incl. sand strips). */
   if (tropicalBlend >= 0.08 || mushroomBlend >= MUSHROOM_GAMEPLAY_BLEND) return undefined
   if (surface !== 'grass') return undefined
@@ -2309,23 +2320,7 @@ const WonderJumpJetpackGraphic = memo(function WonderJumpJetpackGraphic({
   width: number
   height: number
 }) {
-  return (
-    <Svg pointerEvents="none" width={width} height={height} viewBox="0 0 100 100" preserveAspectRatio="none">
-      <Rect x="8" y="21" width="24" height="42" rx="3.5" fill="#6f7782" stroke="#151b22" strokeWidth="2.2" />
-      <Rect x="68" y="21" width="24" height="42" rx="3.5" fill="#6f7782" stroke="#151b22" strokeWidth="2.2" />
-      <Rect x="26" y="19" width="48" height="44" rx="3" fill="#3f4751" stroke="#171d24" strokeWidth="2.5" />
-      <Rect x="34" y="28" width="32" height="17" rx="0.8" fill="#20262e" stroke="#10151b" strokeWidth="1.9" />
-      <Rect x="37" y="31.5" width="26" height="2.1" rx="1" fill="#65707d" />
-      <Rect x="37" y="36.1" width="26" height="2.1" rx="1" fill="#65707d" />
-      <Rect x="37" y="40.7" width="26" height="2.1" rx="1" fill="#65707d" />
-      <Rect x="7" y="31" width="26" height="5.3" rx="0.6" fill="#d93232" />
-      <Rect x="67" y="31" width="26" height="5.3" rx="0.6" fill="#d93232" />
-      <Rect x="11" y="62" width="18" height="17" rx="1.2" fill="#222930" stroke="#10161c" strokeWidth="2" />
-      <Rect x="71" y="62" width="18" height="17" rx="1.2" fill="#222930" stroke="#10161c" strokeWidth="2" />
-      <Rect x="33" y="62" width="34" height="7" rx="0.8" fill="#d93232" />
-      <Rect x="40" y="9" width="20" height="8" rx="0.8" fill="#d93232" stroke="#12171d" strokeWidth="1.9" />
-    </Svg>
-  )
+  return <WonderJumpJetpackFromAsset width={width} height={height} />
 })
 
 const JetpackPickupView = memo(function JetpackPickupView({
@@ -2481,22 +2476,30 @@ const PlayerJetpackFx = memo(function PlayerJetpackFx({
   top: number
   frame: number
 }) {
-  const t = frame * 0.38
+  const t = frame * 0.72
   const pulse = (Math.sin(t) + 1) * 0.5
   const pulseAlt = (Math.sin(t + 1.2) + 1) * 0.5
-  const smokeDrift = Math.sin(t * 0.9) * 2.3
-  const flameL = 36 + pulse * 24
-  const flameR = 36 + pulseAlt * 24
+  const violence = (Math.sin(t * 1.9) + 1) * 0.5
+  const violenceAlt = (Math.sin(t * 2.15 + 1.7) + 1) * 0.5
+  const smokeDrift = Math.sin(t * 1.4) * 3.2
+  const flameL = 48 + pulse * 28 + violence * 14
+  const flameR = 48 + pulseAlt * 28 + violenceAlt * 14
+  const leftJitter = Math.sin(t * 2.7) * 0.75
+  const rightJitter = Math.sin(t * 2.5 + 1.1) * 0.75
+  const leftFlameX = EQUIPPED_JETPACK_LEFT_NOZZLE_X + leftJitter
+  const rightFlameX = EQUIPPED_JETPACK_RIGHT_NOZZLE_X + rightJitter
+  const leftFlameTip = flameL + 34
+  const rightFlameTip = flameR + 34
   const flameGradId = useRef(`jpEqFlame_${Math.random().toString(36).slice(2, 9)}`).current
   const flameCoreId = useRef(`jpEqCore_${Math.random().toString(36).slice(2, 9)}`).current
   return (
     <View pointerEvents="none" style={{ position: 'absolute', left, top, width: 52, height: 82 }}>
       <Svg
         pointerEvents="none"
-        style={{ position: 'absolute', left: 0, top: 44, width: 52, height: 106 }}
+        style={{ position: 'absolute', left: 0, top: EQUIPPED_JETPACK_FLAME_TOP, width: 52, height: 128 }}
         width={52}
-        height={106}
-        viewBox="0 0 52 106"
+        height={128}
+        viewBox="0 0 52 128"
         preserveAspectRatio="none"
       >
         <Defs>
@@ -2511,33 +2514,44 @@ const PlayerJetpackFx = memo(function PlayerJetpackFx({
             <Stop offset="100%" stopColor="#ff8f2e" />
           </LinearGradient>
         </Defs>
-        <Ellipse cx={10.4} cy={12 + pulse * 5} rx={7.9} ry={12.2} fill="#ff7f2a" opacity={0.24 + pulse * 0.17} />
-        <Ellipse cx={41.6} cy={12 + pulseAlt * 5} rx={7.9} ry={12.2} fill="#ff7f2a" opacity={0.24 + pulseAlt * 0.17} />
-        <Ellipse cx={10.4 + smokeDrift} cy={7 + pulse * 1.8} rx={5 + pulse} ry={3.5 + pulse * 0.9} fill="#59616a" opacity={0.2} />
-        <Ellipse cx={41.6 - smokeDrift} cy={7 + pulseAlt * 1.8} rx={5 + pulseAlt} ry={3.5 + pulseAlt * 0.9} fill="#59616a" opacity={0.2} />
+        <Ellipse cx={leftFlameX} cy={5 + pulse * 3} rx={6.2} ry={9.6} fill="#ff7f2a" opacity={0.28 + pulse * 0.18} />
+        <Ellipse cx={rightFlameX} cy={5 + pulseAlt * 3} rx={6.2} ry={9.6} fill="#ff7f2a" opacity={0.28 + pulseAlt * 0.18} />
+        <Ellipse cx={EQUIPPED_JETPACK_LEFT_NOZZLE_X + smokeDrift * 0.45} cy={1 + pulse * 1.2} rx={4.4 + pulse * 0.8} ry={2.5 + pulse * 0.7} fill="#59616a" opacity={0.18} />
+        <Ellipse cx={EQUIPPED_JETPACK_RIGHT_NOZZLE_X - smokeDrift * 0.45} cy={1 + pulseAlt * 1.2} rx={4.4 + pulseAlt * 0.8} ry={2.5 + pulseAlt * 0.7} fill="#59616a" opacity={0.18} />
         <Polygon
-          points={`3.4,0 5.4,8 2.4,16 6.4,24 4.4,33 7.4,42 5.4,${46 + flameL * 0.22} 8.4,${54 + flameL * 0.35} 10.4,${flameL + 26} 12.4,${54 + flameL * 0.35} 15.4,${46 + flameL * 0.22} 13.4,42 16.4,33 14.4,24 18.4,16 15.4,8 17.4,0`}
+          points={`${leftFlameX - 2.7},0 ${leftFlameX - 5.8},10 ${leftFlameX - 3.4},18 ${leftFlameX - 8.6},31 ${leftFlameX - 4.8},43 ${leftFlameX - 9.6},58 ${leftFlameX - 5.2},${leftFlameTip - 16} ${leftFlameX},${leftFlameTip} ${leftFlameX + 5.2},${leftFlameTip - 16} ${leftFlameX + 9.6},58 ${leftFlameX + 4.8},43 ${leftFlameX + 8.6},31 ${leftFlameX + 3.4},18 ${leftFlameX + 5.8},10 ${leftFlameX + 2.7},0`}
           fill={`url(#${flameGradId})`}
         />
         <Polygon
-          points={`7.4,3 8.4,10 6.9,16 8.9,23 7.9,30 9.4,37 8.4,${40 + flameL * 0.2} 9.6,${47 + flameL * 0.28} 10.4,${flameL + 16} 11.2,${47 + flameL * 0.28} 12.4,${40 + flameL * 0.2} 11.4,37 12.9,30 11.9,23 13.9,16 12.4,10 13.4,3`}
+          points={`${leftFlameX - 1.2},2 ${leftFlameX - 3.2},13 ${leftFlameX - 1.8},22 ${leftFlameX - 4.4},35 ${leftFlameX - 2.3},47 ${leftFlameX - 4.8},60 ${leftFlameX - 2},${leftFlameTip - 20} ${leftFlameX},${leftFlameTip - 10} ${leftFlameX + 2},${leftFlameTip - 20} ${leftFlameX + 4.8},60 ${leftFlameX + 2.3},47 ${leftFlameX + 4.4},35 ${leftFlameX + 1.8},22 ${leftFlameX + 3.2},13 ${leftFlameX + 1.2},2`}
           fill={`url(#${flameCoreId})`}
           opacity={0.94}
         />
         <Polygon
-          points={`34.6,0 36.6,8 33.6,16 37.6,24 35.6,33 38.6,42 36.6,${46 + flameR * 0.22} 39.6,${54 + flameR * 0.35} 41.6,${flameR + 26} 43.6,${54 + flameR * 0.35} 46.6,${46 + flameR * 0.22} 44.6,42 47.6,33 45.6,24 49.6,16 46.6,8 48.6,0`}
+          points={`${rightFlameX - 2.7},0 ${rightFlameX - 5.8},10 ${rightFlameX - 3.4},18 ${rightFlameX - 8.6},31 ${rightFlameX - 4.8},43 ${rightFlameX - 9.6},58 ${rightFlameX - 5.2},${rightFlameTip - 16} ${rightFlameX},${rightFlameTip} ${rightFlameX + 5.2},${rightFlameTip - 16} ${rightFlameX + 9.6},58 ${rightFlameX + 4.8},43 ${rightFlameX + 8.6},31 ${rightFlameX + 3.4},18 ${rightFlameX + 5.8},10 ${rightFlameX + 2.7},0`}
           fill={`url(#${flameGradId})`}
         />
         <Polygon
-          points={`38.6,3 39.6,10 38.1,16 40.1,23 39.1,30 40.6,37 39.6,${40 + flameR * 0.2} 40.8,${47 + flameR * 0.28} 41.6,${flameR + 16} 42.4,${47 + flameR * 0.28} 43.6,${40 + flameR * 0.2} 42.6,37 44.1,30 43.1,23 45.1,16 43.6,10 44.6,3`}
+          points={`${rightFlameX - 1.2},2 ${rightFlameX - 3.2},13 ${rightFlameX - 1.8},22 ${rightFlameX - 4.4},35 ${rightFlameX - 2.3},47 ${rightFlameX - 4.8},60 ${rightFlameX - 2},${rightFlameTip - 20} ${rightFlameX},${rightFlameTip - 10} ${rightFlameX + 2},${rightFlameTip - 20} ${rightFlameX + 4.8},60 ${rightFlameX + 2.3},47 ${rightFlameX + 4.4},35 ${rightFlameX + 1.8},22 ${rightFlameX + 3.2},13 ${rightFlameX + 1.2},2`}
           fill={`url(#${flameCoreId})`}
           opacity={0.94}
         />
-        <Ellipse cx={12} cy={63 + pulse * 10} rx={0.9} ry={2.1} fill="#ffd98e" opacity={0.58} />
-        <Ellipse cx={40} cy={66 + pulseAlt * 9} rx={0.9} ry={2.1} fill="#ffd98e" opacity={0.58} />
+        <Ellipse cx={EQUIPPED_JETPACK_LEFT_NOZZLE_X - 2 + leftJitter} cy={72 + pulse * 13} rx={1.1} ry={2.8} fill="#ffd98e" opacity={0.7} />
+        <Ellipse cx={EQUIPPED_JETPACK_LEFT_NOZZLE_X + 3 + leftJitter} cy={86 + violence * 16} rx={0.9} ry={2.4} fill="#ffb13a" opacity={0.55} />
+        <Ellipse cx={EQUIPPED_JETPACK_RIGHT_NOZZLE_X - 3 + rightJitter} cy={75 + pulseAlt * 12} rx={1.1} ry={2.8} fill="#ffd98e" opacity={0.7} />
+        <Ellipse cx={EQUIPPED_JETPACK_RIGHT_NOZZLE_X + 3 + rightJitter} cy={88 + violenceAlt * 15} rx={0.9} ry={2.4} fill="#ffb13a" opacity={0.55} />
       </Svg>
-      <View pointerEvents="none" style={{ position: 'absolute', left: 0, top: 0, width: 52, height: 82 }}>
-        <WonderJumpJetpackGraphic width={52} height={82} />
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: EQUIPPED_JETPACK_VISUAL_LEFT,
+          top: EQUIPPED_JETPACK_VISUAL_TOP,
+          width: EQUIPPED_JETPACK_VISUAL_W,
+          height: EQUIPPED_JETPACK_VISUAL_H,
+        }}
+      >
+        <WonderJumpJetpackGraphic width={EQUIPPED_JETPACK_VISUAL_W} height={EQUIPPED_JETPACK_VISUAL_H} />
       </View>
     </View>
   )
@@ -2901,6 +2915,13 @@ export function WonderJump({
     if (!(gameState.chests ?? []).some((c) => c.collected)) return
     if (gameOverChestPickupPostedRef.current) return
     gameOverChestPickupPostedRef.current = true
+    // Optimistic dock update so hub/main menu shows the gift immediately after death.
+    const prevDocked = wonderJumpChestDockedRef.current
+    const prevUnlocksAt = wonderJumpChestUnlocksAtRef.current
+    wonderJumpChestDockedRef.current = true
+    wonderJumpChestUnlocksAtRef.current = null
+    setServerChestDocked(true)
+    setServerChestUnlocksAt(null)
     void pickupWonderJumpChest(sessionToken)
       .then((p) => {
         wonderJumpChestDockedRef.current = p.chestDocked === true
@@ -2913,6 +2934,11 @@ export function WonderJump({
         }))
       })
       .catch(() => {
+        // Revert optimistic state when pickup could not be persisted.
+        wonderJumpChestDockedRef.current = prevDocked
+        wonderJumpChestUnlocksAtRef.current = prevUnlocksAt
+        setServerChestDocked(prevDocked)
+        setServerChestUnlocksAt(prevUnlocksAt)
         gameOverChestPickupPostedRef.current = false
       })
   }, [gameState.mode, sessionToken])
@@ -3722,7 +3748,12 @@ export function WonderJump({
         <View style={styles.wjDockEmptyComposer} pointerEvents="none">
           <View style={styles.wjDockEmptyOrbit} />
           <View style={styles.wjDockEmptyPad}>
-            <Text style={styles.wjDockEmptyGlyph}>✦</Text>
+            <Svg width={28} height={28} viewBox="0 0 28 28">
+              <Path
+                d="M14 4L16.85 11.15L24 14L16.85 16.85L14 24L11.15 16.85L4 14L11.15 11.15L14 4Z"
+                fill="rgba(203, 255, 0, 0.72)"
+              />
+            </Svg>
           </View>
         </View>
       </View>
@@ -4158,7 +4189,7 @@ export function WonderJump({
           {gameState.jetpackFuelMs > 0 ? (
             <PlayerJetpackFx
               left={snapX(gameState.player.x + EQUIPPED_JETPACK_CENTER_OFFSET_X + jetpackShake.x)}
-              top={Math.round(gameState.player.y + 2 + jetpackShake.y)}
+              top={Math.round(gameState.player.y + EQUIPPED_JETPACK_TOP_OFFSET_Y + jetpackShake.y)}
               frame={gameState.jetpackAnimTick}
             />
           ) : null}
@@ -5053,7 +5084,7 @@ function createWonderJumpStyles(theme: any) {
     width: 44,
     height: 44,
     borderRadius: 11,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(203, 255, 0, 0.08)',
     borderWidth: 1,
     borderColor: S(0.4),
     alignItems: 'center',
@@ -5061,15 +5092,9 @@ function createWonderJumpStyles(theme: any) {
     zIndex: 1,
     shadowColor: A,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.16,
     shadowRadius: 8,
     elevation: 2,
-  },
-  wjDockEmptyGlyph: {
-    fontSize: 19,
-    color: S(0.65),
-    fontFamily: WONDER_JUMP_UI_BOLD,
-    marginTop: -1,
   },
   leaderboardModalBackdrop: {
     flex: 1,

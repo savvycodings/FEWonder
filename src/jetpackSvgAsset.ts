@@ -1,6 +1,6 @@
 import { Image } from 'react-native'
 
-const JETPACK_SVG = require('../assets/jetpack.svg')
+const JETPACK_SVG = require('../assets/wonderjump-jetpack.svg')
 
 let xmlCache: string | null = null
 let inflight: Promise<string> | null = null

@@ -29,6 +29,9 @@ export interface User {
   avatarFrameId?: string | null
   shippingAddress?: string | null
   shippingAddressLine2?: string | null
+  shippingPostalCode?: string | null
+  shippingCity?: string | null
+  shippingProvince?: string | null
   phone?: string | null
   pudoLockerName?: string | null
   pudoLockerAddress?: string | null

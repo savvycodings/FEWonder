@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useFocusEffect } from '@react-navigation/native'
 import * as ImagePicker from 'expo-image-picker'
-import { AvatarFrameWrapper, useEquippedAvatarFrame } from '../components'
+import { AvatarFrameWrapper, avatarPhotoDiscDiameterPoints, useEquippedAvatarFrame } from '../components'
 import { ThemeContext } from '../context'
 import { User } from '../../types'
 import { ProfileHeroBadgeStrip } from '../profileHeroBadgeStrip'
@@ -24,6 +24,7 @@ import {
 
 const PROFILE_FILL = '#000000'
 const PROFILE_HERO_TILE_BG = '#262626'
+const PROFILE_PHOTO_OVERLAY_SIZE = avatarPhotoDiscDiameterPoints(PROFILE_HERO_PROFILE_AVATAR, 'default')
 
 export function ProfileHeroEdit({
   navigation,
@@ -235,14 +236,23 @@ export function ProfileHeroEdit({
                       </View>
                     )}
                   </AvatarFrameWrapper>
-                  <View style={styles.avatarPhotoHint} pointerEvents="none">
+                  <View
+                    style={[
+                      styles.avatarPhotoHint,
+                      {
+                        width: PROFILE_PHOTO_OVERLAY_SIZE,
+                        height: PROFILE_PHOTO_OVERLAY_SIZE,
+                        borderRadius: PROFILE_PHOTO_OVERLAY_SIZE / 2,
+                        marginTop: -PROFILE_PHOTO_OVERLAY_SIZE / 2,
+                        marginLeft: -PROFILE_PHOTO_OVERLAY_SIZE / 2,
+                      },
+                    ]}
+                    pointerEvents="none"
+                  >
                     {photoBusy ? (
                       <ActivityIndicator size="small" color="#ffffff" />
                     ) : (
-                      <View style={styles.avatarPhotoHintRow}>
-                        <FeatherIcon name="camera" size={12} color="#ffffff" />
-                        <Text style={styles.avatarPhotoHintText}>Photo</Text>
-                      </View>
+                      <FeatherIcon name="edit-2" size={18} color="#ffffff" />
                     )}
                   </View>
                 </Pressable>
@@ -378,32 +388,16 @@ function getStyles(theme: any) {
     },
     avatarShell: {
       borderRadius: 999,
-      overflow: 'hidden',
+      overflow: 'visible',
       position: 'relative',
     },
     avatarPhotoHint: {
       position: 'absolute',
-      right: 0,
-      bottom: 0,
-      left: 0,
+      top: '50%',
+      left: '50%',
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 4,
-      borderBottomLeftRadius: 999,
-      borderBottomRightRadius: 999,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-    },
-    avatarPhotoHintRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-    },
-    avatarPhotoHintText: {
-      color: '#ffffff',
-      fontFamily: 'Geist-SemiBold',
-      fontSize: 10,
-      letterSpacing: 0.3,
-      textTransform: 'uppercase',
+      backgroundColor: 'rgba(0,0,0,0.42)',
     },
     photoError: {
       color: '#f87171',

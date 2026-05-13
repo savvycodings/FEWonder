@@ -60,6 +60,16 @@ import {
 } from '../wonderJumpCharacters'
 import { WonderJumpCharacterSvg } from '../components/WonderJumpCharacterSvg'
 
+const WONDER_JUMP_CHARACTER_STORE_CONFIG: Partial<
+  Record<WonderJumpCharacterStyle, { itemId: string; cost: number; purchaseLabel: string }>
+> = {
+  ghost: {
+    itemId: WONDERJUMP_GHOST_STORE_ITEM_ID,
+    cost: WONDERJUMP_GHOST_STORE_COST,
+    purchaseLabel: 'Ghost',
+  },
+}
+
 type WonderBadgeCardMeta = {
   earned: boolean
   label: string
@@ -677,11 +687,10 @@ export function DailyRewards({ navigation, route }: any) {
     style: WonderJumpCharacterStyle,
     freshStatus?: DailyRewardStatus,
   ) {
-    if (style === 'ghost') {
-      if (!isStoreItemOwned(WONDERJUMP_GHOST_STORE_ITEM_ID, freshStatus ?? null)) {
-        setStoreMessage('Purchase the Ghost character first.')
-        return
-      }
+    const storeConfig = WONDER_JUMP_CHARACTER_STORE_CONFIG[style]
+    if (storeConfig && !isStoreItemOwned(storeConfig.itemId, freshStatus ?? null)) {
+      setStoreMessage(`Purchase the ${storeConfig.purchaseLabel} character first.`)
+      return
     }
     await saveWonderJumpCharacterStyle(style)
     setEquippedWonderJumpCharacter(style)
@@ -1015,10 +1024,10 @@ export function DailyRewards({ navigation, route }: any) {
           <View style={styles.charactersGrid}>
             {WONDER_JUMP_CHARACTER_OPTIONS.map((option) => {
               const equipped = equippedWonderJumpCharacter === option.id
-              const isGhost = option.id === 'ghost'
-              const ghostOwned = isStoreItemOwned(WONDERJUMP_GHOST_STORE_ITEM_ID)
-              const ghostBusy = purchasingItemId === WONDERJUMP_GHOST_STORE_ITEM_ID
-              const ghostCanAfford = availableCoins >= WONDERJUMP_GHOST_STORE_COST
+              const purchaseConfig = WONDER_JUMP_CHARACTER_STORE_CONFIG[option.id]
+              const owned = purchaseConfig ? isStoreItemOwned(purchaseConfig.itemId) : true
+              const busy = purchaseConfig ? purchasingItemId === purchaseConfig.itemId : false
+              const canAfford = purchaseConfig ? availableCoins >= purchaseConfig.cost : true
               return (
                 <View key={option.id} style={styles.characterCard}>
                   <View style={styles.characterPreviewPlate}>
@@ -1026,29 +1035,32 @@ export function DailyRewards({ navigation, route }: any) {
                   </View>
                   <Text style={styles.characterName}>{option.label}</Text>
                   <View
-                    style={styles.characterMetaRow}
+                    style={[
+                      styles.characterMetaRow,
+                      !purchaseConfig ? styles.characterMetaRowEnd : null,
+                    ]}
                   >
-                    {isGhost ? (
+                    {purchaseConfig ? (
                       <View style={styles.characterPriceRow}>
                         <RewardStaticCoin size={16} color={theme.brandAccent} />
-                        <Text style={styles.characterPrice}>{WONDERJUMP_GHOST_STORE_COST}</Text>
+                        <Text style={styles.characterPrice}>{purchaseConfig.cost}</Text>
                       </View>
                     ) : null}
                     <Pressable
                       style={[
                         styles.characterEquipButton,
                         equipped ? styles.characterEquipButtonEquipped : null,
-                        !equipped && isGhost && !ghostOwned && (ghostBusy || !ghostCanAfford)
+                        !equipped && Boolean(purchaseConfig) && !owned && (busy || !canAfford)
                           ? styles.characterEquipButtonDisabled
                           : null,
                       ]}
                       disabled={
-                        equipped || (isGhost && !ghostOwned && (ghostBusy || !ghostCanAfford))
+                        equipped || (Boolean(purchaseConfig) && !owned && (busy || !canAfford))
                       }
                       onPress={() => {
-                        if (isGhost && !ghostOwned) {
-                          void purchaseStoreItem(WONDERJUMP_GHOST_STORE_ITEM_ID, async (status) => {
-                            await handleEquipWonderJumpCharacter('ghost', status)
+                        if (purchaseConfig && !owned) {
+                          void purchaseStoreItem(purchaseConfig.itemId, async (status) => {
+                            await handleEquipWonderJumpCharacter(option.id, status)
                           })
                           return
                         }
@@ -1063,8 +1075,8 @@ export function DailyRewards({ navigation, route }: any) {
                       >
                         {equipped
                           ? 'Equipped'
-                          : isGhost && !ghostOwned
-                            ? ghostBusy
+                          : purchaseConfig && !owned
+                            ? busy
                               ? 'Buying...'
                               : 'Buy'
                             : 'Equip'}

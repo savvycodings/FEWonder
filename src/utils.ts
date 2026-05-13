@@ -133,6 +133,9 @@ export async function registerUser(payload: {
   phone: string
   shippingAddress?: string
   shippingAddressLine2?: string
+  shippingPostalCode?: string
+  shippingCity?: string
+  shippingProvince?: string
   pudoLockerName?: string
   pudoLockerAddress?: string
   eftBankAccountName?: string
@@ -337,6 +340,9 @@ export async function updateProfileDetails(payload: {
   email?: string
   shippingAddress?: string
   shippingAddressLine2?: string
+  shippingPostalCode?: string
+  shippingCity?: string
+  shippingProvince?: string
   phone?: string
   pudoLockerName?: string
   pudoLockerAddress?: string
@@ -352,6 +358,9 @@ export async function updateProfileDetails(payload: {
   if (payload.email !== undefined) body.email = payload.email
   if (payload.shippingAddress !== undefined) body.shippingAddress = payload.shippingAddress
   if (payload.shippingAddressLine2 !== undefined) body.shippingAddressLine2 = payload.shippingAddressLine2
+  if (payload.shippingPostalCode !== undefined) body.shippingPostalCode = payload.shippingPostalCode
+  if (payload.shippingCity !== undefined) body.shippingCity = payload.shippingCity
+  if (payload.shippingProvince !== undefined) body.shippingProvince = payload.shippingProvince
   if (payload.phone !== undefined) body.phone = payload.phone
   if (payload.pudoLockerName !== undefined) body.pudoLockerName = payload.pudoLockerName
   if (payload.pudoLockerAddress !== undefined) body.pudoLockerAddress = payload.pudoLockerAddress

@@ -1,5 +1,5 @@
 import { useContext, useMemo, type ReactNode } from 'react'
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useRoute } from '@react-navigation/native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -18,6 +18,7 @@ export function Cart({ navigation }: any) {
   const { theme } = useContext(ThemeContext)
   const styles = useMemo(() => getStyles(theme), [theme])
   const route = useRoute()
+  const { width: windowWidth } = useWindowDimensions()
   /** `Tabs` shell already applies top/horizontal safe insets; root `Stack` `Cart` does not. */
   const isProfileCart = route.name === 'ProfileCart'
   const insets = useSafeAreaInsets()
@@ -46,6 +47,7 @@ export function Cart({ navigation }: any) {
     formatMoney({ amount: amount.toFixed(2), currencyCode: CART_CURRENCY }, CART_CURRENCY)
 
   const scrollBottomPad = 120 + insets.bottom
+  const emptyTitleFontSize = Math.max(18, Math.min(22, windowWidth * 0.055))
 
   function goBackToPrevious() {
     if (navigation.canGoBack()) {
@@ -90,7 +92,15 @@ export function Cart({ navigation }: any) {
           <View style={styles.emptyIconWrap}>
             <FeatherIcon name="shopping-bag" size={28} color={theme.brandAccent} />
           </View>
-          <Text style={styles.emptyTitle}>Your cart is empty</Text>
+          <Text
+            style={[styles.emptyTitle, { fontSize: emptyTitleFontSize, lineHeight: emptyTitleFontSize + 6 }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.6}
+            maxFontSizeMultiplier={1}
+          >
+            Your cart is empty
+          </Text>
           <Text style={styles.emptySub}>Add products from Home, Search, or Product page.</Text>
         </View>
       </>,
@@ -400,10 +410,9 @@ const getStyles = (theme: any) => {
       marginBottom: 12,
     },
     emptyTitle: {
+      width: '100%',
       color: theme.headingColor || theme.textColor || '#ffffff',
       fontFamily: HEADING_FONT,
-      fontSize: 22,
-      lineHeight: 28,
       marginBottom: 6,
       textAlign: 'center',
       letterSpacing: -0.2,
