@@ -11,7 +11,7 @@ import {
 import { ThemeContext } from '../context'
 import { fetchAdminOrders } from '../ordersApi'
 
-type Filter = 'peach' | 'eft'
+type Filter = 'yoco' | 'eft'
 
 function centsLabel(cents: number, code: string) {
   return `${(cents / 100).toFixed(2)} ${code}`
@@ -20,7 +20,7 @@ function centsLabel(cents: number, code: string) {
 export function AdminOrdersHub({ navigation }: any) {
   const { theme } = useContext(ThemeContext)
   const styles = getStyles(theme)
-  const [filter, setFilter] = useState<Filter>('peach')
+  const [filter, setFilter] = useState<Filter>('yoco')
   const [orders, setOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -55,11 +55,11 @@ export function AdminOrdersHub({ navigation }: any) {
       </View>
       <View style={styles.segmentRow}>
         <TouchableOpacity
-          style={[styles.segment, filter === 'peach' && styles.segmentActive]}
-          onPress={() => setFilter('peach')}
+          style={[styles.segment, filter === 'yoco' && styles.segmentActive]}
+          onPress={() => setFilter('yoco')}
         >
-          <Text style={[styles.segmentText, filter === 'peach' && styles.segmentTextActive]}>
-            Peach payments
+          <Text style={[styles.segmentText, filter === 'yoco' && styles.segmentTextActive]}>
+            Yoco (card)
           </Text>
         </TouchableOpacity>
         <TouchableOpacity

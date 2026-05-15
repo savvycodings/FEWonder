@@ -78,5 +78,5 @@ export const IMAGE_MODELS = {
   nanoBananaPro: { name: 'Nano Banana Pro (Gemini 3 Pro)', label: 'nanoBananaPro' },
 }
 
-/** Peach card checkout — show in payment alert once gateway + server env are ready. */
-export const SHOW_PEACH_CHECKOUT = false
+/** Yoco card checkout — show in payment alert once YOCO_SECRET_KEY is set on the server. */
+export const SHOW_YOCO_CHECKOUT = true

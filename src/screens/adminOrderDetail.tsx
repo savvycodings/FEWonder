@@ -382,29 +382,35 @@ export function AdminOrderDetail({ route }: any) {
               ) : null}
             </>
           ) : null}
-          {o.peachCheckoutId ? (
+          {o.yocoCheckoutId ? (
             <>
-              <Text style={styles.label}>Peach</Text>
+              <Text style={styles.label}>Yoco</Text>
               <View style={styles.copyRow}>
-                <Text style={styles.bodyFlex}>checkout: {o.peachCheckoutId}</Text>
+                <Text style={styles.bodyFlex}>checkout: {o.yocoCheckoutId}</Text>
                 <TouchableOpacity
                   style={styles.copyBtn}
-                  onPress={() => adminCopy('Peach checkout id', o.peachCheckoutId)}
+                  onPress={() => adminCopy('Yoco checkout id', o.yocoCheckoutId)}
                 >
                   <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                 </TouchableOpacity>
               </View>
-              {o.peachResourcePath ? (
+              {o.yocoPaymentId ? (
                 <View style={styles.copyRow}>
-                  <Text style={styles.monoFlex}>{o.peachResourcePath}</Text>
+                  <Text style={styles.monoFlex}>payment: {o.yocoPaymentId}</Text>
                   <TouchableOpacity
                     style={styles.copyBtn}
-                    onPress={() => adminCopy('Peach path', o.peachResourcePath)}
+                    onPress={() => adminCopy('Yoco payment id', o.yocoPaymentId)}
                   >
                     <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
                   </TouchableOpacity>
                 </View>
               ) : null}
+            </>
+          ) : null}
+          {o.peachCheckoutId ? (
+            <>
+              <Text style={styles.label}>Peach (legacy)</Text>
+              <Text style={styles.bodyFlex}>checkout: {o.peachCheckoutId}</Text>
             </>
           ) : null}
           {o.paymentMethod === 'eft' && o.status === 'awaiting_proof' && !o.eftProofImageUrl ? (

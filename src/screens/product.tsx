@@ -25,13 +25,15 @@ import {
   createOrder,
   fetchEftInstructions,
   getUserSessionToken,
-  initPeachCheckout,
+  initYocoCheckout,
+  syncYocoCheckout,
   uploadEftProof,
 } from '../ordersApi'
 import { fetchSessionUser } from '../utils'
 import { getDbProductByHandle } from '../utils'
 import type { ShopifyMoney, ShopifyProduct } from '../../types'
-import { SHOW_PEACH_CHECKOUT } from '../../constants'
+import { SHOW_YOCO_CHECKOUT } from '../../constants'
+import { startYocoPayment, YOCO_WEBVIEW_PROPS } from '../yocoCheckout'
 import { brandAccentRgba } from '../brandAccent'
 
 const CHECKOUT_FILL = '#000000'
@@ -164,8 +166,9 @@ export function Product({ route, navigation }: any) {
   const [eftOrderId, setEftOrderId] = useState<string | null>(null)
   const [eftReference, setEftReference] = useState<string | null>(null)
   const [eftTotalLabel, setEftTotalLabel] = useState<string>('')
-  const [peachModalOpen, setPeachModalOpen] = useState(false)
-  const [peachWidgetUrl, setPeachWidgetUrl] = useState<string | null>(null)
+  const [yocoModalOpen, setYocoModalOpen] = useState(false)
+  const [yocoRedirectUrl, setYocoRedirectUrl] = useState<string | null>(null)
+  const [yocoOrderId, setYocoOrderId] = useState<string | null>(null)
   const [eftUploadBusy, setEftUploadBusy] = useState(false)
 
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false)
@@ -226,7 +229,7 @@ export function Product({ route, navigation }: any) {
     return null
   }
 
-  async function runCheckout(method: 'eft' | 'peach') {
+  async function runCheckout(method: 'eft' | 'yoco') {
     if (!product?.id) {
       Alert.alert('Product', 'This listing cannot be ordered (missing id).')
       return
@@ -260,9 +263,18 @@ export function Product({ route, navigation }: any) {
         setEftTotalLabel(`${(created.totalCents / 100).toFixed(2)} ${created.currencyCode}`)
         setEftModalOpen(true)
       } else {
-        const peach = await initPeachCheckout(created.orderId)
-        setPeachWidgetUrl(peach.widgetUrl)
-        setPeachModalOpen(true)
+        const yoco = await initYocoCheckout(created.orderId)
+        setYocoOrderId(created.orderId)
+        startYocoPayment(created.orderId, yoco.redirectUrl, {
+          onPaid: () => {
+            setYocoModalOpen(false)
+            setYocoRedirectUrl(null)
+          },
+          onPayInApp: () => {
+            setYocoRedirectUrl(yoco.redirectUrl)
+            setYocoModalOpen(true)
+          },
+        })
       }
     } catch (e: any) {
       Alert.alert('Checkout', e?.message || 'Could not start checkout')
@@ -283,13 +295,13 @@ export function Product({ route, navigation }: any) {
       deliveryMethod === 'pudo'
         ? 'Pudo locker delivery includes R70.00 shipping in your total.'
         : 'Courier: R150 per single box, R200 per whole set (included in your total).'
-    const payMessage = SHOW_PEACH_CHECKOUT
+    const payMessage = SHOW_YOCO_CHECKOUT
       ? `${shipNote}\nHow would you like to pay?`
       : `${shipNote}\nPay with bank transfer (EFT).`
     const payButtons = [
       { text: 'EFT (bank transfer)', onPress: () => runCheckout('eft') },
-      ...(SHOW_PEACH_CHECKOUT
-        ? [{ text: 'Peach (card)', onPress: () => runCheckout('peach') }]
+      ...(SHOW_YOCO_CHECKOUT
+        ? [{ text: 'Card (Yoco)', onPress: () => runCheckout('yoco') }]
         : []),
       { text: 'Cancel', style: 'cancel' as const },
     ]
@@ -341,13 +353,22 @@ export function Product({ route, navigation }: any) {
     }
   }
 
-  const peachHtml =
-    peachWidgetUrl != null
-      ? `<!DOCTYPE html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><script src="${peachWidgetUrl.replace(
-          /"/g,
-          '',
-        )}"></script></head><body style="margin:0;padding:12px;background:#fff"><form class="paymentWidgets" data-brands="VISA MASTER AMEX"></form></body></html>`
-      : ''
+  function onYocoWebViewNavigation(navState: { url?: string }) {
+    const url = navState.url || ''
+    if (url.includes('/payment/yoco/success')) {
+      setYocoModalOpen(false)
+      setYocoRedirectUrl(null)
+      if (yocoOrderId) {
+        void syncYocoCheckout(yocoOrderId).catch(() => {
+          Alert.alert('Payment submitted', 'Check Profile → Orders in a moment for status.')
+        })
+      }
+    } else if (url.includes('/payment/yoco/failed') || url.includes('/payment/yoco/cancelled')) {
+      Alert.alert('Payment not completed', 'You can try card payment again from your order.')
+      setYocoModalOpen(false)
+      setYocoRedirectUrl(null)
+    }
+  }
 
   return (
     <View style={styles.page}>
@@ -738,19 +759,21 @@ export function Product({ route, navigation }: any) {
         </View>
       </Modal>
 
-      <Modal visible={peachModalOpen} animationType="slide">
-        <View style={styles.peachPage}>
-          <View style={styles.peachHeaderBar}>
-            <Text style={styles.checkoutTitle}>Card payment (Peach)</Text>
-            <TouchableOpacity onPress={() => setPeachModalOpen(false)} hitSlop={12}>
+      <Modal visible={yocoModalOpen} animationType="slide">
+        <View style={styles.yocoPage}>
+          <View style={styles.yocoHeaderBar}>
+            <Text style={styles.checkoutTitle}>Card payment (Yoco)</Text>
+            <TouchableOpacity onPress={() => setYocoModalOpen(false)} hitSlop={12}>
               <Text style={styles.checkoutGhostBtnText}>Close</Text>
             </TouchableOpacity>
           </View>
-          {peachWidgetUrl ? (
+          {yocoRedirectUrl ? (
             <WebView
               originWhitelist={['*']}
-              source={{ html: peachHtml, baseUrl: 'https://oppwa.com' }}
-              style={styles.peachWeb}
+              source={{ uri: yocoRedirectUrl }}
+              onNavigationStateChange={onYocoWebViewNavigation}
+              style={styles.yocoWeb}
+              {...YOCO_WEBVIEW_PROPS}
             />
           ) : null}
         </View>
@@ -1248,8 +1271,8 @@ const getStyles = (theme: any) => {
     fontSize: 15,
     color: L(0.85),
   },
-  peachPage: { flex: 1, backgroundColor: CHECKOUT_FILL },
-  peachHeaderBar: {
+  yocoPage: { flex: 1, backgroundColor: CHECKOUT_FILL },
+  yocoHeaderBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1260,6 +1283,6 @@ const getStyles = (theme: any) => {
     borderBottomColor: theme.brandAccent,
     backgroundColor: CHECKOUT_FILL,
   },
-  peachWeb: { flex: 1, backgroundColor: '#0a0a0a' },
+  yocoWeb: { flex: 1, backgroundColor: '#0a0a0a' },
   })
 }

@@ -1,6 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as SecureStore from 'expo-secure-store'
 import { DOMAIN } from '../constants'
+
+function yocoReturnBaseUrl(): string {
+  return DOMAIN || ''
+}
 import type { AuthPayload } from '../types'
 
 const ADMIN_JWT_KEY = 'wonderport-admin-orders-jwt'
@@ -94,7 +98,7 @@ export async function fetchEftInstructions() {
 }
 
 export type CreateOrderPayload = {
-  paymentMethod: 'peach' | 'eft'
+  paymentMethod: 'yoco' | 'eft'
   items: { productId: string; quantity: number; packaging?: 'single' | 'set' }[]
   deliveryMethod: 'pudo' | 'standard'
   contactPhone: string
@@ -122,13 +126,30 @@ export async function createOrder(body: CreateOrderPayload) {
   }>
 }
 
-export async function initPeachCheckout(orderId: string) {
-  return userFetch(`/orders/${orderId}/peach/init`, { method: 'POST' }) as Promise<{
+export async function initYocoCheckout(orderId: string) {
+  return userFetch(`/orders/${orderId}/yoco/init`, {
+    method: 'POST',
+    body: JSON.stringify({ returnBaseUrl: yocoReturnBaseUrl() }),
+  }) as Promise<{
     checkoutId: string
-    widgetUrl: string
+    redirectUrl: string
     amount: string
     currency: string
-    merchantTransactionId: string
+    referenceCode: string
+    processingMode?: string
+    testMode?: boolean
+    testPaymentHint?: string
+  }>
+}
+
+export async function syncYocoCheckout(orderId: string) {
+  return userFetch(`/orders/${orderId}/yoco/sync`, { method: 'POST' }) as Promise<{
+    ok: boolean
+    status: string
+    alreadyPaid?: boolean
+    pending?: boolean
+    yocoStatus?: string
+    becamePaid?: boolean
   }>
 }
 
@@ -167,7 +188,7 @@ export async function fetchMyOrder(orderId: string) {
       shippingCents: number
       totalCents: number
       shippingSnapshot: { name: string | null; line1: string | null; line2: string | null }
-      peachCheckoutId: string | null
+      yocoCheckoutId: string | null
       eftProofImageUrl: string | null
       eftCustomerNote: string | null
       createdAt: string
@@ -221,7 +242,7 @@ export type AdminCommunityReport = {
   reportedEmail: string | null
 }
 
-export async function fetchAdminOrders(paymentMethod: 'peach' | 'eft' | 'all', limit = 50, offset = 0) {
+export async function fetchAdminOrders(paymentMethod: 'yoco' | 'eft' | 'all', limit = 50, offset = 0) {
   const q =
     paymentMethod === 'all'
       ? `?limit=${limit}&offset=${offset}`

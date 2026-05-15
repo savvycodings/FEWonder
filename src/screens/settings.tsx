@@ -110,7 +110,7 @@ export function Settings({ user, sessionToken, onUserUpdated, onLogout }: Settin
         style={styles.chatChoiceButton}
         onPress={() => navigation.navigate('AdminOrdersLogin')}
       >
-        <Text style={styles.chatTypeText}>View orders (Peach / EFT)</Text>
+        <Text style={styles.chatTypeText}>View orders (Yoco / EFT)</Text>
       </Pressable>
       {SHOW_CHAT_MODEL_SECTION ? (
         <View />

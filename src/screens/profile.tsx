@@ -301,7 +301,7 @@ export function Profile({
       </View>
       <View style={styles.groupCard}>
         {ordersPreview.length === 0 ? (
-          <Text style={styles.orderEmpty}>No orders yet. Buy something with EFT or Peach to see it here.</Text>
+          <Text style={styles.orderEmpty}>No orders yet. Buy something with EFT or card (Yoco) to see it here.</Text>
         ) : (
           ordersPreview.map((order, index) => (
             <Pressable
