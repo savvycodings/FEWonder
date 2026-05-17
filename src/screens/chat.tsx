@@ -583,7 +583,9 @@ export function Chat({
             const showOwnActions = isMe && activeOwnMessageId === item.id
             const avatarUri = getAvatarUri(item, isMe)
             const initial = (item.user.fullName || 'U').slice(0, 1).toUpperCase()
-            const bubbleFrameId = isMe ? avatarFrameId : coerceAvatarFrameId(item.user.avatarFrameId)
+            const bubbleFrameId = isMe
+              ? coerceAvatarFrameId(user.avatarFrameId ?? avatarFrameId)
+              : coerceAvatarFrameId(item.user.avatarFrameId)
             return (
               <View style={[styles.messageShell, isMe ? styles.meShell : styles.otherShell]}>
                 {!isMe ? (

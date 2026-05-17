@@ -1,5 +1,6 @@
 export { Home } from './home'
 export { Login } from './login'
+export { ForgotPassword } from './forgotPassword'
 export { Product } from './product'
 export { CategoryProducts } from './categoryProducts'
 export { Search } from './search'

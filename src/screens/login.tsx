@@ -1,4 +1,5 @@
 import { useContext, useState } from 'react'
+import { useNavigation } from '@react-navigation/native'
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
@@ -26,6 +27,7 @@ function digitsOnlyLen(s: string) {
 export function Login({ onAuthSuccess }: Props) {
   const { theme } = useContext(ThemeContext)
   const styles = getStyles(theme)
+  const navigation = useNavigation<any>()
   const insets = useSafeAreaInsets()
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [fullName, setFullName] = useState('')
@@ -193,6 +195,16 @@ export function Login({ onAuthSuccess }: Props) {
             style={styles.input}
             secureTextEntry
           />
+
+          {mode === 'signin' ? (
+            <TouchableOpacity
+              style={styles.forgotPasswordLink}
+              onPress={() => navigation.navigate('ForgotPassword')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+            </TouchableOpacity>
+          ) : null}
 
           {mode === 'signup' ? (
             <>
@@ -392,6 +404,17 @@ const getStyles = (theme: any) => {
       color: theme.textColor,
       fontFamily: theme.mediumFont,
       fontSize: 15,
+    },
+    forgotPasswordLink: {
+      alignSelf: 'flex-end',
+      marginTop: -4,
+      marginBottom: 8,
+      paddingVertical: 4,
+    },
+    forgotPasswordText: {
+      color: theme.brandAccent,
+      fontFamily: theme.semiBoldFont,
+      fontSize: 13,
     },
     inputMultiline: {
       minHeight: 88,

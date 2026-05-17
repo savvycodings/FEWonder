@@ -73,8 +73,10 @@ export interface DailyRewardStatus {
   /** Wonder Store items already purchased (server-backed). */
   ownedStoreItemIds: string[]
   claimedCount: number
-  /** Consecutive local-calendar-day streak (matches phone timezone; claims + Daily Rewards after day 7). */
+  /** Consecutive local-calendar-day streak (keeps counting past day 7 for badges). */
   currentStreakDays: number
+  /** First day label in the active 7-day reward window (1, 8, 15, …). */
+  rewardWindowStartDay?: number
   /** Lifetime count of orders with status `paid` (for box badges). */
   paidOrderCount: number
   /** Current WonderJump leaderboard rank (1 = first place); null when unranked. */

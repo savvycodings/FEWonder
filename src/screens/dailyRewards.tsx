@@ -52,6 +52,8 @@ import {
   migrateWonderBadgeSlotId,
   type WonderBadgeId,
 } from '../wonderBadgesCatalog'
+import { listEarnedWonderBadgeIds } from '../wonderBadgeEarned'
+import { markWonderBadgesSeen } from '../wonderBadgeNotifications'
 import {
   WONDER_JUMP_CHARACTER_OPTIONS,
   loadWonderJumpCharacterStyle,
@@ -82,7 +84,9 @@ type WonderBadgeCardMeta = {
 function wonderBadgeCardMeta(
   id: WonderBadgeId,
   claimedCount: number,
-  loginStreak: number,
+  loginStreakDays: number,
+  /** Progress bars: matches banner streak during the 7-day reward track, then calendar login streak. */
+  streakProgress: number,
   paidOrders: number,
   wonderJumpRank: number | null,
 ): WonderBadgeCardMeta {
@@ -90,9 +94,9 @@ function wonderBadgeCardMeta(
   switch (id) {
     case 'badge:day7': {
       const target = 7
-      const p = Math.min(Math.max(0, claimedCount), target)
+      const p = Math.min(Math.max(0, streakProgress), target)
       return {
-        earned: claimedCount >= 7,
+        earned: loginStreakDays >= 7 || claimedCount >= 7,
         label: entry.label,
         caption: entry.acquire,
         progressLabel: `${p} / ${target}`,
@@ -101,10 +105,10 @@ function wonderBadgeCardMeta(
     }
     case 'badge:day30': {
       const target = 30
-      const s = Math.max(0, loginStreak)
+      const s = Math.max(0, streakProgress)
       const p = Math.min(s, target)
       return {
-        earned: s >= target,
+        earned: loginStreakDays >= target,
         label: entry.label,
         caption: entry.acquire,
         progressLabel: `${p} / ${target}`,
@@ -113,10 +117,10 @@ function wonderBadgeCardMeta(
     }
     case 'badge:day90': {
       const target = 90
-      const s = Math.max(0, loginStreak)
+      const s = Math.max(0, streakProgress)
       const p = Math.min(s, target)
       return {
-        earned: s >= target,
+        earned: loginStreakDays >= target,
         label: entry.label,
         caption: entry.acquire,
         progressLabel: `${p} / ${target}`,
@@ -284,12 +288,17 @@ export function DailyRewards({ navigation, route }: any) {
   )
   const rewards = rewardStatus?.rewards?.length ? rewardStatus.rewards : fallbackRewards
   const claimedCount = rewardStatus?.claimedCount || 0
-  const currentStreak =
+  const loginStreakDays =
     rewardStatus != null &&
     typeof rewardStatus.currentStreakDays === 'number' &&
     Number.isFinite(rewardStatus.currentStreakDays)
       ? Math.max(0, Math.floor(rewardStatus.currentStreakDays))
-      : claimedCount
+      : 0
+  /** Banner: match reward progress (circles) during the 7-day track; login streak after that. */
+  const currentStreak =
+    claimedCount > 0 && claimedCount < 7
+      ? Math.max(loginStreakDays, claimedCount)
+      : loginStreakDays
   const paidOrderCount = rewardStatus?.paidOrderCount ?? 0
   const wonderJumpRank =
     typeof rewardStatus?.wonderJumpRank === 'number' && Number.isFinite(rewardStatus.wonderJumpRank)
@@ -523,6 +532,11 @@ export function DailyRewards({ navigation, route }: any) {
     }
   }, [sessionToken])
 
+  useEffect(() => {
+    if (!rewardStatus) return
+    void markWonderBadgesSeen(listEarnedWonderBadgeIds(rewardStatus))
+  }, [rewardStatus])
+
   async function handleClaim() {
     if (!sessionToken || claimingReward || !rewardStatus?.canClaim) return
     try {
@@ -749,7 +763,7 @@ export function DailyRewards({ navigation, route }: any) {
             <Text style={styles.bannerTitle}>Keep your streak alive</Text>
           </View>
           <Text style={styles.bannerSubtitle}>
-            After day 7, open this screen once a day to grow your streak.
+            Open this screen once a day to grow your streak. After day 7, rewards repeat every week (day 8, 9, and so on).
           </Text>
 
           <View style={styles.daysRow}>
@@ -779,7 +793,10 @@ export function DailyRewards({ navigation, route }: any) {
               ) : (
                 <FeatherIcon name="zap" size={28} color={theme.brandAccent} />
               )}
-              <Text style={styles.streakText}>{currentStreak} days</Text>
+              <Text style={styles.streakText}>
+                {currentStreak > 0 ? `Day ${currentStreak}` : '0 days'}
+                {currentStreak > 0 ? ' streak' : ''}
+              </Text>
             </View>
           </View>
       </View>
@@ -832,7 +849,7 @@ export function DailyRewards({ navigation, route }: any) {
           {rewards.map((reward, index) => {
             const isClaimed = reward.status === 'claimed'
             const isUnlocked = reward.status === 'unlocked'
-            const isDay7 = reward.day === 7
+            const isDay7 = reward.day > 0 && reward.day % 7 === 0
             const day7BadgeSize = Math.min(112, Math.floor(rewardCardWidth * 0.72))
             return (
               <View key={`${reward.day}-${index}`} style={[styles.rewardCard, { width: rewardCardWidth }]}>
@@ -892,7 +909,14 @@ export function DailyRewards({ navigation, route }: any) {
           {visibleBadgeIds.map((id) => {
             const slotMatches = (s: string | null) => (migrateWonderBadgeSlotId(s) ?? s) === id
             const equipped = heroBadgeSlots.some((s) => slotMatches(s))
-            const meta = wonderBadgeCardMeta(id, claimedCount, currentStreak, paidOrderCount, wonderJumpRank)
+            const meta = wonderBadgeCardMeta(
+              id,
+              claimedCount,
+              loginStreakDays,
+              currentStreak,
+              paidOrderCount,
+              wonderJumpRank,
+            )
             return (
               <View
                 key={id}

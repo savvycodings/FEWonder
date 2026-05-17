@@ -33,12 +33,14 @@ export function CommunityUserProfile() {
 
   const userId = String(params?.userId || '')
   const fullName = String(params?.fullName || 'Member')
-  const profilePicture = params?.profilePicture?.trim() || null
-  const avatarFrameId = coerceAvatarFrameId(params?.avatarFrameId)
+  const profilePictureParam = params?.profilePicture?.trim() || null
   const sessionToken = String(params?.sessionToken || '')
 
   const [apiDetail, setApiDetail] = useState<Awaited<ReturnType<typeof fetchCommunityUserPublicProfile>>>(null)
   const [apiChecked, setApiChecked] = useState(false)
+
+  const profilePicture = apiDetail?.profilePicture?.trim() || profilePictureParam
+  const avatarFrameId = coerceAvatarFrameId(apiDetail?.avatarFrameId ?? params?.avatarFrameId)
 
   useLayoutEffect(() => {
     navigation.setOptions({

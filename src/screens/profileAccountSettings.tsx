@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,9 +11,10 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import FeatherIcon from '@expo/vector-icons/Feather'
 import { ThemeContext } from '../context'
 import { User } from '../../types'
-import { updateProfileDetails } from '../utils'
+import { changePassword, updateProfileDetails } from '../utils'
 import { brandAccentRgba } from '../brandAccent'
 
 type Props = {
@@ -29,6 +31,28 @@ export function ProfileAccountSettings({ user, sessionToken, onUserUpdated }: Pr
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const [showPasswordForm, setShowPasswordForm] = useState(false)
+  const [passwordBusy, setPasswordBusy] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState('')
+
+  function closePasswordForm() {
+    setShowPasswordForm(false)
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmNewPassword('')
+    setPasswordError('')
+    setPasswordSuccess('')
+  }
+
+  function openPasswordForm() {
+    setPasswordError('')
+    setPasswordSuccess('')
+    setShowPasswordForm(true)
+  }
 
   useEffect(() => {
     setFullName(user.fullName || '')
@@ -41,6 +65,43 @@ export function ProfileAccountSettings({ user, sessionToken, onUserUpdated }: Pr
       email.trim().toLowerCase() !== (user.email || '').toLowerCase(),
     [fullName, email, user]
   )
+
+  const canChangePassword = useMemo(
+    () =>
+      currentPassword.length > 0 && newPassword.length >= 8 && confirmNewPassword.length > 0,
+    [currentPassword, newPassword, confirmNewPassword],
+  )
+
+  async function onChangePassword() {
+    if (!canChangePassword || passwordBusy) return
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError('New passwords do not match.')
+      setPasswordSuccess('')
+      return
+    }
+    setPasswordError('')
+    setPasswordSuccess('')
+    setPasswordBusy(true)
+    try {
+      await changePassword({
+        sessionToken,
+        currentPassword,
+        newPassword,
+        confirmNewPassword,
+      })
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmNewPassword('')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmNewPassword('')
+      setPasswordSuccess('Password updated.')
+    } catch (e: any) {
+      setPasswordError(e?.message || 'Could not change password.')
+    } finally {
+      setPasswordBusy(false)
+    }
+  }
 
   async function onSave() {
     if (!canSave || saving) return
@@ -98,6 +159,75 @@ export function ProfileAccountSettings({ user, sessionToken, onUserUpdated }: Pr
             {saving ? <ActivityIndicator color={theme.tintTextColor} /> : <Text style={styles.saveText}>Save</Text>}
           </TouchableOpacity>
         </View>
+
+        {!showPasswordForm ? (
+          <Pressable
+            style={styles.actionRow}
+            onPress={openPasswordForm}
+            accessibilityRole="button"
+            accessibilityLabel="Change password"
+          >
+            <FeatherIcon name="lock" size={18} color={theme.brandAccent} />
+            <Text style={styles.actionRowText}>Change password</Text>
+            <FeatherIcon name="chevron-right" size={18} color="rgba(255,255,255,0.45)" />
+          </Pressable>
+        ) : (
+          <View style={styles.card}>
+            <View style={styles.passwordCardHeader}>
+              <Text style={styles.passwordCardTitle}>Change password</Text>
+              <Pressable onPress={closePasswordForm} hitSlop={10} accessibilityRole="button">
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.sectionHint}>
+              Forgot your password? Sign out and use Forgot password on the sign-in screen.
+            </Text>
+            <Text style={styles.label}>Current password</Text>
+            <TextInput
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              placeholder="Current password"
+              placeholderTextColor={theme.mutedForegroundColor}
+              style={styles.input}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+            <Text style={styles.label}>New password</Text>
+            <TextInput
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="At least 8 characters"
+              placeholderTextColor={theme.mutedForegroundColor}
+              style={styles.input}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+            <Text style={styles.label}>Confirm new password</Text>
+            <TextInput
+              value={confirmNewPassword}
+              onChangeText={setConfirmNewPassword}
+              placeholder="Repeat new password"
+              placeholderTextColor={theme.mutedForegroundColor}
+              style={styles.input}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+            {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+            {passwordSuccess ? <Text style={styles.successText}>{passwordSuccess}</Text> : null}
+            <TouchableOpacity
+              style={[styles.saveButton, (!canChangePassword || passwordBusy) && styles.saveButtonDisabled]}
+              onPress={onChangePassword}
+              disabled={!canChangePassword || passwordBusy}
+              activeOpacity={0.9}
+            >
+              {passwordBusy ? (
+                <ActivityIndicator color={theme.tintTextColor} />
+              ) : (
+                <Text style={styles.saveText}>Update password</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   )
@@ -134,12 +264,54 @@ const getStyles = (theme: any) => {
       backgroundColor: theme.brandAccent,
       marginBottom: 14,
     },
+    actionRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 14,
+      paddingVertical: 14,
+      paddingHorizontal: 14,
+      borderRadius: 14,
+      backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+      borderWidth: 1,
+      borderColor: L(0.22),
+    },
+    actionRowText: {
+      flex: 1,
+      color: theme.textColor,
+      fontFamily: theme.semiBoldFont,
+      fontSize: 14,
+    },
+    passwordCardHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 8,
+    },
+    passwordCardTitle: {
+      color: theme.headingColor || theme.textColor,
+      fontFamily: 'Montserrat_700Bold',
+      fontSize: 16,
+    },
+    cancelText: {
+      color: theme.brandAccent,
+      fontFamily: theme.semiBoldFont,
+      fontSize: 13,
+    },
+    sectionHint: {
+      color: theme.mutedForegroundColor,
+      fontFamily: theme.regularFont,
+      fontSize: 12,
+      lineHeight: 17,
+      marginBottom: 10,
+    },
     card: {
       borderRadius: 14,
       backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
       borderWidth: 1,
       borderColor: L(0.3),
       padding: 12,
+      marginTop: 14,
     },
     label: {
       color: theme.mutedForegroundColor,

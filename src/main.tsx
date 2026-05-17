@@ -20,6 +20,7 @@ import {
   ProfileHeroEdit,
   RedeemCode,
   Login,
+  ForgotPassword,
   DailyRewards,
   AdminOrdersLogin,
   AdminOrdersHub,
@@ -618,9 +619,12 @@ export function Main() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!user ? (
-        <Stack.Screen name="Login">
-          {() => <Login onAuthSuccess={onRegisterSuccess} />}
-        </Stack.Screen>
+        <>
+          <Stack.Screen name="Login">
+            {() => <Login onAuthSuccess={onRegisterSuccess} />}
+          </Stack.Screen>
+          <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
+        </>
       ) : (
         <Stack.Screen name="Tabs">
           {() => (

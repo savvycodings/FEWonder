@@ -177,10 +177,6 @@ export function ProfileHeroEdit({
 
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-      <Text style={styles.lead}>
-        Tap the banner or your profile photo to change them. Use the link below for your account name and email.
-      </Text>
-
       <View style={styles.heroCard}>
         <Pressable onPress={pickBanner} disabled={busy} style={styles.bannerPress}>
           <View style={[styles.banner, { height: PROFILE_HERO_BANNER_H }]}>
@@ -291,7 +287,7 @@ export function ProfileHeroEdit({
 
       <Pressable style={styles.storeRow} onPress={goWonderStore}>
         <FeatherIcon name="shopping-bag" size={18} color={theme.brandAccent} />
-        <Text style={styles.storeRowText}>Wonder Store (themes, frames & badges soon)</Text>
+        <Text style={styles.storeRowText}>Wonder Store</Text>
         <FeatherIcon name="chevron-right" size={18} color="rgba(255,255,255,0.45)" />
       </Pressable>
     </ScrollView>
@@ -313,13 +309,6 @@ function getStyles(theme: any) {
     centered: {
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    lead: {
-      color: theme.mutedForegroundColor || 'rgba(255,255,255,0.65)',
-      fontFamily: theme.regularFont,
-      fontSize: 13,
-      lineHeight: 18,
-      marginBottom: 14,
     },
     heroCard: {
       borderRadius: 14,

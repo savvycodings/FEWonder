@@ -6,6 +6,8 @@ export type CommunityUserPublicDetail = {
   tagline?: string | null
   bannerUrl?: string | null
   badgeSlots?: [string | null, string | null, string | null]
+  avatarFrameId?: string | null
+  profilePicture?: string | null
 }
 
 /**

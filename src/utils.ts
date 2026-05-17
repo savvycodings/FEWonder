@@ -42,8 +42,7 @@ export function normalizeDailyRewardStatus(status: DailyRewardStatus): void {
     status.paidOrderCount = 0
   }
   if (typeof status.currentStreakDays !== 'number' || !Number.isFinite(status.currentStreakDays)) {
-    const claimed = typeof status.claimedCount === 'number' && Number.isFinite(status.claimedCount) ? status.claimedCount : 0
-    status.currentStreakDays = Math.max(0, Math.floor(claimed))
+    status.currentStreakDays = 0
   }
   if (typeof status.wonderJumpRank !== 'number' || !Number.isFinite(status.wonderJumpRank) || status.wonderJumpRank <= 0) {
     status.wonderJumpRank = null
@@ -383,6 +382,77 @@ export async function updateProfileDetails(payload: {
     throw new Error(data?.error || 'Unable to update profile details')
   }
   return data.user as User
+}
+
+export async function changePassword(payload: {
+  sessionToken: string
+  currentPassword: string
+  newPassword: string
+  confirmNewPassword: string
+}): Promise<void> {
+  const response = await fetch(`${DOMAIN}/auth/change-password`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${payload.sessionToken}`,
+    },
+    body: JSON.stringify({
+      currentPassword: payload.currentPassword,
+      newPassword: payload.newPassword,
+      confirmNewPassword: payload.confirmNewPassword,
+    }),
+  })
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to change password')
+  }
+}
+
+export async function requestForgotPasswordOtp(email: string): Promise<{ devHint?: string }> {
+  const response = await fetch(`${DOMAIN}/auth/forgot-password/request`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
+  })
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to send verification code')
+  }
+  return { devHint: typeof data.devHint === 'string' ? data.devHint : undefined }
+}
+
+export async function verifyForgotPasswordOtp(email: string, otp: string): Promise<void> {
+  const response = await fetch(`${DOMAIN}/auth/forgot-password/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim().toLowerCase(), otp: otp.trim() }),
+  })
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data?.error || 'Invalid verification code')
+  }
+}
+
+export async function resetPasswordWithOtp(payload: {
+  email: string
+  otp: string
+  newPassword: string
+  confirmNewPassword: string
+}): Promise<void> {
+  const response = await fetch(`${DOMAIN}/auth/forgot-password/reset`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: payload.email.trim().toLowerCase(),
+      otp: payload.otp.trim(),
+      newPassword: payload.newPassword,
+      confirmNewPassword: payload.confirmNewPassword,
+    }),
+  })
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to reset password')
+  }
 }
 
 export async function getDailyRewardStatus(sessionToken: string): Promise<DailyRewardStatus> {

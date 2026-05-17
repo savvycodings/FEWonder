@@ -1,4 +1,5 @@
-import { useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useFocusEffect } from '@react-navigation/native'
 import {
   Image,
   ImageSourcePropType,
@@ -27,6 +28,7 @@ import {
   readDailyRewardsCache,
   type DbCategorySummary,
 } from '../utils'
+import { shouldShowDailyRewardsHomeAlert } from '../wonderBadgeNotifications'
 import { ShopifyProduct } from '../../types'
 import { formatMoney } from '../money'
 
@@ -108,8 +110,7 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
   const [activeCategory, setActiveCategory] = useState<string>(HOME_CHIPS[0])
   const [dbCategories, setDbCategories] = useState<DbCategorySummary[]>([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
-  const [hasUnclaimedReward, setHasUnclaimedReward] = useState(false)
-  const lastRewardsPrefetchAt = useRef(0)
+  const [showDailyRewardsAlert, setShowDailyRewardsAlert] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -177,29 +178,32 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
     }
   }, [activeCategory, dbCategories])
 
-  useEffect(() => {
-    let cancelled = false
-    readDailyRewardsCache().then((c) => {
-      if (!cancelled && c?.canClaim) setHasUnclaimedReward(true)
-    })
-    return () => {
-      cancelled = true
+  const refreshDailyRewardsAlert = useCallback(async () => {
+    if (!sessionToken) {
+      setShowDailyRewardsAlert(false)
+      return
     }
-  }, [])
-
-  useEffect(() => {
-    if (!sessionToken) return
-    const now = Date.now()
-    if (now - lastRewardsPrefetchAt.current < 45_000) return
-    lastRewardsPrefetchAt.current = now
-    getDailyRewardStatus(sessionToken)
-      .then((s) => {
-        setHasUnclaimedReward(Boolean(s?.canClaim))
-      })
-      .catch(() => {
-        /* warm cache only */
-      })
+    try {
+      const cached = await readDailyRewardsCache()
+      if (cached) {
+        setShowDailyRewardsAlert(await shouldShowDailyRewardsHomeAlert(cached))
+      }
+    } catch {
+      /* ignore */
+    }
+    try {
+      const status = await getDailyRewardStatus(sessionToken)
+      setShowDailyRewardsAlert(await shouldShowDailyRewardsHomeAlert(status))
+    } catch {
+      /* keep last known alert state */
+    }
   }, [sessionToken])
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshDailyRewardsAlert()
+    }, [refreshDailyRewardsAlert]),
+  )
 
   return (
     <View style={styles.container}>
@@ -228,7 +232,7 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
               >
                 <FeatherIcon name="gift" size={26} color={theme.textColor} />
               </TouchableOpacity>
-              {hasUnclaimedReward ? (
+              {showDailyRewardsAlert ? (
                 <View style={styles.alertBadge}>
                   <Text style={styles.alertBadgeText}>!</Text>
                 </View>
