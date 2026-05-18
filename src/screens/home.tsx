@@ -69,6 +69,44 @@ function hasBrandBannerImage(c: DbCategorySummary): boolean {
   return String(c.imageUrl || '').trim().length > 0
 }
 
+function brandHaystack(c: DbCategorySummary): string {
+  return `${c.title || ''} ${c.handle || ''}`.toLowerCase().replace(/[-_]+/g, ' ')
+}
+
+function shouldUseBlackBrandBackground(c: DbCategorySummary): boolean {
+  const hay = brandHaystack(c)
+  return /\bhey\s*one\b/.test(hay) || /\bheyone\b/.test(hay)
+}
+
+type BrandBannerImageLayout =
+  | { mode: 'cover' }
+  | { mode: 'contain'; inset: number }
+  /** Full banner: `contain` scales to height/width without cropping top or bottom. */
+  | { mode: 'containFit' }
+
+/** Handle-first so sizing always applies (matches `/categories` slugs). */
+function getBrandBannerImageLayout(c: DbCategorySummary): BrandBannerImageLayout {
+  const handle = String(c.handle || '').trim().toLowerCase()
+
+  if (handle === 'lucky-emma') {
+    return { mode: 'containFit' }
+  }
+  if (handle === 'cureplaneta') {
+    return { mode: 'cover' }
+  }
+  if (handle === 'pop-mart') {
+    return { mode: 'contain', inset: 14 }
+  }
+
+  return { mode: 'cover' }
+}
+
+/** Kept for hot-reload / older call sites — use `getBrandBannerImageLayout` in new code. */
+function getBrandLogoInset(c: DbCategorySummary): number | null {
+  const layout = getBrandBannerImageLayout(c)
+  return layout.mode === 'contain' ? layout.inset : null
+}
+
 function getImageSource(item: ShopifyProduct): ImageSourcePropType | undefined {
   if (item?.featuredImageUrl) return { uri: item.featuredImageUrl }
   return (item as { image?: ImageSourcePropType }).image
@@ -263,6 +301,8 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
               {brandsSorted.map((c) => {
                 const count = Math.max(0, Math.floor(Number(c.productCount) || 0))
                 const countLabel = count === 1 ? '1 product' : `${count} products`
+                const blackLogoBg = shouldUseBlackBrandBackground(c)
+                const bannerImage = getBrandBannerImageLayout(c)
                 return (
                   <Pressable
                     key={String(c.shopifyId || c.handle)}
@@ -281,12 +321,40 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
                       style={styles.brandAccentOuter}
                       contentStyle={styles.brandAccentInner}
                     >
-                      <View style={styles.brandBannerClip}>
-                        <Image
-                          source={{ uri: String(c.imageUrl).trim() }}
-                          style={styles.brandBannerImage}
-                          resizeMode="cover"
-                        />
+                      <View style={[styles.brandBannerClip, blackLogoBg ? styles.brandBannerClipBlack : null]}>
+                        {bannerImage.mode === 'contain' ? (
+                          <View
+                            style={[
+                              styles.brandLogoInsetSlot,
+                              {
+                                top: bannerImage.inset,
+                                left: bannerImage.inset,
+                                right: bannerImage.inset,
+                                bottom: bannerImage.inset,
+                              },
+                            ]}
+                          >
+                            <Image
+                              source={{ uri: String(c.imageUrl).trim() }}
+                              style={styles.brandLogoInsetImage}
+                              resizeMode="contain"
+                            />
+                          </View>
+                        ) : bannerImage.mode === 'containFit' ? (
+                          <View style={styles.brandLogoContainFitSlot}>
+                            <Image
+                              source={{ uri: String(c.imageUrl).trim() }}
+                              style={styles.brandLogoContainFitImage}
+                              resizeMode="contain"
+                            />
+                          </View>
+                        ) : (
+                          <Image
+                            source={{ uri: String(c.imageUrl).trim() }}
+                            style={styles.brandBannerImage}
+                            resizeMode="cover"
+                          />
+                        )}
                         <LinearGradient
                           pointerEvents="none"
                           colors={['transparent', 'rgba(0,0,0,0.2)', 'rgba(0,0,0,0.92)']}
@@ -498,7 +566,7 @@ const getStyles = (theme: any) =>
       backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
       borderRadius: 18,
       paddingHorizontal: 4,
-      paddingTop: 8,
+      paddingTop: 4,
       paddingBottom: 4,
       borderWidth: 1,
       borderColor: theme.tileBorderColor || theme.borderColor,
@@ -597,10 +665,30 @@ const getStyles = (theme: any) =>
       height: 156,
       borderRadius: 14,
       overflow: 'hidden',
-      backgroundColor: '#141418',
+      backgroundColor: '#ffffff',
+    },
+    brandBannerClipBlack: {
+      backgroundColor: '#000000',
     },
     brandBannerImage: {
       ...StyleSheet.absoluteFillObject,
+      width: '100%',
+      height: '100%',
+    },
+    brandLogoInsetSlot: {
+      position: 'absolute',
+    },
+    brandLogoInsetImage: {
+      width: '100%',
+      height: '100%',
+    },
+    brandLogoContainFitSlot: {
+      ...StyleSheet.absoluteFillObject,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 6,
+    },
+    brandLogoContainFitImage: {
       width: '100%',
       height: '100%',
     },

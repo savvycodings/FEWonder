@@ -128,6 +128,13 @@ export interface ShopifyProduct {
     single?: ShopifyMoney | null
     set?: ShopifyMoney | null
   }
+  /** `standard` = buy as-is; `blind_box` = single vs whole set packaging picker. */
+  purchaseMode?: 'standard' | 'blind_box'
+  /** Synced from Shopify (`products.total_inventory`). */
+  totalInventory?: number | null
+  availableForSale?: boolean | null
+  /** Derived: available and stock > 0. */
+  inStock?: boolean
 }
 
 export interface IAppContext {

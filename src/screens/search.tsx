@@ -2,6 +2,7 @@ import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Image,
   ImageSourcePropType,
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,7 +24,6 @@ const GRID_GAP = 12
 const HOME_ACCENT_TEXT = '#000000'
 /** Unselected home category chip fill (`chipPlainOuter`) */
 const HOME_CHIP_FILL = '#000000'
-
 /** Same Montserrat weight as home category chips (e.g. Popular) — registered in App.tsx */
 const HOME_CHIP_MONTSERRAT = 'Montserrat_800ExtraBold' as const
 
@@ -86,13 +86,15 @@ const FEATURED_COLLECTION_IDS = [
 ]
 export function Search({ navigation }: { navigation: any }) {
   const [query, setQuery] = useState('')
-  const [isSearchFocused, setIsSearchFocused] = useState(false)
   const [activeBanner, setActiveBanner] = useState(0)
   const [carouselIndex, setCarouselIndex] = useState(0)
   const bannerScrollRef = useRef<ScrollView | null>(null)
+  const searchInputRef = useRef<TextInput | null>(null)
   const { width } = useWindowDimensions()
   const bannerWidth = width - 32
   const [products, setProducts] = useState<ShopifyProduct[]>([])
+  const [searchResults, setSearchResults] = useState<ShopifyProduct[]>([])
+  const [loadingSearchResults, setLoadingSearchResults] = useState(false)
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [collections, setCollections] = useState<ShopifyCollectionSummary[]>([])
   const [loadingCollections, setLoadingCollections] = useState(true)
@@ -100,13 +102,34 @@ export function Search({ navigation }: { navigation: any }) {
   const { theme } = useContext(ThemeContext)
   const bannerSlides = useMemo(() => [...banners, banners[0]], [])
 
-  const productNameSuggestions = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return []
-    return products
-      .filter((item) => String(item.title || '').toLowerCase().includes(q))
-      .slice(0, 6)
-  }, [query, products])
+  const trimmedQuery = query.trim()
+  const isSearching = trimmedQuery.length > 0
+
+  useEffect(() => {
+    if (!trimmedQuery) {
+      setSearchResults([])
+      setLoadingSearchResults(false)
+      return
+    }
+    let cancelled = false
+    const timer = setTimeout(() => {
+      ;(async () => {
+        setLoadingSearchResults(true)
+        try {
+          const fetched = await listDbProducts({ first: 50, query: trimmedQuery })
+          if (!cancelled) setSearchResults(fetched)
+        } catch {
+          if (!cancelled) setSearchResults([])
+        } finally {
+          if (!cancelled) setLoadingSearchResults(false)
+        }
+      })()
+    }, 280)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [trimmedQuery])
   const topSellers = useMemo(() => products.slice(0, 2), [products])
   const newArrivals = useMemo(() => products.slice(2, 4), [products])
   const cardW = (width - 32 - GRID_GAP) / 2
@@ -229,83 +252,80 @@ export function Search({ navigation }: { navigation: any }) {
     )
   }
 
+  function dismissKeyboard() {
+    searchInputRef.current?.blur()
+    Keyboard.dismiss()
+  }
+
   return (
     <View style={[styles.page, { backgroundColor: theme.appBackgroundColor || '#f7f8fb' }]}>
+      <View style={styles.hero}>
+        <View style={styles.searchWrap}>
+          <View style={styles.searchBar}>
+            <FeatherIcon name="search" size={16} color="#8e97ad" />
+            <TextInput
+              ref={searchInputRef}
+              value={query}
+              onChangeText={setQuery}
+              placeholder="Search products or series"
+              placeholderTextColor="#a2a9bb"
+              style={styles.searchInput}
+              returnKeyType="search"
+              autoCorrect={false}
+              onSubmitEditing={dismissKeyboard}
+            />
+            {query.length > 0 && (
+              <Pressable
+                onPress={() => {
+                  setQuery('')
+                  setSearchResults([])
+                }}
+                hitSlop={8}
+              >
+                <FeatherIcon name="x" size={16} color="#8e97ad" />
+              </Pressable>
+            )}
+          </View>
+        </View>
+      </View>
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
         style={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        onScrollBeginDrag={dismissKeyboard}
       >
-        <View style={styles.hero}>
-          <View style={styles.searchWrap}>
-            <View style={styles.searchBar}>
-              <FeatherIcon name="search" size={16} color="#8e97ad" />
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                onFocus={() => setIsSearchFocused(true)}
-                onBlur={() => setIsSearchFocused(false)}
-                placeholder="Search"
-                placeholderTextColor="#a2a9bb"
-                style={styles.searchInput}
-              />
-              {query.length > 0 && (
-                <Pressable onPress={() => setQuery('')} hitSlop={8}>
-                  <FeatherIcon name="x" size={16} color="#8e97ad" />
-                </Pressable>
-              )}
-            </View>
-            {isSearchFocused && query.trim().length > 0 ? (
-              <View
-                style={[
-                  styles.searchDropdown,
-                  {
-                    backgroundColor: theme.secondaryBackgroundColor || theme.appBackgroundColor || '#1a1f2e',
-                    borderColor: theme.tileBorderColor || theme.borderColor || '#2b3145',
-                  },
-                ]}
-              >
-                {productNameSuggestions.length ? (
-                  productNameSuggestions.map((item) => (
-                    <Pressable
-                      key={`search-suggestion-${item.id || item.handle || item.title}`}
-                      style={styles.searchDropdownRow}
-                      onPress={() => {
-                        setQuery(item.title)
-                        navigation.navigate('Product', { product: item })
-                      }}
-                    >
-                      <Text
-                        style={[styles.searchDropdownText, { color: theme.headingColor || theme.textColor || '#ffffff' }]}
-                        numberOfLines={1}
-                      >
-                        {item.title}
-                      </Text>
-                      <FeatherIcon
-                        name="arrow-up-right"
-                        size={14}
-                        color={theme.mutedForegroundColor || '#b3bdd8'}
-                      />
-                    </Pressable>
-                  ))
-                ) : (
-                  <View style={styles.searchDropdownEmptyRow}>
-                    <Text style={[styles.searchDropdownEmptyText, { color: theme.mutedForegroundColor || '#b3bdd8' }]}>
-                      No matching products
-                    </Text>
-                  </View>
-                )}
-              </View>
-            ) : null}
-          </View>
-
-        </View>
-
         <View style={styles.body}>
+          {isSearching ? (
+            <View style={styles.productSection}>
+              <View style={styles.resultsHeader}>
+                <Text style={[styles.resultsTitleMontserrat, { color: theme.textColor }]}>
+                  {loadingSearchResults
+                    ? 'Searching…'
+                    : searchResults.length
+                      ? `${searchResults.length} result${searchResults.length === 1 ? '' : 's'}`
+                      : 'No results'}
+                </Text>
+              </View>
+              {!loadingSearchResults && !searchResults.length ? (
+                <Text style={[styles.loadingText, { color: theme.mutedForegroundColor }]}>
+                  Try a series name, brand, or product title.
+                </Text>
+              ) : null}
+              {searchResults.length > 0 ? (
+                <View style={gridStyles.grid}>
+                  {searchResults.map((item) => renderProductCard(item))}
+                </View>
+              ) : null}
+            </View>
+          ) : (
+            <>
+          {!loadingProducts && !products.length ? (
+            <Text style={[styles.loadingText, { color: theme.mutedForegroundColor }]}>No products found.</Text>
+          ) : null}
           {loadingProducts ? (
             <Text style={[styles.loadingText, { color: theme.mutedForegroundColor }]}>Loading products…</Text>
-          ) : !products.length ? (
-            <Text style={[styles.loadingText, { color: theme.mutedForegroundColor }]}>No products found.</Text>
           ) : null}
           <View style={styles.searchBannerWrap}>
             <ScrollView
@@ -384,6 +404,7 @@ export function Search({ navigation }: { navigation: any }) {
                       navigation.navigate('CategoryProducts', {
                         slug: collection.handle,
                         title: collection.title,
+                        headerLabel: 'Search',
                       })
                     }
                   >
@@ -413,6 +434,8 @@ export function Search({ navigation }: { navigation: any }) {
               <View style={gridStyles.grid}>{newArrivals.map((item) => renderProductCard(item))}</View>
             </View>
           ) : null}
+            </>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -433,7 +456,7 @@ function getProductGridStyles(theme: any) {
       backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
       borderRadius: 18,
       paddingHorizontal: 4,
-      paddingTop: 8,
+      paddingTop: 4,
       paddingBottom: 4,
       borderWidth: 1,
       borderColor: theme.tileBorderColor || theme.borderColor,
@@ -525,11 +548,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 18,
-    zIndex: 20,
+    zIndex: 60,
+    elevation: 60,
   },
   searchWrap: {
     position: 'relative',
-    zIndex: 30,
   },
   searchBar: {
     borderRadius: 12,
@@ -539,45 +562,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     marginBottom: 0,
-  },
-  searchDropdown: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 60,
-    backgroundColor: '#11131b',
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: 'hidden',
-    zIndex: 200,
-    elevation: 10,
-  },
-  searchDropdownRow: {
-    minHeight: 46,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(194, 206, 238, 0.15)',
-  },
-  searchDropdownText: {
-    flex: 1,
-    marginRight: 10,
-    color: '#f1f4ff',
-    fontFamily: 'Geist-Medium',
-    fontSize: 14,
-  },
-  searchDropdownEmptyRow: {
-    minHeight: 46,
-    paddingHorizontal: 14,
-    justifyContent: 'center',
-  },
-  searchDropdownEmptyText: {
-    color: '#b3bdd8',
-    fontFamily: 'Geist-Medium',
-    fontSize: 13,
   },
   searchInput: {
     flex: 1,

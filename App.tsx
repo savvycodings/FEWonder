@@ -23,7 +23,8 @@ import {
   BottomSheetModalProvider,
   BottomSheetView,
 } from '@gorhom/bottom-sheet'
-import { StyleSheet, LogBox } from 'react-native'
+import { Alert, StyleSheet, LogBox } from 'react-native'
+import { getCartStockError, isProductInStock, maxPurchasableQuantity } from './src/productStock'
 import { Platform } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
@@ -128,15 +129,33 @@ export default function App() {
   }
 
   function addToCart(item: any, quantity: number = 1) {
+    if (!isProductInStock(item)) {
+      Alert.alert('Out of stock', 'This item is not available to purchase right now.')
+      return
+    }
+    const max = maxPurchasableQuantity(item)
+    const qty = Math.min(Math.max(1, Math.floor(quantity) || 1), max)
     setCartItems(prev => {
       const existingIndex = prev.findIndex(v => v.title === item.title)
       if (existingIndex === -1) {
-        return [...prev, { ...item, quantity }]
+        const next = [...prev, { ...item, quantity: qty }]
+        const err = getCartStockError(next)
+        if (err) {
+          Alert.alert('Out of stock', err)
+          return prev
+        }
+        return next
       }
       const copy = [...prev]
+      const combined = copy[existingIndex].quantity + qty
       copy[existingIndex] = {
         ...copy[existingIndex],
-        quantity: copy[existingIndex].quantity + quantity,
+        quantity: Math.min(combined, max),
+      }
+      const err = getCartStockError(copy)
+      if (err) {
+        Alert.alert('Out of stock', err)
+        return prev
       }
       return copy
     })

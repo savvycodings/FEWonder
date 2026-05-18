@@ -19,11 +19,10 @@ import {
 } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import * as Clipboard from 'expo-clipboard'
-import { WebView } from 'react-native-webview'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { ThemeContext, AppContext } from '../context'
-import { WonderportAccentCard } from '../components'
+import { WonderportAccentCard, YocoPaymentModal } from '../components'
 import {
   createOrder,
   fetchEftInstructions,
@@ -34,8 +33,9 @@ import {
 } from '../ordersApi'
 import { fetchSessionUser } from '../utils'
 import { SHOW_YOCO_CHECKOUT } from '../../constants'
-import { startYocoPayment, YOCO_WEBVIEW_PROPS } from '../yocoCheckout'
+import { startYocoPayment } from '../yocoCheckout'
 import { brandAccentRgba } from '../brandAccent'
+import { getCartStockError } from '../productStock'
 
 const CHECKOUT_FILL = '#000000'
 const HOME_CHIP_FILL = '#000000'
@@ -175,6 +175,11 @@ export function CartCheckout({ navigation }: { navigation: any }) {
       return
     }
     if (!cartItems?.length) return
+    const stockErr = getCartStockError(cartItems)
+    if (stockErr) {
+      Alert.alert('Out of stock', stockErr)
+      return
+    }
 
     setCheckoutBusy(true)
     try {
@@ -232,6 +237,11 @@ export function CartCheckout({ navigation }: { navigation: any }) {
 
   function continueDeliveryThenPay() {
     setCheckoutFormError('')
+    const stockErr = getCartStockError(cartItems)
+    if (stockErr) {
+      Alert.alert('Out of stock', stockErr)
+      return
+    }
     const err = validateDeliveryCheckout()
     if (err) {
       setCheckoutFormError(err)
@@ -590,27 +600,13 @@ export function CartCheckout({ navigation }: { navigation: any }) {
         </SafeAreaView>
       </Modal>
 
-      <Modal visible={yocoModalOpen} animationType="slide" statusBarTranslucent={false}>
-        <SafeAreaProvider>
-          <SafeAreaView style={styles.yocoPage} edges={['top', 'bottom']}>
-            <View style={styles.yocoHeaderBar}>
-              <Text style={styles.checkoutTitle}>Card payment</Text>
-              <TouchableOpacity onPress={() => setYocoModalOpen(false)} hitSlop={12}>
-                <Text style={styles.checkoutGhostBtnText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-            {yocoRedirectUrl ? (
-              <WebView
-                originWhitelist={['*']}
-                source={{ uri: yocoRedirectUrl }}
-                onNavigationStateChange={onYocoWebViewNavigation}
-                style={styles.yocoWeb}
-                {...YOCO_WEBVIEW_PROPS}
-              />
-            ) : null}
-          </SafeAreaView>
-        </SafeAreaProvider>
-      </Modal>
+      <YocoPaymentModal
+        visible={yocoModalOpen}
+        redirectUrl={yocoRedirectUrl}
+        accentColor={theme.brandAccent}
+        onClose={() => setYocoModalOpen(false)}
+        onNavigationStateChange={onYocoWebViewNavigation}
+      />
     </View>
   )
 }
@@ -830,17 +826,5 @@ function getStyles(theme: any) {
       fontSize: 15,
       color: L(0.85),
     },
-    yocoPage: { flex: 1, backgroundColor: CHECKOUT_FILL },
-    yocoHeaderBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingVertical: 14,
-      borderBottomWidth: 2,
-      borderBottomColor: theme.brandAccent,
-      backgroundColor: CHECKOUT_FILL,
-    },
-    yocoWeb: { flex: 1, backgroundColor: '#0a0a0a' },
   })
 }

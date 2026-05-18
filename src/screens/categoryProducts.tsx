@@ -12,6 +12,7 @@ const GRID_GAP = 12
 export function CategoryProducts({ route, navigation }: { route: any; navigation: any }) {
   const slug = String(route?.params?.slug || '').trim()
   const fallbackTitle = String(route?.params?.title || '').trim()
+  const headerLabel = String(route?.params?.headerLabel || '').trim()
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
   const [title, setTitle] = useState(fallbackTitle || 'Category')
@@ -19,6 +20,7 @@ export function CategoryProducts({ route, navigation }: { route: any; navigation
   const { width } = useWindowDimensions()
   const { theme } = useContext(ThemeContext)
   const cardW = (width - 32 - GRID_GAP) / 2
+  /** Client-side filter only — `products` are already limited to this collection via `getDbCategoryBySlug(slug)`. */
   const filteredProducts = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return products
@@ -52,8 +54,8 @@ export function CategoryProducts({ route, navigation }: { route: any; navigation
   }, [slug, fallbackTitle])
 
   useEffect(() => {
-    navigation.setOptions?.({ title })
-  }, [navigation, title])
+    navigation.setOptions?.({ title: headerLabel || title })
+  }, [navigation, headerLabel, title])
 
   const styles = useMemo(() => getStyles(theme), [theme])
 
@@ -65,7 +67,7 @@ export function CategoryProducts({ route, navigation }: { route: any; navigation
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder={`Search ${title}`}
+            placeholder={title ? `Search in ${title}` : 'Search this collection'}
             placeholderTextColor="#a2a9bb"
             style={styles.searchInput}
           />
@@ -80,7 +82,11 @@ export function CategoryProducts({ route, navigation }: { route: any; navigation
         <Text style={[styles.headerTitle, { color: theme.textColor }]}>{title}</Text>
         {loading ? <Text style={[styles.metaText, { color: theme.mutedForegroundColor }]}>Loading…</Text> : null}
         {!loading && !filteredProducts.length ? (
-          <Text style={[styles.metaText, { color: theme.mutedForegroundColor }]}>No products found.</Text>
+          <Text style={[styles.metaText, { color: theme.mutedForegroundColor }]}>
+            {query.trim()
+              ? `No products in this collection match “${query.trim()}”.`
+              : 'No products in this collection.'}
+          </Text>
         ) : null}
         <View style={styles.grid}>
           {filteredProducts.map((item) => {

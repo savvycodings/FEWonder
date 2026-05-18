@@ -643,15 +643,15 @@ export function Main() {
       <Stack.Screen
         name="CategoryProducts"
         component={CategoryProducts}
-        options={{
+        options={({ route }) => ({
           headerShown: true,
           headerBackTitle: '',
-          headerTitle: 'Category',
+          headerTitle: String(route.params?.headerLabel || 'Category'),
           headerStyle: { backgroundColor: '#000000' },
           headerTintColor: '#ffffff',
           headerTitleStyle: { color: '#ffffff', fontFamily: 'Geist-Bold' },
           headerShadowVisible: false,
-        }}
+        })}
       />
       <Stack.Screen
         name="CommunityUserProfile"

@@ -1,11 +1,12 @@
 import { useContext, useMemo, type ReactNode } from 'react'
-import { Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useRoute } from '@react-navigation/native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppContext, ThemeContext } from '../context'
 import { formatMoney, parseMoneyToNumber } from '../money'
 import { brandAccentRgba } from '../brandAccent'
+import { getCartStockError, maxPurchasableQuantity } from '../productStock'
 
 const SHIPPING_SINGLE_ZAR = 150
 const SHIPPING_WHOLE_SET_ZAR = 200
@@ -42,12 +43,21 @@ export function Cart({ navigation }: any) {
   }, [cartItems])
 
   const orderTotal = subtotal + shippingTotal
+  const cartStockErr = useMemo(() => getCartStockError(cartItems), [cartItems])
 
   const formatZar = (amount: number) =>
     formatMoney({ amount: amount.toFixed(2), currencyCode: CART_CURRENCY }, CART_CURRENCY)
 
   const scrollBottomPad = 120 + insets.bottom
   const emptyTitleFontSize = Math.max(18, Math.min(22, windowWidth * 0.055))
+
+  function onCheckoutPress() {
+    if (cartStockErr) {
+      Alert.alert('Out of stock', cartStockErr)
+      return
+    }
+    navigation.navigate('CartCheckout')
+  }
 
   function goBackToPrevious() {
     if (navigation.canGoBack()) {
@@ -166,7 +176,14 @@ export function Cart({ navigation }: any) {
                   <Text style={styles.qtyValue}>{item.quantity}</Text>
                   <Pressable
                     style={styles.qtyButton}
-                    onPress={() => updateCartItemQuantity(item.title, item.quantity + 1)}
+                    onPress={() => {
+                      const max = maxPurchasableQuantity(item)
+                      if (max > 0 && item.quantity >= max) {
+                        Alert.alert('Out of stock', `Only ${max} in stock for this item.`)
+                        return
+                      }
+                      updateCartItemQuantity(item.title, item.quantity + 1)
+                    }}
                   >
                     <FeatherIcon name="plus" size={14} color={iconColor} />
                   </Pressable>
@@ -190,7 +207,14 @@ export function Cart({ navigation }: any) {
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>{formatZar(orderTotal)}</Text>
           </View>
-          <Pressable style={styles.checkoutButton} onPress={() => navigation.navigate('CartCheckout')}>
+          {cartStockErr ? (
+            <Text style={styles.stockWarning}>{cartStockErr}</Text>
+          ) : null}
+          <Pressable
+            style={[styles.checkoutButton, cartStockErr ? styles.checkoutButtonDisabled : null]}
+            disabled={Boolean(cartStockErr)}
+            onPress={onCheckoutPress}
+          >
             <Text style={styles.checkoutText}>Checkout</Text>
           </Pressable>
         </View>
@@ -380,12 +404,22 @@ const getStyles = (theme: any) => {
       fontFamily: theme.boldFont,
       fontSize: 18,
     },
+    stockWarning: {
+      marginTop: 10,
+      fontFamily: theme.mediumFont,
+      fontSize: 13,
+      color: theme.brandAccent,
+      lineHeight: 18,
+    },
     checkoutButton: {
       marginTop: 10,
       backgroundColor: theme.brandAccent,
       borderRadius: 999,
       paddingVertical: 12,
       alignItems: 'center',
+    },
+    checkoutButtonDisabled: {
+      opacity: 0.45,
     },
     checkoutText: {
       color: theme.brandAccent_TEXT,

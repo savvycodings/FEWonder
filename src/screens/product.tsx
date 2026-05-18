@@ -18,12 +18,11 @@ import {
 } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import * as Clipboard from 'expo-clipboard'
-import { WebView } from 'react-native-webview'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { ThemeContext, AppContext } from '../context'
-import { WonderportAccentCard } from '../components'
-import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { WonderportAccentCard, YocoPaymentModal } from '../components'
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { formatMoney, parseMoneyToNumber } from '../money'
 import {
   createOrder,
@@ -37,8 +36,14 @@ import { fetchSessionUser } from '../utils'
 import { getDbProductByHandle } from '../utils'
 import type { ShopifyMoney, ShopifyProduct } from '../../types'
 import { SHOW_YOCO_CHECKOUT } from '../../constants'
-import { startYocoPayment, YOCO_WEBVIEW_PROPS } from '../yocoCheckout'
+import { startYocoPayment } from '../yocoCheckout'
 import { brandAccentRgba } from '../brandAccent'
+import {
+  formatStockLabel,
+  isProductInStock,
+  maxPurchasableQuantity,
+} from '../productStock'
+import { productShowsPackagingChoice } from '../productPurchaseMode'
 
 const CHECKOUT_FILL = '#000000'
 const PRODUCT_PAGE_BG = '#000000'
@@ -105,10 +110,17 @@ export function Product({ route, navigation }: any) {
     }
   }, [route?.params?.product?.handle])
 
+  const showPackaging = useMemo(() => productShowsPackagingChoice(product), [product])
+  const linePackaging = showPackaging && packaging === 'set' ? 'set' : 'single'
+
+  useEffect(() => {
+    if (!showPackaging) setPackaging('single')
+  }, [showPackaging, product?.id, product?.handle])
+
   const selectedUnitPrice = useMemo<ShopifyMoney | null>(() => {
-    if (packaging === 'set') return product?.packagePrices?.set ?? product?.price ?? null
+    if (showPackaging && packaging === 'set') return product?.packagePrices?.set ?? product?.price ?? null
     return product?.packagePrices?.single ?? product?.price ?? null
-  }, [packaging, product])
+  }, [packaging, product, showPackaging])
 
   const heroImageSource = useMemo(() => {
     if (product?.featuredImageUrl) return { uri: product.featuredImageUrl }
@@ -132,8 +144,16 @@ export function Product({ route, navigation }: any) {
       String(selectedUnitPrice.currencyCode || 'USD'),
     )
   }, [selectedUnitPrice, quantity])
+  const stockLabel = useMemo(() => formatStockLabel(product), [product])
+  const inStock = useMemo(() => isProductInStock(product), [product])
+  const maxQty = useMemo(() => maxPurchasableQuantity(product), [product])
+
+  useEffect(() => {
+    if (maxQty > 0 && quantity > maxQty) setQuantity(maxQty)
+  }, [maxQty, quantity])
+
   const compareText = useMemo(() => {
-    if (packaging === 'set') return null
+    if (showPackaging && packaging === 'set') return null
     const c = product?.compareAtPrice
     if (c?.amount != null && c.amount !== '' && selectedUnitPrice?.amount) {
       const sale = parseFloat(String(selectedUnitPrice.amount))
@@ -143,19 +163,13 @@ export function Product({ route, navigation }: any) {
       }
     }
     return null
-  }, [packaging, product?.compareAtPrice, selectedUnitPrice])
+  }, [packaging, product?.compareAtPrice, selectedUnitPrice, showPackaging])
   const detailText = useMemo(
     () =>
       plainTextFromHtml(product?.descriptionHtml, 800) ||
       'See photos and listing details. Packaging and edition may vary by vendor.',
     [product?.descriptionHtml]
   )
-  const metaParts = useMemo(() => {
-    const parts = [product?.vendor, product?.productType || product?.category].filter(
-      (p): p is string => Boolean(p && String(p).trim())
-    )
-    return parts.length ? parts : ['Collectible']
-  }, [product])
   const heroSize = Math.min(Math.max(width - 32, 260), 380)
 
   const [checkoutBusy, setCheckoutBusy] = useState(false)
@@ -234,6 +248,10 @@ export function Product({ route, navigation }: any) {
   }
 
   async function runCheckout(method: 'eft' | 'yoco') {
+    if (!inStock) {
+      Alert.alert('Out of stock', 'This item is not available to purchase right now.')
+      return
+    }
     if (!product?.id) {
       Alert.alert('Product', 'This listing cannot be ordered (missing id).')
       return
@@ -247,7 +265,7 @@ export function Product({ route, navigation }: any) {
     try {
       const created = await createOrder({
         paymentMethod: method,
-        items: [{ productId: String(product.id), quantity, packaging }],
+        items: [{ productId: String(product.id), quantity, packaging: linePackaging }],
         deliveryMethod,
         contactPhone: contactPhone.trim(),
         contactEmail: contactEmail.trim().toLowerCase(),
@@ -313,6 +331,10 @@ export function Product({ route, navigation }: any) {
   }
 
   function onBuyNowPress() {
+    if (!inStock) {
+      Alert.alert('Out of stock', 'This item is not available to purchase right now.')
+      return
+    }
     if (priceText === 'Price on request') {
       Alert.alert('Price', 'This item has no fixed price online. Contact support.')
       return
@@ -430,14 +452,7 @@ export function Product({ route, navigation }: any) {
             <Text style={styles.inlinePrice}>{priceText}</Text>
             {compareText ? <Text style={styles.compareAtPrice}>{compareText}</Text> : null}
           </View>
-
-          <View style={styles.metaRow}>
-            {metaParts.map((part, i) => (
-              <View key={i} style={styles.metaChip}>
-                <Text style={styles.metaChipText}>{part}</Text>
-              </View>
-            ))}
-          </View>
+          <Text style={styles.stockLabel}>{stockLabel}</Text>
         </WonderportAccentCard>
 
         <View style={[styles.section, styles.sectionCard]}>
@@ -454,38 +469,41 @@ export function Product({ route, navigation }: any) {
               <Text style={styles.qtyValue}>{quantity}</Text>
             </View>
             <TouchableOpacity
-              style={styles.qtyButton}
+              style={[styles.qtyButton, quantity >= maxQty || !inStock ? styles.qtyButtonDisabled : null]}
               activeOpacity={0.85}
-              onPress={() => setQuantity(q => q + 1)}
+              disabled={!inStock || quantity >= maxQty}
+              onPress={() => setQuantity(q => Math.min(maxQty, q + 1))}
             >
               <FeatherIcon name="plus" size={15} color={theme.brandAccent} />
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={[styles.section, styles.sectionCard]}>
-          <Text style={styles.sectionTitle}>Packaging</Text>
-          <View style={styles.optionRow}>
-            <TouchableOpacity
-              style={[styles.optionButton, packaging === 'single' ? styles.optionButtonActive : null]}
-              activeOpacity={0.9}
-              onPress={() => setPackaging('single')}
-            >
-              <Text style={[styles.optionText, packaging === 'single' ? styles.optionTextActive : null]}>
-                Single blind box
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.optionButton, packaging === 'set' ? styles.optionButtonActive : null]}
-              activeOpacity={0.9}
-              onPress={() => setPackaging('set')}
-            >
-              <Text style={[styles.optionText, packaging === 'set' ? styles.optionTextActive : null]}>
-                Whole set
-              </Text>
-            </TouchableOpacity>
+        {showPackaging ? (
+          <View style={[styles.section, styles.sectionCard]}>
+            <Text style={styles.sectionTitle}>Packaging</Text>
+            <View style={styles.optionRow}>
+              <TouchableOpacity
+                style={[styles.optionButton, packaging === 'single' ? styles.optionButtonActive : null]}
+                activeOpacity={0.9}
+                onPress={() => setPackaging('single')}
+              >
+                <Text style={[styles.optionText, packaging === 'single' ? styles.optionTextActive : null]}>
+                  Single blind box
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.optionButton, packaging === 'set' ? styles.optionButtonActive : null]}
+                activeOpacity={0.9}
+                onPress={() => setPackaging('set')}
+              >
+                <Text style={[styles.optionText, packaging === 'set' ? styles.optionTextActive : null]}>
+                  Whole set
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        ) : null}
 
         <View style={[styles.section, styles.sectionCard]}>
           <Text style={styles.sectionTitle}>About this item</Text>
@@ -497,15 +515,20 @@ export function Product({ route, navigation }: any) {
         <Text style={styles.price}>{footerTotalText}</Text>
         <View style={styles.actionsRow}>
           <TouchableOpacity
-            style={styles.addButton}
+            style={[styles.addButton, !inStock ? styles.footerButtonDisabled : null]}
             activeOpacity={0.9}
+            disabled={!inStock}
             onPress={() => {
+              if (!inStock) {
+                Alert.alert('Out of stock', 'This item is not available to purchase right now.')
+                return
+              }
               const packagedItem = {
                 ...product,
                 price: selectedUnitPrice,
-                selectedPackaging: packaging,
+                selectedPackaging: linePackaging,
                 title:
-                  packaging === 'set'
+                  linePackaging === 'set'
                     ? `${String(product?.title || 'Product')} (Whole set)`
                     : String(product?.title || 'Product'),
               }
@@ -516,9 +539,9 @@ export function Product({ route, navigation }: any) {
             <Text style={styles.addButtonText}>Add to cart</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.buyButton}
+            style={[styles.buyButton, !inStock ? styles.footerButtonDisabled : null]}
             activeOpacity={0.9}
-            disabled={checkoutBusy}
+            disabled={checkoutBusy || !inStock}
             onPress={onBuyNowPress}
           >
             {checkoutBusy ? (
@@ -786,27 +809,13 @@ export function Product({ route, navigation }: any) {
         </SafeAreaView>
       </Modal>
 
-      <Modal visible={yocoModalOpen} animationType="slide" statusBarTranslucent={false}>
-        <SafeAreaProvider>
-          <SafeAreaView style={styles.yocoPage} edges={['top', 'bottom']}>
-            <View style={styles.yocoHeaderBar}>
-              <Text style={styles.checkoutTitle}>Card payment</Text>
-              <TouchableOpacity onPress={() => setYocoModalOpen(false)} hitSlop={12}>
-                <Text style={styles.checkoutGhostBtnText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-            {yocoRedirectUrl ? (
-              <WebView
-                originWhitelist={['*']}
-                source={{ uri: yocoRedirectUrl }}
-                onNavigationStateChange={onYocoWebViewNavigation}
-                style={styles.yocoWeb}
-                {...YOCO_WEBVIEW_PROPS}
-              />
-            ) : null}
-          </SafeAreaView>
-        </SafeAreaProvider>
-      </Modal>
+      <YocoPaymentModal
+        visible={yocoModalOpen}
+        redirectUrl={yocoRedirectUrl}
+        accentColor={theme.brandAccent}
+        onClose={() => setYocoModalOpen(false)}
+        onNavigationStateChange={onYocoWebViewNavigation}
+      />
     </View>
   )
 }
@@ -883,7 +892,7 @@ const getStyles = (theme: any) => {
   },
   titleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 10,
   },
   heartButton: {
@@ -914,27 +923,11 @@ const getStyles = (theme: any) => {
     fontSize: 16,
     textDecorationLine: 'line-through',
   },
-  metaRow: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  metaChip: {
-    backgroundColor: HOME_CHIP_FILL,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.tileBorderColor || L(0.28),
-  },
-  metaChipText: {
+  stockLabel: {
+    marginTop: 6,
     fontFamily: theme.mediumFont,
+    fontSize: 14,
     color: theme.brandAccent,
-    fontSize: 11,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
   },
   section: {
     marginTop: 14,
@@ -1007,6 +1000,9 @@ const getStyles = (theme: any) => {
     borderWidth: 3,
     borderColor: L(0.55),
   },
+  qtyButtonDisabled: {
+    opacity: 0.4,
+  },
   qtyValueWrap: {
     minWidth: 56,
     height: 42,
@@ -1077,6 +1073,9 @@ const getStyles = (theme: any) => {
     color: HOME_ACCENT_TEXT,
     fontFamily: theme.semiBoldFont,
     fontSize: 13,
+  },
+  footerButtonDisabled: {
+    opacity: 0.45,
   },
   deliveryBackdrop: {
     flex: 1,
@@ -1314,17 +1313,5 @@ const getStyles = (theme: any) => {
     fontSize: 15,
     color: L(0.85),
   },
-  yocoPage: { flex: 1, backgroundColor: CHECKOUT_FILL },
-  yocoHeaderBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 2,
-    borderBottomColor: theme.brandAccent,
-    backgroundColor: CHECKOUT_FILL,
-  },
-  yocoWeb: { flex: 1, backgroundColor: '#0a0a0a' },
   })
 }
