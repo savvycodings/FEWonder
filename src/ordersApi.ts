@@ -137,8 +137,6 @@ export async function initYocoCheckout(orderId: string) {
     currency: string
     referenceCode: string
     processingMode?: string
-    testMode?: boolean
-    testPaymentHint?: string
   }>
 }
 

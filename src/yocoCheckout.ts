@@ -28,7 +28,7 @@ export function startYocoPayment(
   let appStateSub: { remove: () => void } | null = null
   let syncing = false
 
-  const trySync = (manual = false) => {
+  const trySync = () => {
     if (syncing) return
     syncing = true
     void syncYocoCheckout(orderId)
@@ -38,22 +38,9 @@ export function startYocoPayment(
           appStateSub = null
           options.onPaid?.()
           Alert.alert('Payment confirmed', 'Your order is paid. Thank you!')
-          return
-        }
-        if (manual) {
-          const yocoStatus = result.yocoStatus ? `Yoco status: ${result.yocoStatus}. ` : ''
-          Alert.alert(
-            result.pending ? 'Payment not finished yet' : 'Not paid yet',
-            `${yocoStatus}If you saw a card error on Yoco, that is not caused by the webhook secret — contact Yoco support or try the test keys from developer.yoco.com/docs/checkout-api/testing.`,
-          )
         }
       })
-      .catch((e: unknown) => {
-        if (manual) {
-          const msg = e instanceof Error ? e.message : 'Could not reach the server'
-          Alert.alert('Check failed', msg)
-        }
-      })
+      .catch(() => {})
       .finally(() => {
         syncing = false
       })
@@ -65,17 +52,16 @@ export function startYocoPayment(
 
   Alert.alert(
     'Card payment',
-    'Open Yoco in your phone browser. Tap Card (not Google Pay) and copy the orange test box exactly: 4111 1111 1111 1111, expiry 01/30, CVC 123.\n\nEmpty webhook secret does NOT block payment — it only means we confirm via “Check status” until you add a webhook.',
+    'Pay securely with your card. You can complete checkout in the app or in your browser.',
     [
+      { text: 'Pay in app', onPress: options.onPayInApp },
       {
-        text: 'Open browser',
+        text: 'Pay in browser',
         onPress: () => {
           appStateSub = AppState.addEventListener('change', onAppState)
           void Linking.openURL(redirectUrl)
         },
       },
-      { text: 'Check status', onPress: () => trySync(true) },
-      { text: 'Pay in app', onPress: options.onPayInApp },
       { text: 'Cancel', style: 'cancel' },
     ]
   )

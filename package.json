@@ -7,7 +7,10 @@
     "start": "expo start",
     "android": "node scripts/run-android.cjs",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:ios": "node ./node_modules/eas-cli/bin/run build --platform ios --profile production",
+    "build:android": "node ./node_modules/eas-cli/bin/run build --platform android --profile production",
+    "eas": "node ./node_modules/eas-cli/bin/run"
   },
   "dependencies": {
     "@expo-google-fonts/montserrat": "^0.4.2",
@@ -54,7 +57,11 @@
     "@babel/core": "^7.24.0",
     "@types/react": "~19.1.10",
     "@types/uuid": "^9.0.7",
+    "eas-cli": "^18.13.0",
     "typescript": "~5.9.3"
   },
-  "private": true
+  "private": true,
+  "pnpm": {
+    "ignoredBuiltDependencies": ["dtrace-provider"]
+  }
 }

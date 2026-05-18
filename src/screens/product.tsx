@@ -3,12 +3,16 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
   useWindowDimensions,
 } from 'react-native'
@@ -19,7 +23,7 @@ import FeatherIcon from '@expo/vector-icons/Feather'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { ThemeContext, AppContext } from '../context'
 import { WonderportAccentCard } from '../components'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { formatMoney, parseMoneyToNumber } from '../money'
 import {
   createOrder,
@@ -301,7 +305,7 @@ export function Product({ route, navigation }: any) {
     const payButtons = [
       { text: 'EFT (bank transfer)', onPress: () => runCheckout('eft') },
       ...(SHOW_YOCO_CHECKOUT
-        ? [{ text: 'Card (Yoco)', onPress: () => runCheckout('yoco') }]
+        ? [{ text: 'Card', onPress: () => runCheckout('yoco') }]
         : []),
       { text: 'Cancel', style: 'cancel' as const },
     ]
@@ -527,8 +531,15 @@ export function Product({ route, navigation }: any) {
       </View>
 
       <Modal visible={deliveryModalOpen} animationType="fade" transparent>
-        <View style={styles.deliveryBackdrop}>
-          <View style={styles.deliveryCard}>
+        <SafeAreaView style={styles.deliveryBackdrop} edges={['top', 'bottom']}>
+          <KeyboardAvoidingView
+            style={styles.deliveryKeyboardWrap}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+              <View style={styles.deliveryBackdropInner}>
+                <TouchableWithoutFeedback accessible={false}>
+                  <View style={styles.deliveryCard}>
             <Text style={styles.deliveryTitle}>Delivery & contact</Text>
             <Text style={styles.deliverySub}>
               Courier: R150 single / R200 whole set per item. Pudo: R70 flat. Included in total (ZAR only).
@@ -562,6 +573,7 @@ export function Product({ route, navigation }: any) {
             </View>
             <ScrollView
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
               style={styles.deliveryScroll}
               showsVerticalScrollIndicator={false}
             >
@@ -625,21 +637,30 @@ export function Product({ route, navigation }: any) {
                   />
                 </>
               )}
-              <Text style={styles.deliveryFieldLabel}>Your bank (optional, helps match EFT)</Text>
+              <Text style={[styles.deliveryFieldLabel, styles.deliveryBankHeading]}>
+                Your bank (optional)
+              </Text>
+              <Text style={styles.deliveryFieldLabel}>Account holder</Text>
               <TextInput
                 value={customerEftName}
                 onChangeText={setCustomerEftName}
-                placeholder="Account holder"
+                placeholder="Name on account"
                 placeholderTextColor={theme.mutedForegroundColor}
                 style={styles.deliveryInput}
+                returnKeyType="next"
+                blurOnSubmit={false}
               />
+              <Text style={styles.deliveryFieldLabel}>Bank name</Text>
               <TextInput
                 value={customerEftBank}
                 onChangeText={setCustomerEftBank}
-                placeholder="Bank name"
+                placeholder="e.g. FNB"
                 placeholderTextColor={theme.mutedForegroundColor}
                 style={styles.deliveryInput}
+                returnKeyType="next"
+                blurOnSubmit={false}
               />
+              <Text style={styles.deliveryFieldLabel}>Account number</Text>
               <TextInput
                 value={customerEftAcct}
                 onChangeText={setCustomerEftAcct}
@@ -647,6 +668,8 @@ export function Product({ route, navigation }: any) {
                 placeholderTextColor={theme.mutedForegroundColor}
                 style={styles.deliveryInput}
                 keyboardType="number-pad"
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
               />
             </ScrollView>
             {checkoutFormError ? <Text style={styles.deliveryError}>{checkoutFormError}</Text> : null}
@@ -666,12 +689,16 @@ export function Product({ route, navigation }: any) {
                 <Text style={styles.deliveryContinueText}>Continue to payment</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+                  </View>
+                </TouchableWithoutFeedback>
+              </View>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
       </Modal>
 
       <Modal visible={eftModalOpen} animationType="slide" transparent>
-        <View style={styles.checkoutBackdrop}>
+        <SafeAreaView style={styles.checkoutBackdrop} edges={['top', 'bottom']}>
           <WonderportAccentCard
             borderWidth={3}
             borderRadius={18}
@@ -756,27 +783,29 @@ export function Product({ route, navigation }: any) {
               <Text style={styles.checkoutGhostBtnText}>Close</Text>
             </TouchableOpacity>
           </WonderportAccentCard>
-        </View>
+        </SafeAreaView>
       </Modal>
 
-      <Modal visible={yocoModalOpen} animationType="slide">
-        <View style={styles.yocoPage}>
-          <View style={styles.yocoHeaderBar}>
-            <Text style={styles.checkoutTitle}>Card payment (Yoco)</Text>
-            <TouchableOpacity onPress={() => setYocoModalOpen(false)} hitSlop={12}>
-              <Text style={styles.checkoutGhostBtnText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-          {yocoRedirectUrl ? (
-            <WebView
-              originWhitelist={['*']}
-              source={{ uri: yocoRedirectUrl }}
-              onNavigationStateChange={onYocoWebViewNavigation}
-              style={styles.yocoWeb}
-              {...YOCO_WEBVIEW_PROPS}
-            />
-          ) : null}
-        </View>
+      <Modal visible={yocoModalOpen} animationType="slide" statusBarTranslucent={false}>
+        <SafeAreaProvider>
+          <SafeAreaView style={styles.yocoPage} edges={['top', 'bottom']}>
+            <View style={styles.yocoHeaderBar}>
+              <Text style={styles.checkoutTitle}>Card payment</Text>
+              <TouchableOpacity onPress={() => setYocoModalOpen(false)} hitSlop={12}>
+                <Text style={styles.checkoutGhostBtnText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+            {yocoRedirectUrl ? (
+              <WebView
+                originWhitelist={['*']}
+                source={{ uri: yocoRedirectUrl }}
+                onNavigationStateChange={onYocoWebViewNavigation}
+                style={styles.yocoWeb}
+                {...YOCO_WEBVIEW_PROPS}
+              />
+            ) : null}
+          </SafeAreaView>
+        </SafeAreaProvider>
       </Modal>
     </View>
   )
@@ -1052,9 +1081,15 @@ const getStyles = (theme: any) => {
   deliveryBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.65)',
+  },
+  deliveryKeyboardWrap: {
+    flex: 1,
+  },
+  deliveryBackdropInner: {
+    flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 24,
+    paddingVertical: 16,
   },
   deliveryCard: {
     borderRadius: 18,
@@ -1112,8 +1147,15 @@ const getStyles = (theme: any) => {
     fontFamily: theme.mediumFont,
     fontSize: 12,
     color: PRODUCT_TEXT_MUTED,
-    marginBottom: 4,
-    marginTop: 8,
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  deliveryBankHeading: {
+    marginTop: 18,
+    marginBottom: 2,
+    fontFamily: theme.semiBoldFont,
+    fontSize: 13,
+    color: PRODUCT_TEXT_PRIMARY,
   },
   deliveryInput: {
     borderWidth: 1,
@@ -1121,6 +1163,7 @@ const getStyles = (theme: any) => {
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
+    marginBottom: 4,
     fontFamily: theme.mediumFont,
     fontSize: 15,
     color: PRODUCT_TEXT_PRIMARY,
@@ -1278,7 +1321,6 @@ const getStyles = (theme: any) => {
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 14,
-    paddingTop: 18,
     borderBottomWidth: 2,
     borderBottomColor: theme.brandAccent,
     backgroundColor: CHECKOUT_FILL,

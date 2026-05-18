@@ -69,7 +69,7 @@ export function AdminOrderDetail({ route }: any) {
   const promptAcceptEft = () => {
     Alert.alert(
       'Accept payment?',
-      'Marks this order paid, applies loyalty coins, and requests the courier / Pudo waybill from ShipLogic.',
+      'Mark this order as paid and book shipping?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -136,17 +136,9 @@ export function AdminOrderDetail({ route }: any) {
           </Text>
 
           <View style={styles.actionCard}>
-            <Text style={styles.actionTitle}>Shipping & Pudo waybill</Text>
-            <Text style={styles.actionHint}>
-              In the app: open this order from Admin → Orders (or user’s orders). The green actions here control
-              ShipLogic booking — not the customer checkout screen.
-            </Text>
+            <Text style={styles.actionTitle}>Shipping</Text>
             {o.paymentMethod === 'eft' && o.status === 'awaiting_proof' && o.eftProofImageUrl ? (
               <>
-                <Text style={styles.actionBody}>
-                  Proof is uploaded. Review the image below, then accept to mark paid and request the courier /
-                  waybill.
-                </Text>
                 <TouchableOpacity
                   style={[styles.acceptBtn, accepting && styles.acceptBtnDisabled]}
                   disabled={accepting}
@@ -155,25 +147,21 @@ export function AdminOrderDetail({ route }: any) {
                   {accepting ? (
                     <ActivityIndicator color="#111" />
                   ) : (
-                    <Text style={styles.acceptBtnText}>Accept payment & get waybill</Text>
+                    <Text style={styles.acceptBtnText}>Accept payment & book shipping</Text>
                   )}
                 </TouchableOpacity>
               </>
             ) : null}
             {o.paymentMethod === 'eft' && o.status === 'awaiting_proof' && !o.eftProofImageUrl ? (
-              <Text style={styles.warn}>Waiting for customer proof — no waybill until you accept payment.</Text>
+              <Text style={styles.warn}>Awaiting payment proof from customer.</Text>
             ) : null}
             {o.status === 'paid' && !o.tcgShipmentId ? (
               <>
-                <Text style={styles.actionBody}>
-                  Order is paid but there is no courier booking yet (or it failed). Tap to call ShipLogic again and
-                  obtain the Pudo / courier reference.
-                </Text>
                 <TouchableOpacity
                   style={[styles.waybillBtn, bookingCourier && styles.acceptBtnDisabled]}
                   disabled={bookingCourier}
                   onPress={() => {
-                    Alert.alert('Book courier?', 'Calls ShipLogic now for this paid order.', [
+                    Alert.alert('Book shipping?', 'Request a shipping label for this paid order.', [
                       { text: 'Cancel', style: 'cancel' },
                       { text: 'Book', onPress: () => void runBookCourier() },
                     ])
@@ -182,14 +170,14 @@ export function AdminOrderDetail({ route }: any) {
                   {bookingCourier ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.waybillBtnText}>Get Pudo / courier waybill now</Text>
+                    <Text style={styles.waybillBtnText}>Book shipping</Text>
                   )}
                 </TouchableOpacity>
               </>
             ) : null}
             {o.status === 'paid' && o.tcgShipmentId ? (
               <Text style={styles.actionOk}>
-                Courier booked — short ref: {o.tcgShortTrackingReference || '—'} (details in Courier section below).
+                Shipping booked · ref {o.tcgShortTrackingReference || '—'}
               </Text>
             ) : null}
           </View>
@@ -231,9 +219,9 @@ export function AdminOrderDetail({ route }: any) {
           ) : null}
           <Text style={styles.label}>Delivery</Text>
           <Text style={styles.body}>
-            {o.deliveryMethod === 'pudo' ? 'Pudo locker' : 'Standard courier'} · snapshot below
+            {o.deliveryMethod === 'pudo' ? 'Pudo locker' : 'Standard courier'}
           </Text>
-          <Text style={styles.label}>Shipping snapshot</Text>
+          <Text style={styles.label}>Delivery address</Text>
           <Text style={styles.body}>{o.shippingSnapshot?.name}</Text>
           <View style={styles.copyRow}>
             <Text style={styles.bodyFlex}>{o.shippingSnapshot?.line1 || '—'}</Text>
@@ -430,9 +418,6 @@ export function AdminOrderDetail({ route }: any) {
                 <Text style={styles.linkText}>Open proof in browser</Text>
               </TouchableOpacity>
               {o.eftCustomerNote ? <Text style={styles.body}>{o.eftCustomerNote}</Text> : null}
-              {o.paymentMethod === 'eft' && o.status === 'awaiting_proof' && o.eftProofImageUrl ? (
-                <Text style={styles.hint}>Use the green “Accept payment & get waybill” button at the top of this screen.</Text>
-              ) : null}
             </>
           ) : null}
           {o.tcgShipmentId ||
@@ -548,20 +533,6 @@ const getStyles = (theme: any) =>
       fontSize: 16,
       color: theme.brandAccent,
       marginBottom: 6,
-    },
-    actionHint: {
-      fontFamily: theme.mediumFont,
-      fontSize: 11,
-      color: theme.mutedForegroundColor,
-      marginBottom: 10,
-      lineHeight: 16,
-    },
-    actionBody: {
-      fontFamily: theme.mediumFont,
-      fontSize: 13,
-      color: theme.textColor,
-      marginBottom: 12,
-      lineHeight: 18,
     },
     actionOk: {
       fontFamily: theme.mediumFont,
