@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from 'react'
+import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -21,7 +21,7 @@ import * as Clipboard from 'expo-clipboard'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { ThemeContext, AppContext } from '../context'
-import { WonderportAccentCard, YocoPaymentModal } from '../components'
+import { PaymentMethodModal, WonderportAccentCard, YocoPaymentModal } from '../components'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { formatMoney, parseMoneyToNumber } from '../money'
 import {
@@ -29,14 +29,13 @@ import {
   fetchEftInstructions,
   getUserSessionToken,
   initYocoCheckout,
-  syncYocoCheckout,
   uploadEftProof,
 } from '../ordersApi'
+import { finalizeYocoCheckout, parseYocoReturnRoute, yocoOutcomeAlert } from '../yocoCheckout'
 import { fetchSessionUser } from '../utils'
 import { getDbProductByHandle } from '../utils'
 import type { ShopifyMoney, ShopifyProduct } from '../../types'
 import { SHOW_YOCO_CHECKOUT } from '../../constants'
-import { startYocoPayment } from '../yocoCheckout'
 import { brandAccentRgba } from '../brandAccent'
 import {
   formatStockLabel,
@@ -85,6 +84,10 @@ export function Product({ route, navigation }: any) {
   const styles = getStyles(theme)
   const initialProduct = (route?.params?.product || {}) as ShopifyProduct
   const [product, setProduct] = useState<ShopifyProduct>(initialProduct)
+  const productHandle = String(route?.params?.product?.handle || '').trim()
+  const loadedHeroUrisRef = useRef<Set<string>>(new Set())
+  const heroImageUriRef = useRef('')
+  const [heroImageLoading, setHeroImageLoading] = useState(false)
   const [packaging, setPackaging] = useState<'single' | 'set'>('single')
   const [quantity, setQuantity] = useState(1)
   const liked = savedItems.some(item => item.title === product.title)
@@ -94,12 +97,11 @@ export function Product({ route, navigation }: any) {
   }, [route?.params?.product])
 
   useEffect(() => {
-    const handle = String(route?.params?.product?.handle || '').trim()
-    if (!handle) return
+    if (!productHandle) return
     let cancelled = false
     ;(async () => {
       try {
-        const fullProduct = await getDbProductByHandle(handle)
+        const fullProduct = await getDbProductByHandle(productHandle)
         if (!cancelled) setProduct(fullProduct)
       } catch {
         /* keep route param payload if fetch fails */
@@ -108,7 +110,7 @@ export function Product({ route, navigation }: any) {
     return () => {
       cancelled = true
     }
-  }, [route?.params?.product?.handle])
+  }, [productHandle])
 
   const showPackaging = useMemo(() => productShowsPackagingChoice(product), [product])
   const linePackaging = showPackaging && packaging === 'set' ? 'set' : 'single'
@@ -122,10 +124,33 @@ export function Product({ route, navigation }: any) {
     return product?.packagePrices?.single ?? product?.price ?? null
   }, [packaging, product, showPackaging])
 
+  const heroImageUri = useMemo(
+    () => String(product?.featuredImageUrl || '').trim(),
+    [product?.featuredImageUrl],
+  )
+
   const heroImageSource = useMemo(() => {
-    if (product?.featuredImageUrl) return { uri: product.featuredImageUrl }
+    if (heroImageUri) return { uri: heroImageUri }
     return product?.image
-  }, [product])
+  }, [heroImageUri, product?.image])
+
+  const heroShowsLoadingOverlay = Boolean(heroImageUri && heroImageLoading)
+
+  heroImageUriRef.current = heroImageUri
+
+  useEffect(() => {
+    if (!heroImageUri) {
+      setHeroImageLoading(false)
+      return
+    }
+    setHeroImageLoading(!loadedHeroUrisRef.current.has(heroImageUri))
+  }, [heroImageUri])
+
+  function markHeroImageLoaded(forUri: string) {
+    if (!forUri) return
+    loadedHeroUrisRef.current.add(forUri)
+    if (heroImageUriRef.current === forUri) setHeroImageLoading(false)
+  }
   const priceText = useMemo(() => {
     if (selectedUnitPrice?.amount != null && selectedUnitPrice.amount !== '') {
       return formatMoney(selectedUnitPrice)
@@ -187,9 +212,12 @@ export function Product({ route, navigation }: any) {
   const [yocoModalOpen, setYocoModalOpen] = useState(false)
   const [yocoRedirectUrl, setYocoRedirectUrl] = useState<string | null>(null)
   const [yocoOrderId, setYocoOrderId] = useState<string | null>(null)
+  const [yocoSyncing, setYocoSyncing] = useState(false)
+  const yocoHandledRef = useRef(false)
   const [eftUploadBusy, setEftUploadBusy] = useState(false)
 
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false)
+  const [paymentMethodModalOpen, setPaymentMethodModalOpen] = useState(false)
   const [deliveryMethod, setDeliveryMethod] = useState<'standard' | 'pudo'>('standard')
   const [contactPhone, setContactPhone] = useState('')
   const [contactEmail, setContactEmail] = useState('')
@@ -286,17 +314,10 @@ export function Product({ route, navigation }: any) {
         setEftModalOpen(true)
       } else {
         const yoco = await initYocoCheckout(created.orderId)
+        yocoHandledRef.current = false
         setYocoOrderId(created.orderId)
-        startYocoPayment(created.orderId, yoco.redirectUrl, {
-          onPaid: () => {
-            setYocoModalOpen(false)
-            setYocoRedirectUrl(null)
-          },
-          onPayInApp: () => {
-            setYocoRedirectUrl(yoco.redirectUrl)
-            setYocoModalOpen(true)
-          },
-        })
+        setYocoRedirectUrl(yoco.redirectUrl)
+        setYocoModalOpen(true)
       }
     } catch (e: any) {
       Alert.alert('Checkout', e?.message || 'Could not start checkout')
@@ -306,6 +327,7 @@ export function Product({ route, navigation }: any) {
   }
 
   function continueDeliveryThenPay() {
+    Keyboard.dismiss()
     setCheckoutFormError('')
     const err = validateDeliveryCheckout()
     if (err) {
@@ -313,21 +335,7 @@ export function Product({ route, navigation }: any) {
       return
     }
     setDeliveryModalOpen(false)
-    const shipNote =
-      deliveryMethod === 'pudo'
-        ? 'Pudo locker delivery includes R70.00 shipping in your total.'
-        : 'Courier: R150 per single box, R200 per whole set (included in your total).'
-    const payMessage = SHOW_YOCO_CHECKOUT
-      ? `${shipNote}\nHow would you like to pay?`
-      : `${shipNote}\nPay with bank transfer (EFT).`
-    const payButtons = [
-      { text: 'EFT (bank transfer)', onPress: () => runCheckout('eft') },
-      ...(SHOW_YOCO_CHECKOUT
-        ? [{ text: 'Card', onPress: () => runCheckout('yoco') }]
-        : []),
-      { text: 'Cancel', style: 'cancel' as const },
-    ]
-    Alert.alert('Payment method', payMessage, payButtons)
+    setPaymentMethodModalOpen(true)
   }
 
   function onBuyNowPress() {
@@ -379,21 +387,48 @@ export function Product({ route, navigation }: any) {
     }
   }
 
-  function onYocoWebViewNavigation(navState: { url?: string }) {
-    const url = navState.url || ''
-    if (url.includes('/payment/yoco/success')) {
+  async function finishYocoCheckoutFlow(orderId: string) {
+    setYocoSyncing(true)
+    try {
+      const outcome = await finalizeYocoCheckout(orderId)
+      const copy = yocoOutcomeAlert(outcome)
+      if (copy) Alert.alert(copy.title, copy.message)
+    } catch {
+      Alert.alert(
+        'Payment status',
+        'Could not confirm payment. Check Profile → Orders for the latest status.',
+      )
+    } finally {
+      setYocoSyncing(false)
       setYocoModalOpen(false)
       setYocoRedirectUrl(null)
-      if (yocoOrderId) {
-        void syncYocoCheckout(yocoOrderId).catch(() => {
-          Alert.alert('Payment submitted', 'Check Profile → Orders in a moment for status.')
-        })
-      }
-    } else if (url.includes('/payment/yoco/failed') || url.includes('/payment/yoco/cancelled')) {
-      Alert.alert('Payment not completed', 'You can try card payment again from your order.')
-      setYocoModalOpen(false)
-      setYocoRedirectUrl(null)
+      setYocoOrderId(null)
     }
+  }
+
+  function onYocoWebViewNavigation(navState: { url?: string }) {
+    const route = parseYocoReturnRoute(navState.url || '')
+    if (!route || !yocoOrderId || yocoHandledRef.current || yocoSyncing) return
+    yocoHandledRef.current = true
+    void finishYocoCheckoutFlow(yocoOrderId)
+  }
+
+  function handleYocoModalClose() {
+    if (yocoSyncing) return
+    const orderId = yocoOrderId
+    setYocoRedirectUrl(null)
+    if (!orderId) {
+      setYocoModalOpen(false)
+      setYocoOrderId(null)
+      return
+    }
+    if (yocoHandledRef.current) {
+      setYocoModalOpen(false)
+      setYocoOrderId(null)
+      return
+    }
+    yocoHandledRef.current = true
+    void finishYocoCheckoutFlow(orderId)
   }
 
   return (
@@ -419,12 +454,30 @@ export function Product({ route, navigation }: any) {
       >
         <View style={[styles.heroImageWrap, { height: heroSize }]}>
           {heroImageSource ? (
-            <Image source={heroImageSource} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+            <Image
+              key={heroImageUri || 'local-hero'}
+              source={heroImageSource}
+              style={StyleSheet.absoluteFillObject}
+              resizeMode="cover"
+              onLoadStart={() => {
+                const uri = heroImageUri
+                if (!uri || loadedHeroUrisRef.current.has(uri)) return
+                setHeroImageLoading(true)
+              }}
+              onLoad={() => markHeroImageLoaded(heroImageUri)}
+              onLoadEnd={() => markHeroImageLoaded(heroImageUri)}
+              onError={() => markHeroImageLoaded(heroImageUri)}
+            />
           ) : (
             <View style={styles.heroPlaceholder}>
               <Text style={styles.heroPlaceholderText}>{product.title || 'Product'}</Text>
             </View>
           )}
+          {heroShowsLoadingOverlay ? (
+            <View style={styles.heroImageLoadingOverlay} pointerEvents="none">
+              <ActivityIndicator size="large" color={theme.brandAccent} />
+            </View>
+          ) : null}
         </View>
 
         <WonderportAccentCard
@@ -561,16 +614,15 @@ export function Product({ route, navigation }: any) {
           >
             <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
               <View style={styles.deliveryBackdropInner}>
-                <TouchableWithoutFeedback accessible={false}>
                   <View style={styles.deliveryCard}>
             <Text style={styles.deliveryTitle}>Delivery & contact</Text>
-            <Text style={styles.deliverySub}>
-              Courier: R150 single / R200 whole set per item. Pudo: R70 flat. Included in total (ZAR only).
-            </Text>
             <View style={styles.deliveryChipsRow}>
               <TouchableOpacity
                 style={[styles.deliveryChip, deliveryMethod === 'standard' ? styles.deliveryChipActive : null]}
-                onPress={() => setDeliveryMethod('standard')}
+                onPress={() => {
+                  Keyboard.dismiss()
+                  setDeliveryMethod('standard')
+                }}
                 activeOpacity={0.9}
               >
                 <Text
@@ -584,7 +636,10 @@ export function Product({ route, navigation }: any) {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.deliveryChip, deliveryMethod === 'pudo' ? styles.deliveryChipActive : null]}
-                onPress={() => setDeliveryMethod('pudo')}
+                onPress={() => {
+                  Keyboard.dismiss()
+                  setDeliveryMethod('pudo')
+                }}
                 activeOpacity={0.9}
               >
                 <Text
@@ -595,7 +650,7 @@ export function Product({ route, navigation }: any) {
               </TouchableOpacity>
             </View>
             <ScrollView
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="never"
               keyboardDismissMode="on-drag"
               style={styles.deliveryScroll}
               showsVerticalScrollIndicator={false}
@@ -699,7 +754,10 @@ export function Product({ route, navigation }: any) {
             <View style={styles.deliveryFooterRow}>
               <TouchableOpacity
                 style={styles.deliveryCancelBtn}
-                onPress={() => setDeliveryModalOpen(false)}
+                onPress={() => {
+                  Keyboard.dismiss()
+                  setDeliveryModalOpen(false)
+                }}
                 activeOpacity={0.85}
               >
                 <Text style={styles.deliveryCancelText}>Cancel</Text>
@@ -713,7 +771,6 @@ export function Product({ route, navigation }: any) {
               </TouchableOpacity>
             </View>
                   </View>
-                </TouchableWithoutFeedback>
               </View>
             </TouchableWithoutFeedback>
           </KeyboardAvoidingView>
@@ -809,11 +866,26 @@ export function Product({ route, navigation }: any) {
         </SafeAreaView>
       </Modal>
 
+      <PaymentMethodModal
+        visible={paymentMethodModalOpen}
+        showCard={SHOW_YOCO_CHECKOUT}
+        onEft={() => {
+          setPaymentMethodModalOpen(false)
+          runCheckout('eft')
+        }}
+        onCard={() => {
+          setPaymentMethodModalOpen(false)
+          runCheckout('yoco')
+        }}
+        onCancel={() => setPaymentMethodModalOpen(false)}
+      />
+
       <YocoPaymentModal
         visible={yocoModalOpen}
         redirectUrl={yocoRedirectUrl}
         accentColor={theme.brandAccent}
-        onClose={() => setYocoModalOpen(false)}
+        syncing={yocoSyncing}
+        onClose={handleYocoModalClose}
         onNavigationStateChange={onYocoWebViewNavigation}
       />
     </View>
@@ -863,6 +935,12 @@ const getStyles = (theme: any) => {
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: surfaceBorder,
+  },
+  heroImageLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroPlaceholder: {
     ...StyleSheet.absoluteFillObject,
@@ -1102,13 +1180,6 @@ const getStyles = (theme: any) => {
     fontFamily: HOME_MONTSERRAT_BOLD,
     fontSize: 20,
     color: PRODUCT_TEXT_PRIMARY,
-    marginBottom: 6,
-  },
-  deliverySub: {
-    fontFamily: theme.regularFont,
-    fontSize: 13,
-    color: PRODUCT_TEXT_MUTED,
-    lineHeight: 18,
     marginBottom: 12,
   },
   deliveryChipsRow: {

@@ -1,7 +1,7 @@
 /**
  * Full checkout flodw for items in the cart (same server path as Product "Buy now").
  */
-import { useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -22,18 +22,17 @@ import * as Clipboard from 'expo-clipboard'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ThemeContext, AppContext } from '../context'
-import { WonderportAccentCard, YocoPaymentModal } from '../components'
+import { PaymentMethodModal, WonderportAccentCard, YocoPaymentModal } from '../components'
 import {
   createOrder,
   fetchEftInstructions,
   getUserSessionToken,
   initYocoCheckout,
-  syncYocoCheckout,
   uploadEftProof,
 } from '../ordersApi'
+import { finalizeYocoCheckout, parseYocoReturnRoute, yocoOutcomeAlert } from '../yocoCheckout'
 import { fetchSessionUser } from '../utils'
 import { SHOW_YOCO_CHECKOUT } from '../../constants'
-import { startYocoPayment } from '../yocoCheckout'
 import { brandAccentRgba } from '../brandAccent'
 import { getCartStockError } from '../productStock'
 
@@ -74,6 +73,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
   const styles = useMemo(() => getStyles(theme), [theme])
 
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false)
+  const [paymentMethodModalOpen, setPaymentMethodModalOpen] = useState(false)
   const [checkoutBusy, setCheckoutBusy] = useState(false)
   const [checkoutFormError, setCheckoutFormError] = useState('')
   const [deliveryMethod, setDeliveryMethod] = useState<'standard' | 'pudo'>('standard')
@@ -103,6 +103,8 @@ export function CartCheckout({ navigation }: { navigation: any }) {
   const [yocoModalOpen, setYocoModalOpen] = useState(false)
   const [yocoRedirectUrl, setYocoRedirectUrl] = useState<string | null>(null)
   const [yocoOrderId, setYocoOrderId] = useState<string | null>(null)
+  const [yocoSyncing, setYocoSyncing] = useState(false)
+  const yocoHandledRef = useRef(false)
 
   useLayoutEffect(() => {
     if (!cartItems?.length) {
@@ -212,22 +214,14 @@ export function CartCheckout({ navigation }: { navigation: any }) {
         setEftReference(created.referenceCode)
         setEftTotalLabel(`${(created.totalCents / 100).toFixed(2)} ${created.currencyCode}`)
         setEftModalOpen(true)
+        clearCart()
       } else {
         const yoco = await initYocoCheckout(created.orderId)
+        yocoHandledRef.current = false
         setYocoOrderId(created.orderId)
-        startYocoPayment(created.orderId, yoco.redirectUrl, {
-          onPaid: () => {
-            setYocoModalOpen(false)
-            setYocoRedirectUrl(null)
-            navigation.navigate('Tabs')
-          },
-          onPayInApp: () => {
-            setYocoRedirectUrl(yoco.redirectUrl)
-            setYocoModalOpen(true)
-          },
-        })
+        setYocoRedirectUrl(yoco.redirectUrl)
+        setYocoModalOpen(true)
       }
-      clearCart()
     } catch (e: any) {
       Alert.alert('Checkout', e?.message || 'Could not start checkout')
     } finally {
@@ -236,6 +230,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
   }
 
   function continueDeliveryThenPay() {
+    Keyboard.dismiss()
     setCheckoutFormError('')
     const stockErr = getCartStockError(cartItems)
     if (stockErr) {
@@ -248,21 +243,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
       return
     }
     setDeliveryModalOpen(false)
-    const shipNote =
-      deliveryMethod === 'pudo'
-        ? 'Pudo locker delivery includes R70.00 shipping in your total.'
-        : 'Courier: R150 per single box and R200 per whole set line (included in your total).'
-    const payMessage = SHOW_YOCO_CHECKOUT
-      ? `${shipNote}\nHow would you like to pay?`
-      : `${shipNote}\nPay with bank transfer (EFT).`
-    const payButtons = [
-      { text: 'EFT (bank transfer)', onPress: () => runCheckout('eft') },
-      ...(SHOW_YOCO_CHECKOUT
-        ? [{ text: 'Card', onPress: () => runCheckout('yoco') }]
-        : []),
-      { text: 'Cancel', style: 'cancel' as const },
-    ]
-    Alert.alert('Payment method', payMessage, payButtons)
+    setPaymentMethodModalOpen(true)
   }
 
   async function onPickEftProof() {
@@ -294,25 +275,56 @@ export function CartCheckout({ navigation }: { navigation: any }) {
     }
   }
 
-  function onYocoWebViewNavigation(navState: { url?: string }) {
-    const url = navState.url || ''
-    if (url.includes('/payment/yoco/success')) {
-      setYocoModalOpen(false)
-      setYocoRedirectUrl(null)
-      if (yocoOrderId) {
-        void syncYocoCheckout(yocoOrderId).finally(() => navigation.navigate('Tabs'))
-      } else {
+  async function finishYocoCheckoutFlow(orderId: string) {
+    setYocoSyncing(true)
+    try {
+      const outcome = await finalizeYocoCheckout(orderId)
+      const copy = yocoOutcomeAlert(outcome)
+      if (copy) Alert.alert(copy.title, copy.message)
+      if (outcome === 'paid') {
+        clearCart()
         navigation.navigate('Tabs')
       }
-    } else if (url.includes('/payment/yoco/failed') || url.includes('/payment/yoco/cancelled')) {
-      Alert.alert('Payment not completed', 'You can try card payment again from your order.')
+    } catch {
+      Alert.alert(
+        'Payment status',
+        'Could not confirm payment. Check Profile → Orders for the latest status.',
+      )
+    } finally {
+      setYocoSyncing(false)
       setYocoModalOpen(false)
       setYocoRedirectUrl(null)
+      setYocoOrderId(null)
     }
   }
 
+  function onYocoWebViewNavigation(navState: { url?: string }) {
+    const route = parseYocoReturnRoute(navState.url || '')
+    if (!route || !yocoOrderId || yocoHandledRef.current || yocoSyncing) return
+    yocoHandledRef.current = true
+    void finishYocoCheckoutFlow(yocoOrderId)
+  }
+
+  function handleYocoModalClose() {
+    if (yocoSyncing) return
+    const orderId = yocoOrderId
+    setYocoRedirectUrl(null)
+    if (!orderId) {
+      setYocoModalOpen(false)
+      setYocoOrderId(null)
+      return
+    }
+    if (yocoHandledRef.current) {
+      setYocoModalOpen(false)
+      setYocoOrderId(null)
+      return
+    }
+    yocoHandledRef.current = true
+    void finishYocoCheckoutFlow(orderId)
+  }
+
   const keepUiWithoutCart =
-    checkoutBusy || eftModalOpen || yocoModalOpen || Boolean(eftOrderId || yocoRedirectUrl)
+    checkoutBusy || yocoSyncing || eftModalOpen || yocoModalOpen || Boolean(eftOrderId || yocoRedirectUrl)
   if (!cartItems?.length && !keepUiWithoutCart) {
     return null
   }
@@ -347,16 +359,15 @@ export function CartCheckout({ navigation }: { navigation: any }) {
           >
             <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
               <View style={styles.deliveryBackdropInner}>
-                <TouchableWithoutFeedback accessible={false}>
                   <View style={styles.deliveryCard}>
             <Text style={styles.deliveryTitle}>Delivery & contact</Text>
-            <Text style={styles.deliverySub}>
-              Courier: R150 per single box, R200 per whole set. Pudo: R70 flat. Included in total (ZAR only).
-            </Text>
             <View style={styles.deliveryChipsRow}>
               <TouchableOpacity
                 style={[styles.deliveryChip, deliveryMethod === 'standard' ? styles.deliveryChipActive : null]}
-                onPress={() => setDeliveryMethod('standard')}
+                onPress={() => {
+                  Keyboard.dismiss()
+                  setDeliveryMethod('standard')
+                }}
                 activeOpacity={0.9}
               >
                 <Text
@@ -370,7 +381,10 @@ export function CartCheckout({ navigation }: { navigation: any }) {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.deliveryChip, deliveryMethod === 'pudo' ? styles.deliveryChipActive : null]}
-                onPress={() => setDeliveryMethod('pudo')}
+                onPress={() => {
+                  Keyboard.dismiss()
+                  setDeliveryMethod('pudo')
+                }}
                 activeOpacity={0.9}
               >
                 <Text
@@ -381,7 +395,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
               </TouchableOpacity>
             </View>
             <ScrollView
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="never"
               keyboardDismissMode="on-drag"
               style={styles.deliveryScroll}
               showsVerticalScrollIndicator={false}
@@ -485,7 +499,10 @@ export function CartCheckout({ navigation }: { navigation: any }) {
             <View style={styles.deliveryFooterRow}>
               <TouchableOpacity
                 style={styles.deliveryCancelBtn}
-                onPress={() => navigation.goBack()}
+                onPress={() => {
+                  Keyboard.dismiss()
+                  navigation.goBack()
+                }}
                 activeOpacity={0.85}
               >
                 <Text style={styles.deliveryCancelText}>Cancel</Text>
@@ -504,7 +521,6 @@ export function CartCheckout({ navigation }: { navigation: any }) {
               </TouchableOpacity>
             </View>
                   </View>
-                </TouchableWithoutFeedback>
               </View>
             </TouchableWithoutFeedback>
           </KeyboardAvoidingView>
@@ -600,11 +616,26 @@ export function CartCheckout({ navigation }: { navigation: any }) {
         </SafeAreaView>
       </Modal>
 
+      <PaymentMethodModal
+        visible={paymentMethodModalOpen}
+        showCard={SHOW_YOCO_CHECKOUT}
+        onEft={() => {
+          setPaymentMethodModalOpen(false)
+          runCheckout('eft')
+        }}
+        onCard={() => {
+          setPaymentMethodModalOpen(false)
+          runCheckout('yoco')
+        }}
+        onCancel={() => setPaymentMethodModalOpen(false)}
+      />
+
       <YocoPaymentModal
         visible={yocoModalOpen}
         redirectUrl={yocoRedirectUrl}
         accentColor={theme.brandAccent}
-        onClose={() => setYocoModalOpen(false)}
+        syncing={yocoSyncing}
+        onClose={handleYocoModalClose}
         onNavigationStateChange={onYocoWebViewNavigation}
       />
     </View>
@@ -663,13 +694,6 @@ function getStyles(theme: any) {
       fontFamily: HOME_MONTSERRAT_BOLD,
       fontSize: 20,
       color: PRODUCT_TEXT_PRIMARY,
-      marginBottom: 6,
-    },
-    deliverySub: {
-      fontFamily: theme.regularFont,
-      fontSize: 13,
-      color: PRODUCT_TEXT_MUTED,
-      lineHeight: 18,
       marginBottom: 12,
     },
     deliveryChipsRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },

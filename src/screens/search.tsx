@@ -49,11 +49,24 @@ function isExcludedSearchCollection(c: ShopifyCollectionSummary): boolean {
   return /\ball products\b/.test(hay) || /\bnew releases?\b/.test(hay)
 }
 
-const banners = [
-  require('../../public/homepageimgs/searchbanner.webp'),
-  require('../../public/homepageimgs/searchbanner2.webp'),
-  require('../../public/homepageimgs/searchbanner3.webp'),
-]
+/** Search hero carousel — order matches banner image files (1–3). */
+const SEARCH_BANNERS = [
+  {
+    image: require('../../public/homepageimgs/searchbanner.webp'),
+    title: 'Monsters',
+    searchQuery: 'monsters',
+  },
+  {
+    image: require('../../public/homepageimgs/searchbanner2.webp'),
+    title: 'Crybaby',
+    searchQuery: 'crybaby',
+  },
+  {
+    image: require('../../public/homepageimgs/searchbanner3.webp'),
+    title: 'Skullpanda',
+    searchQuery: 'skullpanda',
+  },
+] as const
 
 const FEATURED_COLLECTION_IDS = [
   'gid://shopify/Collection/294309199985',
@@ -100,7 +113,10 @@ export function Search({ navigation }: { navigation: any }) {
   const [loadingCollections, setLoadingCollections] = useState(true)
   const [showAllCollections, setShowAllCollections] = useState(false)
   const { theme } = useContext(ThemeContext)
-  const bannerSlides = useMemo(() => [...banners, banners[0]], [])
+  const bannerSlides = useMemo(
+    () => [...SEARCH_BANNERS.map((b) => b.image), SEARCH_BANNERS[0].image],
+    [],
+  )
 
   const trimmedQuery = query.trim()
   const isSearching = trimmedQuery.length > 0
@@ -182,6 +198,16 @@ export function Search({ navigation }: { navigation: any }) {
     }
   }, [])
 
+  function onSearchBannerPress(bannerIndex: number) {
+    const banner = SEARCH_BANNERS[bannerIndex]
+    if (!banner) return
+    navigation.navigate('CategoryProducts', {
+      title: banner.title,
+      searchQuery: banner.searchQuery,
+      headerLabel: 'Search',
+    })
+  }
+
   useEffect(() => {
     const id = setInterval(() => {
       setCarouselIndex((prev) => {
@@ -190,7 +216,7 @@ export function Search({ navigation }: { navigation: any }) {
           x: next * bannerWidth,
           animated: true,
         })
-        if (next >= banners.length) {
+        if (next >= SEARCH_BANNERS.length) {
           setActiveBanner(0)
         } else {
           setActiveBanner(next)
@@ -336,7 +362,7 @@ export function Search({ navigation }: { navigation: any }) {
               decelerationRate="fast"
               onMomentumScrollEnd={(e) => {
                 const nextIndex = Math.round(e.nativeEvent.contentOffset.x / bannerWidth)
-                if (nextIndex >= banners.length) {
+                if (nextIndex >= SEARCH_BANNERS.length) {
                   setCarouselIndex(0)
                   setActiveBanner(0)
                   requestAnimationFrame(() => {
@@ -348,17 +374,14 @@ export function Search({ navigation }: { navigation: any }) {
                 setActiveBanner(nextIndex)
               }}
             >
-              {bannerSlides.map((banner, index) => (
+              {bannerSlides.map((bannerImage, index) => (
                 <Pressable
                   key={index}
                   style={[styles.searchBannerSlide, { width: bannerWidth }]}
-                  onPress={() => {
-                    const first = products[0]
-                    if (first) navigation.navigate('Product', { product: first })
-                  }}
+                  onPress={() => onSearchBannerPress(index % SEARCH_BANNERS.length)}
                 >
                   <Image
-                    source={banner}
+                    source={bannerImage}
                     style={styles.searchBanner}
                     resizeMode="cover"
                   />
@@ -366,7 +389,7 @@ export function Search({ navigation }: { navigation: any }) {
               ))}
             </ScrollView>
             <View style={styles.bannerDots}>
-              {banners.map((_, index) => (
+              {SEARCH_BANNERS.map((_, index) => (
                 <View
                   key={index}
                   style={[
@@ -377,6 +400,24 @@ export function Search({ navigation }: { navigation: any }) {
               ))}
             </View>
           </View>
+
+          {topSellers.length > 0 ? (
+            <View style={styles.productSection}>
+              <View style={styles.resultsHeader}>
+                <Text style={[styles.resultsTitleMontserrat, { color: theme.textColor }]}>Top sellers</Text>
+              </View>
+              <View style={gridStyles.grid}>{topSellers.map((item) => renderProductCard(item))}</View>
+            </View>
+          ) : null}
+
+          {newArrivals.length > 0 ? (
+            <View style={styles.productSection}>
+              <View style={styles.resultsHeader}>
+                <Text style={[styles.resultsTitleMontserrat, { color: theme.textColor }]}>New arrivals</Text>
+              </View>
+              <View style={gridStyles.grid}>{newArrivals.map((item) => renderProductCard(item))}</View>
+            </View>
+          ) : null}
 
           <View style={styles.collectionsSection}>
             <View style={styles.resultsHeader}>
@@ -416,24 +457,6 @@ export function Search({ navigation }: { navigation: any }) {
               </View>
             )}
           </View>
-
-          {topSellers.length > 0 ? (
-            <View style={styles.productSection}>
-              <View style={styles.resultsHeader}>
-                <Text style={[styles.resultsTitleMontserrat, { color: theme.textColor }]}>Top sellers</Text>
-              </View>
-              <View style={gridStyles.grid}>{topSellers.map((item) => renderProductCard(item))}</View>
-            </View>
-          ) : null}
-
-          {newArrivals.length > 0 ? (
-            <View style={styles.productSection}>
-              <View style={styles.resultsHeader}>
-                <Text style={[styles.resultsTitleMontserrat, { color: theme.textColor }]}>New arrivals</Text>
-              </View>
-              <View style={gridStyles.grid}>{newArrivals.map((item) => renderProductCard(item))}</View>
-            </View>
-          ) : null}
             </>
           )}
         </View>

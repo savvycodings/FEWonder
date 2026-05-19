@@ -236,18 +236,7 @@ function ProfileStackScreen({
       <ProfileStack.Screen
         name="ProfileSettings"
         options={{
-          headerShown: true,
-          headerTitle: 'Settings',
-          headerBackTitle: '',
-          headerStyle: {
-            backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
-          },
-          headerTitleStyle: {
-            color: theme.textColor,
-            fontFamily: theme.boldFont,
-          },
-          headerTintColor: theme.textColor,
-          headerShadowVisible: false,
+          headerShown: false,
         }}
       >
         {() => (

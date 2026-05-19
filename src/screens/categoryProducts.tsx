@@ -5,12 +5,13 @@ import { ProductTileImageWithHeart } from '../components'
 import { ThemeContext } from '../context'
 import { ShopifyProduct } from '../../types'
 import { formatMoney } from '../money'
-import { getDbCategoryBySlug } from '../utils'
+import { getDbCategoryBySlug, listDbProducts } from '../utils'
 
 const GRID_GAP = 12
 
 export function CategoryProducts({ route, navigation }: { route: any; navigation: any }) {
   const slug = String(route?.params?.slug || '').trim()
+  const catalogSearchQuery = String(route?.params?.searchQuery || '').trim()
   const fallbackTitle = String(route?.params?.title || '').trim()
   const headerLabel = String(route?.params?.headerLabel || '').trim()
   const [loading, setLoading] = useState(true)
@@ -37,6 +38,21 @@ export function CategoryProducts({ route, navigation }: { route: any; navigation
     ;(async () => {
       setLoading(true)
       try {
+        if (catalogSearchQuery) {
+          const fetched = await listDbProducts({ first: 50, query: catalogSearchQuery })
+          if (!cancelled) {
+            setTitle(fallbackTitle || 'Products')
+            setProducts(fetched)
+          }
+          return
+        }
+        if (!slug) {
+          if (!cancelled) {
+            setTitle(fallbackTitle || 'Category')
+            setProducts([])
+          }
+          return
+        }
         const data = await getDbCategoryBySlug(slug)
         if (!cancelled) {
           setTitle(data.category?.title || fallbackTitle || 'Category')
@@ -51,7 +67,7 @@ export function CategoryProducts({ route, navigation }: { route: any; navigation
     return () => {
       cancelled = true
     }
-  }, [slug, fallbackTitle])
+  }, [slug, catalogSearchQuery, fallbackTitle])
 
   useEffect(() => {
     navigation.setOptions?.({ title: headerLabel || title })
@@ -84,8 +100,10 @@ export function CategoryProducts({ route, navigation }: { route: any; navigation
         {!loading && !filteredProducts.length ? (
           <Text style={[styles.metaText, { color: theme.mutedForegroundColor }]}>
             {query.trim()
-              ? `No products in this collection match “${query.trim()}”.`
-              : 'No products in this collection.'}
+              ? `No products match “${query.trim()}”.`
+              : catalogSearchQuery
+                ? `No products found for “${catalogSearchQuery}”.`
+                : 'No products in this collection.'}
           </Text>
         ) : null}
         <View style={styles.grid}>

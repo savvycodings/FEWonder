@@ -1,6 +1,7 @@
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
+import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native'
 import { useContext } from 'react'
 import { useNavigation } from '@react-navigation/native'
+import { HeaderBackButton } from '@react-navigation/elements'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { ThemeContext } from '../context'
 import { User } from '../../types'
@@ -25,12 +26,25 @@ export function Settings({ user, sessionToken, onUserUpdated, onLogout }: Settin
   const styles = getStyles(theme)
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-    >
+    <View style={styles.screen}>
+      <View style={styles.headerBar}>
+        <HeaderBackButton
+          label="Profile"
+          truncatedLabel="Profile"
+          displayMode="default"
+          tintColor={theme.textColor}
+          labelStyle={styles.headerBackLabel}
+          onPress={() => navigation.goBack()}
+        />
+      </View>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.contentContainer}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
+        showsVerticalScrollIndicator={false}
+      >
       <Text style={styles.pageTitle}>Settings</Text>
-      <Text style={styles.pageSubtitle}>Manage your account information and billing preferences.</Text>
       <View style={styles.accentRule} />
 
       <View style={styles.sectionCard}>
@@ -126,7 +140,8 @@ export function Settings({ user, sessionToken, onUserUpdated, onLogout }: Settin
         <FeatherIcon name="log-out" size={16} color={theme.brandAccent} />
         <Text style={styles.logoutText}>Log out</Text>
       </Pressable>
-    </ScrollView>
+      </ScrollView>
+    </View>
   )
 }
 
@@ -136,23 +151,29 @@ const getStyles = (theme:any) => {
   buttonContainer: {
     marginBottom: 20
   },
+  screen: {
+    flex: 1,
+    backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
+  },
+  headerBar: {
+    height: 44,
+    justifyContent: 'center',
+    paddingLeft: Platform.OS === 'ios' ? 0 : 2,
+  },
+  headerBackLabel: {
+    fontSize: 17,
+    fontFamily: theme.regularFont,
+  },
   container: {
     flex: 1,
     backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
   },
   pageTitle: {
-    marginTop: 12,
-    marginBottom: 4,
+    marginTop: 0,
+    marginBottom: 8,
     color: theme.headingColor || theme.textColor,
     fontFamily: 'Montserrat_700Bold',
     fontSize: 30,
-  },
-  pageSubtitle: {
-    marginBottom: 8,
-    color: theme.mutedForegroundColor,
-    fontFamily: theme.regularFont,
-    fontSize: 13,
-    lineHeight: 19,
   },
   accentRule: {
     width: 62,
@@ -162,9 +183,9 @@ const getStyles = (theme:any) => {
     marginBottom: 14,
   },
   contentContainer: {
-    paddingHorizontal: 14,
-    paddingTop: 8,
-    paddingBottom: 40
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 40,
   },
   titleContainer: {
     paddingVertical: 10,
