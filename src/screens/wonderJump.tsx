@@ -15,7 +15,20 @@ import {
   View,
 } from 'react-native'
 import { useIsFocused } from '@react-navigation/native'
-import Svg, { Circle, Defs, Ellipse, G, LinearGradient, Path, Polygon, Rect, Stop, SvgUri, SvgXml } from 'react-native-svg'
+import Svg, {
+  Circle,
+  Defs,
+  Ellipse,
+  G,
+  LinearGradient,
+  Path,
+  Polygon,
+  RadialGradient,
+  Rect,
+  Stop,
+  SvgUri,
+  SvgXml,
+} from 'react-native-svg'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { User, WonderJumpLeaderboardEntry } from '../../types'
 import { DailyRewardsMysteryGiftVisual } from '../components/DailyRewardsMysteryGiftVisual'
@@ -35,17 +48,23 @@ import {
 } from '../utils'
 import { ThemeContext } from '../context'
 import { brandAccentRgba, BRAND_ACCENT_LIME_HEX } from '../brandAccent'
-
+import {
+  getMeteorPlumeReach,
+  METEOR_VARIANT_CONFIG,
+  MeteorComposite,
+  pickAsteroidVariant,
+  type AsteroidVariant,
+} from '../wonderJump/meteorArt'
 type RunMode = 'menu' | 'playing' | 'paused' | 'gameOver'
 type PlatformKind = 'normal' | 'bouncy' | 'moving' | 'breakable'
 type ControlScheme = 'touchSplit' | 'dpad'
 
 /** Starting biome from Home or in-game menu (affects visuals + mushroom surface mix). */
-export type WonderJumpStartBiome = 'grassland' | 'mushroom' | 'tropical'
+export type WonderJumpStartBiome = 'grassland' | 'mushroom' | 'tropical' | 'space'
 
-export type WonderJumpDeathCause = 'fall' | 'spike' | 'crab'
+export type WonderJumpDeathCause = 'fall' | 'spike' | 'crab' | 'asteroid'
 
-type PlatformSurfaceKind = 'grass' | 'sand' | 'mushroom_grey' | 'mushroom_red'
+type PlatformSurfaceKind = 'grass' | 'sand' | 'mushroom_grey' | 'mushroom_red' | 'moon'
 
 type PlatformMushroomDecoKind = 'single' | 'group'
 type PlatformFlowerDecoKind =
@@ -147,6 +166,20 @@ type Crab = {
   deathMs: number
 }
 
+/** Falling meteor hazard in deep space — world coords, moves downward (+Y). */
+type Asteroid = {
+  id: string
+  variant: AsteroidVariant
+  x: number
+  y: number
+  width: number
+  height: number
+  velocityY: number
+  rotation: number
+  spinRate: number
+  flamePhase: number
+}
+
 type Player = {
   x: number
   y: number
@@ -169,6 +202,9 @@ type GameState = {
   /** At most one chest entity per run; server blocks another until claim. */
   chestSpawnedThisRun: boolean
   crabs: Crab[]
+  asteroids: Asteroid[]
+  /** Raw heightScore at last asteroid spawn (spacing). */
+  lastAsteroidSpawnHeight: number
   cameraY: number
   heightScore: number
   /** World Y of last jetpack spawn to avoid clustering. */
@@ -181,6 +217,8 @@ type GameState = {
   jetpackAnimTick: number
   /** Global UI animation tick for hover/shake effects. */
   uiAnimTick: number
+  /** Display-rate tick for meteor flame (matches design canvas RAF). */
+  flameAnimTick: number
   /** Jetpack pickups collected this run (each pickup counts once). */
   jetpacksUsedThisRun: number
   /** Set when entering game over; cleared on menu / new run. */
@@ -199,6 +237,10 @@ const GROUND_SUPPORT_SLACK_PX = 4
 const PLATFORM_HEIGHT = 12
 /** Extra pixels drawn below hitbox so dirt “hangs” like the reference sprite (collision stays 12px). */
 const PLATFORM_VISUAL_OVERHANG = 7
+function platformVisualShellHeight(_surface: PlatformSurfaceKind) {
+  return PLATFORM_HEIGHT + PLATFORM_VISUAL_OVERHANG
+}
+
 /** Tiny props along the platform rim — spacing uses half-width so two decos never touch. */
 const PLATFORM_MUSHROOM_HALF_W = 12
 const PLATFORM_MUSHROOM_MIN_CENTER_GAP = 26
@@ -232,6 +274,10 @@ const CRAB_SPAWN_CHANCE_TROPICAL_START = 0.24
 /** When tropical blend is active but not full start-biome. */
 const CRAB_SPAWN_CHANCE_TROPICAL_BLEND = 0.2
 const CRAB_DEATH_MS = 520
+/** Per-tick spawn roll when height separation is satisfied (space only). */
+const ASTEROID_SPAWN_P = 0.026
+const MAX_ASTEROIDS_ALIVE = 2
+const MIN_ASTEROID_SPAWN_HEIGHT_SEP = 300
 /** Bouncy platforms collide on spring tray, not grass top. */
 const SPRING_COLLISION_RAISE = 6
 
@@ -271,9 +317,20 @@ const BOUNCY_JUMP_VELOCITY = -13.59
  * (90–120 Hz) and applies velocity/gravity extra times per second, which makes jumps feel “broken”.
  */
 const SIM_TICK_MS = 1000 / 60
+/** Cap physics catch-up per display frame so a stall does not hitch the JS thread. */
+const MAX_SIM_STEPS_PER_FRAME = 3
 const MAX_FALL_VELOCITY = 13
 /** Stable identity when jetpack shake is off so child memo comparisons stay cheap. */
 const JETPACK_SHAKE_NONE = Object.freeze({ x: 0 as number, y: 0 as number })
+
+/** Reuse the previous array reference when every element is unchanged (helps memoized platform rows). */
+function reuseShallowArray<T>(next: T[], prev: T[]): T[] {
+  if (next.length !== prev.length) return next
+  for (let i = 0; i < next.length; i++) {
+    if (next[i] !== prev[i]) return next
+  }
+  return prev
+}
 const TILE_HORIZONTAL_MARGIN = 12
 /** Fewer starting rows = less crowded climbs (tune with vertical gaps below). */
 const INITIAL_PLATFORM_COUNT = 22
@@ -284,6 +341,81 @@ const INITIAL_PLATFORM_COUNT = 22
  */
 const MIN_CHAIN_VERTICAL_GAP = 40
 const MAX_CHAIN_VERTICAL_GAP = 78
+/** Max horizontal overlap between consecutive main-chain platforms (prevents idle ladder climbs). */
+const CHAIN_MAX_X_OVERLAP_IDLE = 16
+const CHAIN_MIN_LATERAL_FRACTION_OF_REACH = 0.46
+
+type ChainSpawnState = {
+  step: number
+  lastSign: -1 | 0 | 1
+  streakSameSide: number
+}
+
+function createChainSpawnState(): ChainSpawnState {
+  return { step: 0, lastSign: 0, streakSameSide: 0 }
+}
+
+function maxIdleSafeChainOverlap(prevW: number, nextW: number) {
+  return clamp(Math.min(prevW, nextW) * 0.16, 8, CHAIN_MAX_X_OVERLAP_IDLE)
+}
+
+function minChainCenterSeparation(prevW: number, nextW: number, reach: number) {
+  const maxOv = maxIdleSafeChainOverlap(prevW, nextW)
+  const sepFromOverlap = (prevW + nextW) / 2 - maxOv
+  const sepFromReach = reach * CHAIN_MIN_LATERAL_FRACTION_OF_REACH
+  return clamp(Math.max(sepFromOverlap, sepFromReach), 18, reach * 0.94)
+}
+
+function pickChainHorizontalSign(state: ChainSpawnState): number {
+  const r = Math.random()
+  if (state.streakSameSide >= 2) return state.lastSign > 0 ? -1 : 1
+  if (state.lastSign === 0) return Math.random() < 0.5 ? 1 : -1
+  if (r < 0.3) return state.lastSign
+  if (r < 0.72) return state.lastSign > 0 ? -1 : 1
+  return Math.random() < 0.5 ? 1 : -1
+}
+
+function pickChainOffsetMagnitude(reach: number, heightDifficulty: number) {
+  const spread = heightDifficulty * 0.04
+  const r = Math.random()
+  if (r < 0.25) return randomInRange(reach * (0.34 - spread), reach * (0.58 + spread))
+  if (r < 0.7) return randomInRange(reach * (0.54 - spread), reach * (0.84 + spread))
+  return randomInRange(reach * (0.76 - spread), reach * (0.97 + spread))
+}
+
+function commitChainSpawnSide(state: ChainSpawnState, sign: number) {
+  if (state.lastSign === sign) state.streakSameSide += 1
+  else state.streakSameSide = 1
+  state.lastSign = sign
+  state.step += 1
+}
+
+function resolveChainCenterX(
+  prevCx: number,
+  targetCx: number,
+  prevW: number,
+  nextW: number,
+  reach: number,
+  centerMin: number,
+  centerMax: number
+): number {
+  const minSep = minChainCenterSeparation(prevW, nextW, reach)
+  let cx = clamp(targetCx, centerMin, centerMax)
+  if (Math.abs(cx - prevCx) < minSep) {
+    const rightCx = clamp(prevCx + minSep, centerMin, centerMax)
+    const leftCx = clamp(prevCx - minSep, centerMin, centerMax)
+    const rightDist = Math.abs(rightCx - prevCx)
+    const leftDist = Math.abs(leftCx - prevCx)
+    if (rightDist >= leftDist && rightDist >= minSep * 0.5) cx = rightCx
+    else if (leftDist >= minSep * 0.5) cx = leftCx
+    else cx = rightDist >= leftDist ? rightCx : leftCx
+  }
+  if (Math.abs(cx - prevCx) > reach) {
+    cx = prevCx + (cx > prevCx ? reach : -reach)
+    cx = clamp(cx, centerMin, centerMax)
+  }
+  return cx
+}
 
 /** ~50 main-chain steps × average vertical gap → switch into mushroom blend band */
 const MUSHROOM_BIOME_HEIGHT_START = 50 * 58
@@ -303,6 +435,15 @@ const DISPLAY_SCORE_EARLY_RAW_MAX = 1200
 const DISPLAY_SCORE_EARLY_DIVISOR = 58
 /** Displayed score at tropical threshold — keeps numbers human-sized, not millions. */
 const DISPLAY_SCORE_AT_TROPICAL = 300
+/** HUD score where space biome begins to appear (matches displayRunScore past tropical). */
+const SPACE_BIOME_DISPLAY_START = 700
+/** Raw height where space scenery starts (display 700 after tropical display 300). */
+const SPACE_BIOME_HEIGHT_START =
+  TROPICAL_BIOME_HEIGHT_START + (SPACE_BIOME_DISPLAY_START - DISPLAY_SCORE_AT_TROPICAL) * 45
+/** Height score distance over which tropical scenery lerps into deep space. */
+const SPACE_BIOME_BLEND_RANGE = 820
+/** When space blend ≥ this, space gameplay tuning applies (sparser than tropical). */
+const SPACE_GAMEPLAY_BLEND = 0.5
 
 /** UI score from internal height metric (same input as biome blends). */
 function displayRunScore(rawHeightScore: number): number {
@@ -326,6 +467,8 @@ function deathBlurb(cause: WonderJumpDeathCause | null): string {
       return 'A spike ended that jump.'
     case 'crab':
       return 'A tropical crab got you.'
+    case 'asteroid':
+      return 'A meteor caught you.'
     default:
       return ''
   }
@@ -353,8 +496,13 @@ const MUSHROOM_CHAIN_GAP_EXTRA_MAX = 10
 /** P(attempt sibling row) — lower in mushroom for sparser side platforms */
 const SIBLING_TRY_CHANCE_GRASS = 0.12
 const SIBLING_TRY_CHANCE_MUSHROOM = 0.07
+const SIBLING_TRY_CHANCE_SPACE = 0.05
+/** Extra vertical gap on main-chain spawns in deep space (exclusive — not stacked with mushroom/tropical). */
+const SPACE_CHAIN_GAP_EXTRA_MIN = 6
+const SPACE_CHAIN_GAP_EXTRA_MAX = 10
 const BOUNCY_CHANCE_GRASS = 0.21
 const BOUNCY_CHANCE_MUSHROOM = 0.17
+const BOUNCY_CHANCE_SPACE = 0.15
 
 const GRASSLAND_THEME = {
   screenBg: '#c4e4f5',
@@ -393,6 +541,15 @@ const TROPICAL_THEME = {
   tree: 'rgba(18, 70, 60, 0.45)',
   treeDark: 'rgba(12, 50, 44, 0.55)',
 }
+/** Deep space: black starfield + cool tile tint. */
+const SPACE_THEME = {
+  screenBg: '#020208',
+  tileBg: '#1e2433',
+  sky: '#000000',
+  sunGlow: 'rgba(120, 140, 255, 0.18)',
+  hillFar: '#12141c',
+  hillNear: '#0c0e16',
+}
 const CLASSIC_GAME_FONT = Platform.select({
   ios: 'Courier',
   default: 'monospace',
@@ -416,6 +573,7 @@ const GAME_OVER_DEAD_BIOME_TEXT: Record<WonderJumpStartBiome, string> = {
   /** Light maroon / dusty wine — readable on dark glass */
   mushroom: '#c97a8e',
   tropical: '#5ee8f0',
+  space: '#b8c4e8',
 }
 
 const BIOME_UI_ACCENTS: Record<
@@ -441,6 +599,19 @@ const BIOME_UI_ACCENTS: Record<
     accent: '#1d7f75',
     accentSoft: 'rgba(29, 127, 117, 0.34)',
   },
+  space: {
+    label: 'Deep Space',
+    accent: '#8b9ad4',
+    accentSoft: 'rgba(139, 154, 212, 0.34)',
+  },
+}
+
+/** Bright biome labels on the dark leaderboard card. */
+const LEADERBOARD_BIOME_TEXT_COLOR: Record<WonderJumpStartBiome, string> = {
+  grassland: '#8efc7a',
+  mushroom: '#ff5c7a',
+  tropical: '#3ee8ff',
+  space: '#b48cff',
 }
 
 function hexToRgb(hex: string) {
@@ -471,26 +642,38 @@ function lerp3Color(a: string, b: string, c: string, tAB: number, tBC: number) {
 
 /** 0 = full grassland scene, 1 = full mushroom isles (used for sky/hills + platform surface mix). */
 function getMushroomBlend(heightScore: number, startBiome: WonderJumpStartBiome): number {
-  if (startBiome === 'mushroom' || startBiome === 'tropical') return 1
+  if (startBiome === 'mushroom' || startBiome === 'tropical' || startBiome === 'space') return 1
   return clamp((heightScore - MUSHROOM_BIOME_HEIGHT_START) / MUSHROOM_BIOME_BLEND_RANGE, 0, 1)
 }
 
 /** 0 = mushroom, 1 = tropical (used for sky/hills + platform surface mix). */
 function getTropicalBlend(heightScore: number, startBiome: WonderJumpStartBiome): number {
-  if (startBiome === 'tropical') return 1
+  if (startBiome === 'tropical' || startBiome === 'space') return 1
   return clamp((heightScore - TROPICAL_BIOME_HEIGHT_START) / TROPICAL_BIOME_BLEND_RANGE, 0, 1)
+}
+
+/** 0 = tropical, 1 = deep space. */
+function getSpaceBlend(heightScore: number, startBiome: WonderJumpStartBiome): number {
+  if (startBiome === 'space') return 1
+  return clamp((heightScore - SPACE_BIOME_HEIGHT_START) / SPACE_BIOME_BLEND_RANGE, 0, 1)
 }
 
 function isMushroomGameplay(startBiome: WonderJumpStartBiome, mushroomBlend: number, tropicalBlend: number) {
   return (
     startBiome === 'mushroom' ||
     startBiome === 'tropical' ||
+    startBiome === 'space' ||
     mushroomBlend >= MUSHROOM_GAMEPLAY_BLEND ||
     tropicalBlend >= TROPICAL_GAMEPLAY_BLEND
   )
 }
 
-function pickPlatformSurface(mushroomBlend: number, tropicalBlend: number): PlatformSurfaceKind {
+function isSpaceGameplay(startBiome: WonderJumpStartBiome, spaceBlend: number) {
+  return startBiome === 'space' || spaceBlend >= SPACE_GAMEPLAY_BLEND
+}
+
+function pickPlatformSurface(mushroomBlend: number, tropicalBlend: number, spaceBlend: number): PlatformSurfaceKind {
+  if (spaceBlend >= SPACE_GAMEPLAY_BLEND) return 'moon'
   if (tropicalBlend >= 0.08) {
     const sandChance = clamp(0.56 + tropicalBlend * 0.28, 0.55, 0.86)
     return Math.random() < sandChance ? 'sand' : 'grass'
@@ -509,20 +692,94 @@ function pickPlatformSurface(mushroomBlend: number, tropicalBlend: number): Plat
   return roll < 0.5 ? 'mushroom_grey' : 'mushroom_red'
 }
 
-function biomeHudLabel(mushroomBlend: number, tropicalBlend: number, startBiome: WonderJumpStartBiome): string {
-  if (startBiome === 'tropical') return 'Sunset Keys'
-  if (startBiome === 'mushroom') return tropicalBlend > 0.88 ? 'Sunset Keys' : 'Mushroom Isles'
+function biomeHudLabel(
+  mushroomBlend: number,
+  tropicalBlend: number,
+  spaceBlend: number,
+  startBiome: WonderJumpStartBiome,
+): string {
+  if (startBiome === 'space') return 'Deep Space'
+  if (startBiome === 'tropical') return spaceBlend > 0.88 ? 'Deep Space' : 'Sunset Keys'
+  if (startBiome === 'mushroom') {
+    if (spaceBlend > 0.88) return 'Deep Space'
+    return tropicalBlend > 0.88 ? 'Sunset Keys' : 'Mushroom Isles'
+  }
+  if (spaceBlend > 0.9) return 'Deep Space'
   if (tropicalBlend > 0.9) return 'Sunset Keys'
   if (mushroomBlend > 0.9) return 'Mushroom Isles'
+  if (spaceBlend > 0.08) return 'Space frontier'
   if (mushroomBlend < 0.08) return 'Grasslands'
   return 'Mushroom frontier'
 }
 
 /** Map in-run HUD label to accent biome for colors (game over should match where you were, not only run start). */
 function hudBiomeLabelToAccentBiome(hudLabel: string): WonderJumpStartBiome {
+  if (hudLabel === 'Deep Space' || hudLabel === 'Space frontier') return 'space'
   if (hudLabel === 'Sunset Keys') return 'tropical'
   if (hudLabel === 'Mushroom Isles' || hudLabel === 'Mushroom frontier') return 'mushroom'
   return 'grassland'
+}
+
+/** Biomes unlocked by climbing to gameplay thresholds in a single run from `startBiome`. */
+function biomesUnlockedForHeight(heightScore: number, startBiome: WonderJumpStartBiome): WonderJumpStartBiome[] {
+  const out: WonderJumpStartBiome[] = ['grassland']
+  if (getMushroomBlend(heightScore, startBiome) >= MUSHROOM_GAMEPLAY_BLEND) out.push('mushroom')
+  if (getTropicalBlend(heightScore, startBiome) >= TROPICAL_GAMEPLAY_BLEND) out.push('tropical')
+  if (getSpaceBlend(heightScore, startBiome) >= SPACE_GAMEPLAY_BLEND) out.push('space')
+  return out
+}
+
+function accentBiomeAtHeight(heightScore: number, startBiome: WonderJumpStartBiome): WonderJumpStartBiome {
+  return hudBiomeLabelToAccentBiome(
+    biomeHudLabel(
+      getMushroomBlend(heightScore, startBiome),
+      getTropicalBlend(heightScore, startBiome),
+      getSpaceBlend(heightScore, startBiome),
+      startBiome
+    )
+  )
+}
+
+/** Leaderboard high scores are display points — map them to biome accents. */
+function accentBiomeFromDisplayScore(displayScore: number): WonderJumpStartBiome {
+  const s = Math.floor(displayScore)
+  if (s >= SPACE_BIOME_DISPLAY_START) return 'space'
+  if (s >= DISPLAY_SCORE_AT_TROPICAL) return 'tropical'
+  if (s >= 130) return 'mushroom'
+  return 'grassland'
+}
+
+const BIOME_ACCENT_RANK: Record<WonderJumpStartBiome, number> = {
+  grassland: 0,
+  mushroom: 1,
+  tropical: 2,
+  space: 3,
+}
+
+function maxBiomeAccent(a: WonderJumpStartBiome, b: WonderJumpStartBiome): WonderJumpStartBiome {
+  return BIOME_ACCENT_RANK[a] >= BIOME_ACCENT_RANK[b] ? a : b
+}
+
+function resolveLeaderboardBiomeId(biomeReached: string, displayScore: number): WonderJumpStartBiome {
+  const stored: WonderJumpStartBiome =
+    biomeReached === 'mushroom' || biomeReached === 'tropical' || biomeReached === 'space'
+      ? biomeReached
+      : 'grassland'
+  return maxBiomeAccent(stored, accentBiomeFromDisplayScore(displayScore))
+}
+
+function wonderJumpBiomeDisplayLabel(biomeId: string): string {
+  if (biomeId === 'mushroom' || biomeId === 'tropical' || biomeId === 'space') {
+    return BIOME_UI_ACCENTS[biomeId].label
+  }
+  return BIOME_UI_ACCENTS.grassland.label
+}
+
+function wonderJumpLeaderboardBiomeColor(biomeId: string): string {
+  if (biomeId === 'mushroom' || biomeId === 'tropical' || biomeId === 'space') {
+    return LEADERBOARD_BIOME_TEXT_COLOR[biomeId]
+  }
+  return LEADERBOARD_BIOME_TEXT_COLOR.grassland
 }
 
 function randomInRange(min: number, max: number) {
@@ -566,8 +823,23 @@ function enforceChainReachable(
   if (Math.abs(c1 - prevCx) > reach) {
     c1 = prevCx + (c1 > prevCx ? reach : -reach)
   }
-  c1 = clamp(c1, cMin, cMax)
-  const x1 = c1 - w / 2
+  c1 = resolveChainCenterX(prevCx, c1, prev.width, w, reach, cMin, cMax)
+  let x1 = c1 - w / 2
+  let overlap = overlapWidth(prev.x, prev.x + prev.width, x1, x1 + w)
+  const maxOv = maxIdleSafeChainOverlap(prev.width, w)
+  if (overlap > maxOv) {
+    const push = overlap - maxOv + 4
+    c1 = clamp(c1 + (c1 >= prevCx ? push : -push), cMin, cMax)
+    if (Math.abs(c1 - prevCx) > reach) {
+      c1 = clamp(prevCx + (c1 > prevCx ? reach : -reach), cMin, cMax)
+    }
+    x1 = c1 - w / 2
+    overlap = overlapWidth(prev.x, prev.x + prev.width, x1, x1 + w)
+    if (overlap > maxOv + 2) {
+      c1 = resolveChainCenterX(prevCx, c1, prev.width, w, reach, cMin, cMax)
+      x1 = c1 - w / 2
+    }
+  }
   fixed = { ...fixed, x: x1 }
 
   if (fixed.kind === 'moving') {
@@ -646,6 +918,22 @@ function overlapWidth(aStart: number, aEnd: number, bStart: number, bEnd: number
   return Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart))
 }
 
+/** Drop orphaned spikes and pin x/y to the host platform (moving tiles, after cull). */
+function syncSpikesToPlatforms(spikes: Spike[], platforms: PlatformItem[]): Spike[] {
+  const platformById = new Map(platforms.map((platform) => [platform.id, platform]))
+  const out: Spike[] = []
+  for (const spike of spikes) {
+    const host = platformById.get(spike.id.replace('spike-', ''))
+    if (!host) continue
+    out.push({
+      ...spike,
+      x: host.x + spike.offsetX,
+      y: host.y - spike.height,
+    })
+  }
+  return out
+}
+
 function filterUnfairSpikes(spikes: Spike[], platforms: PlatformItem[]) {
   const platformBySpikeId = new Map(platforms.map((platform) => [`spike-${platform.id}`, platform]))
   return spikes.filter((spike) => {
@@ -676,13 +964,21 @@ function filterUnfairSpikes(spikes: Spike[], platforms: PlatformItem[]) {
 }
 
 function spikeStartIndex(startBiome: WonderJumpStartBiome) {
-  return startBiome === 'mushroom' || startBiome === 'tropical'
+  return startBiome === 'mushroom' || startBiome === 'tropical' || startBiome === 'space'
     ? SPIKE_START_INITIAL_INDEX_MUSHROOM
     : SPIKE_START_INITIAL_INDEX_GRASS
 }
 
-function spikeActivationHeight(startBiome: WonderJumpStartBiome, mushroomBlend: number, tropicalBlend: number) {
-  if (isMushroomGameplay(startBiome, mushroomBlend, tropicalBlend)) {
+function spikeActivationHeight(
+  startBiome: WonderJumpStartBiome,
+  mushroomBlend: number,
+  tropicalBlend: number,
+  spaceBlend = 0
+) {
+  if (
+    isMushroomGameplay(startBiome, mushroomBlend, tropicalBlend) ||
+    isSpaceGameplay(startBiome, spaceBlend)
+  ) {
     return SPIKE_MIN_HEIGHT_SCORE_MUSHROOM
   }
   return SPIKE_MIN_HEIGHT_SCORE_GRASS
@@ -697,10 +993,15 @@ function spawnPlatform(
   previousPlatform?: PlatformItem,
   verticalGapFromPrevious?: number,
   mushroomBlend = 0,
-  tropicalBlend = 0
+  tropicalBlend = 0,
+  spaceBlend = 0,
+  /** Main-chain layout memory; omit for siblings and one-offs. */
+  chainState?: ChainSpawnState
 ): PlatformItem {
   const width =
-    tropicalBlend >= TROPICAL_GAMEPLAY_BLEND
+    spaceBlend >= SPACE_GAMEPLAY_BLEND
+      ? randomInRange(50, 98)
+    : tropicalBlend >= TROPICAL_GAMEPLAY_BLEND
       ? randomInRange(54, 112)
       : mushroomBlend >= MUSHROOM_GAMEPLAY_BLEND
         ? randomInRange(60, 118)
@@ -717,23 +1018,32 @@ function spawnPlatform(
     const prevCx = previousPlatform.x + previousPlatform.width / 2
     const reach = maxReachXForVerticalGap(verticalGapFromPrevious, playWidth, heightDifficulty)
 
-    const roll = Math.random()
     let targetCx: number
+    if (chainState) {
+      const sign = pickChainHorizontalSign(chainState)
+      const offset = pickChainOffsetMagnitude(reach, heightDifficulty)
+      targetCx = prevCx + sign * offset
 
-    if (roll < 0.28) {
-      const biasHigh = prevCx > playWidth * 0.52
-      const lo = biasHigh ? centerMin : (centerMin + centerMax) / 2
-      const hi = biasHigh ? (centerMin + centerMax) / 2 : centerMax
-      targetCx = randomInRange(lo, hi)
-      if (Math.abs(targetCx - prevCx) > reach) {
-        targetCx = clamp(prevCx + (targetCx > prevCx ? reach : -reach), centerMin, centerMax)
+      if (Math.random() < 0.14) {
+        const third = playWidth / 3
+        const anchorRoll = Math.random()
+        if (anchorRoll < 0.34) targetCx = randomInRange(centerMin, third)
+        else if (anchorRoll < 0.67) targetCx = randomInRange(third, 2 * third)
+        else targetCx = randomInRange(2 * third, centerMax)
       }
-    } else if (roll < 0.66) {
-      const lo = clamp(prevCx - reach, centerMin, centerMax)
-      const hi = clamp(prevCx + reach, centerMin, centerMax)
-      targetCx = hi <= lo ? randomInRange(centerMin, centerMax) : randomInRange(lo, hi)
+
+      targetCx = resolveChainCenterX(
+        prevCx,
+        targetCx,
+        previousPlatform.width,
+        width,
+        reach,
+        centerMin,
+        centerMax
+      )
+      commitChainSpawnSide(chainState, targetCx >= prevCx ? 1 : -1)
     } else {
-      targetCx = clamp(prevCx + randomInRange(-reach, reach), centerMin, centerMax)
+      targetCx = clamp(prevCx + randomInRange(-reach * 0.92, reach * 0.92), centerMin, centerMax)
     }
 
     x = clamp(targetCx - width / 2, minX, maxX)
@@ -744,7 +1054,9 @@ function spawnPlatform(
     ? Math.min(0.06 + heightDifficulty * 0.08, 0.18)
     : 0
   const bouncyChance =
-    mushroomBlend >= MUSHROOM_GAMEPLAY_BLEND || tropicalBlend >= TROPICAL_GAMEPLAY_BLEND
+    spaceBlend >= SPACE_GAMEPLAY_BLEND
+      ? BOUNCY_CHANCE_SPACE
+    : mushroomBlend >= MUSHROOM_GAMEPLAY_BLEND || tropicalBlend >= TROPICAL_GAMEPLAY_BLEND
       ? BOUNCY_CHANCE_MUSHROOM
       : BOUNCY_CHANCE_GRASS
   let kind: PlatformKind = 'normal'
@@ -754,7 +1066,7 @@ function spawnPlatform(
   else if (roll < movingChance + breakableChance + bouncyChance) kind = 'bouncy'
 
   const moveDistance = randomInRange(34, 92)
-  const surface = pickPlatformSurface(mushroomBlend, tropicalBlend)
+  const surface = pickPlatformSurface(mushroomBlend, tropicalBlend, spaceBlend)
   return {
     id: `platform-${idSeed}-${Math.round(y)}`,
     x,
@@ -784,12 +1096,15 @@ function trySpawnSiblingPlatform(
   heightDifficulty: number,
   avoid: PlatformItem[],
   mushroomBlend: number,
-  tropicalBlend: number
+  tropicalBlend: number,
+  spaceBlend = 0
 ): PlatformItem | null {
   const siblingTry =
-    mushroomBlend >= MUSHROOM_GAMEPLAY_BLEND || tropicalBlend >= TROPICAL_GAMEPLAY_BLEND
-      ? SIBLING_TRY_CHANCE_MUSHROOM
-      : SIBLING_TRY_CHANCE_GRASS
+    spaceBlend >= SPACE_GAMEPLAY_BLEND
+      ? SIBLING_TRY_CHANCE_SPACE
+      : mushroomBlend >= MUSHROOM_GAMEPLAY_BLEND || tropicalBlend >= TROPICAL_GAMEPLAY_BLEND
+        ? SIBLING_TRY_CHANCE_MUSHROOM
+        : SIBLING_TRY_CHANCE_GRASS
   if (Math.random() > siblingTry) return null
   for (let t = 0; t < 12; t += 1) {
     const p = spawnPlatform(
@@ -801,7 +1116,8 @@ function trySpawnSiblingPlatform(
       undefined,
       undefined,
       mushroomBlend,
-      tropicalBlend
+      tropicalBlend,
+      spaceBlend
     )
     if (!avoid.some((o) => rectsOverlap(o, p))) {
       return p
@@ -810,13 +1126,23 @@ function trySpawnSiblingPlatform(
   return null
 }
 
-function spikeSpawnChance(mushroomBlend: number, tropicalBlend: number, startBiome: WonderJumpStartBiome, heightDifficulty: number) {
-  const effectiveBlend = startBiome === 'tropical' ? 1 : Math.max(mushroomBlend, tropicalBlend)
+function spikeSpawnChance(
+  mushroomBlend: number,
+  tropicalBlend: number,
+  startBiome: WonderJumpStartBiome,
+  heightDifficulty: number,
+  spaceBlend = 0
+) {
+  const effectiveBlend =
+    startBiome === 'tropical' || startBiome === 'space'
+      ? 1
+      : Math.max(mushroomBlend, tropicalBlend, spaceBlend)
   const biomeBase =
     effectiveBlend >= MUSHROOM_GAMEPLAY_BLEND
       ? 0.18 + (effectiveBlend - MUSHROOM_GAMEPLAY_BLEND) * 0.16
       : 0.05 + effectiveBlend * 0.05
-  return clamp(biomeBase + heightDifficulty * 0.1, 0.04, 0.42)
+  const spaceScale = isSpaceGameplay(startBiome, spaceBlend) ? 0.88 : 1
+  return clamp((biomeBase + heightDifficulty * 0.1) * spaceScale, 0.04, 0.38)
 }
 
 function createSpikeOnPlatform(platform: PlatformItem): Spike | null {
@@ -884,10 +1210,13 @@ function spawnSpikes(
   tropicalBlend: number,
   startBiome: WonderJumpStartBiome,
   heightDifficulty: number,
-  forceSpawn = false
+  forceSpawn = false,
+  spaceBlend = 0
 ): Spike[] {
   if (!allowSpikes) return []
-  if (!forceSpawn && Math.random() > spikeSpawnChance(mushroomBlend, tropicalBlend, startBiome, heightDifficulty)) return []
+  if (!forceSpawn && Math.random() > spikeSpawnChance(mushroomBlend, tropicalBlend, startBiome, heightDifficulty, spaceBlend)) {
+    return []
+  }
   const spike = createSpikeOnPlatform(platform)
   return spike ? [spike] : []
 }
@@ -1013,10 +1342,12 @@ function spawnCrabOnPlatform(
   platform: PlatformItem,
   hasSpike: boolean,
   tropicalBlend: number,
+  spaceBlend: number,
   startBiome: WonderJumpStartBiome,
   seed: number
 ): Crab[] {
   if (hasSpike) return []
+  if (startBiome === 'space' || spaceBlend >= 0.12) return []
   if (startBiome !== 'tropical' && tropicalBlend < TROPICAL_GAMEPLAY_BLEND) return []
   if (platform.isFalling || platform.kind === 'breakable') return []
   if (platform.surface !== 'grass' && platform.surface !== 'sand') return []
@@ -1077,8 +1408,10 @@ function spawnJetpack(
   lastJetpackY: number | null,
   mushroomBlend: number,
   tropicalBlend: number,
+  spaceBlend: number,
   startBiome: WonderJumpStartBiome
 ): JetpackPickup[] {
+  if (startBiome === 'space' || spaceBlend >= 0.12) return []
   if (platform.kind === 'breakable') return []
   if (currentAliveCount >= MAX_JETPACKS_ALIVE) return []
   const spawnP = isMushroomGameplay(startBiome, mushroomBlend, tropicalBlend)
@@ -1107,15 +1440,67 @@ function spawnJetpack(
   ]
 }
 
+function trySpawnAsteroid(
+  cameraY: number,
+  playWidth: number,
+  heightScore: number,
+  seed: number,
+  spaceBlend: number,
+  startBiome: WonderJumpStartBiome,
+  aliveCount: number,
+  lastAsteroidSpawnHeight: number
+): Asteroid | null {
+  if (!isSpaceGameplay(startBiome, spaceBlend)) return null
+  if (aliveCount >= MAX_ASTEROIDS_ALIVE) return null
+  if (heightScore - lastAsteroidSpawnHeight < MIN_ASTEROID_SPAWN_HEIGHT_SEP) return null
+  if (Math.random() > ASTEROID_SPAWN_P) return null
+  const variant = pickAsteroidVariant(seed)
+  const cfg = METEOR_VARIANT_CONFIG[variant]
+  const width = cfg.rockW
+  const height = cfg.rockH
+  const margin = 18
+  const x = randomInRange(margin, Math.max(margin, playWidth - width - margin))
+  const y = cameraY - randomInRange(48, 140)
+  return {
+    id: `asteroid-${seed}-${Math.round(y)}`,
+    variant,
+    x,
+    y,
+    width,
+    height,
+    velocityY: randomInRange(cfg.velocityYMin, cfg.velocityYMax),
+    rotation: 0,
+    spinRate: 0,
+    flamePhase: Math.random() * Math.PI * 2,
+  }
+}
+
+function playerHitsAsteroid(player: Player, asteroid: Asteroid): boolean {
+  const padX = 5
+  const padY = 6
+  const ax = asteroid.x + padX
+  const ay = asteroid.y + padY
+  const aw = asteroid.width - padX * 2
+  const ah = asteroid.height - padY * 2
+  return (
+    player.x < ax + aw &&
+    player.x + player.width > ax &&
+    player.y < ay + ah &&
+    player.y + player.height > ay
+  )
+}
+
 function trySpawnWonderJumpChest(
   platform: PlatformItem,
   chestSpawnedThisRun: boolean,
   tropicalBlend: number,
+  spaceBlend: number,
   allowChestForAccount: boolean
 ): ChestPickup[] {
   if (!allowChestForAccount) return []
   if (chestSpawnedThisRun) return []
   if (tropicalBlend < TROPICAL_CHEST_MIN_BLEND) return []
+  if (spaceBlend >= 0.12) return []
   if (platform.kind === 'moving' || platform.kind === 'breakable' || platform.isFalling) return []
   if (platform.surface !== 'grass' && platform.surface !== 'sand') return []
   if (Math.random() > CHEST_SPAWN_P) return []
@@ -1229,14 +1614,17 @@ function createInitialWorld(
   const spikes: Spike[] = []
   const jetpacks: JetpackPickup[] = []
   const crabs: Crab[] = []
+  const asteroids: Asteroid[] = []
   const mainChainIndices: number[] = []
   let lastJetpackY: number | null = null
   const initMushroomBlend = getMushroomBlend(0, startBiome)
   const initTropicalBlend = getTropicalBlend(0, startBiome)
+  const initSpaceBlend = getSpaceBlend(0, startBiome)
   const firstSpikeIndex = spikeStartIndex(startBiome)
 
   let y = playHeight - 70
   let lastChainPlatform: PlatformItem | undefined
+  const chainState = createChainSpawnState()
   for (let i = 0; i < INITIAL_PLATFORM_COUNT; i += 1) {
     const verticalGap = lastChainPlatform ? lastChainPlatform.y - y : undefined
     const platform = spawnPlatform(
@@ -1248,13 +1636,24 @@ function createInitialWorld(
       lastChainPlatform,
       verticalGap,
       initMushroomBlend,
-      initTropicalBlend
+      initTropicalBlend,
+      initSpaceBlend,
+      lastChainPlatform ? chainState : undefined
     )
     platforms.push(platform)
     mainChainIndices.push(platforms.length - 1)
     lastChainPlatform = platform
     const spikeAllowed = i >= firstSpikeIndex
-    const newSpikes = spawnSpikes(platform, spikeAllowed, initMushroomBlend, initTropicalBlend, startBiome, 0)
+    const newSpikes = spawnSpikes(
+      platform,
+      spikeAllowed,
+      initMushroomBlend,
+      initTropicalBlend,
+      startBiome,
+      0,
+      false,
+      initSpaceBlend
+    )
     spikes.push(...newSpikes)
     platforms[platforms.length - 1] = maybeAttachPalmTree(
       { ...platforms[platforms.length - 1], topPalmTree: undefined },
@@ -1262,17 +1661,43 @@ function createInitialWorld(
       initTropicalBlend,
       newSpikes.length > 0
     )
-    crabs.push(...spawnCrabOnPlatform(platforms[platforms.length - 1], newSpikes.length > 0, initTropicalBlend, startBiome, i))
-    const jetpackFromChain = spawnJetpack(platform, jetpacks.length, lastJetpackY, initMushroomBlend, initTropicalBlend, startBiome)
+    crabs.push(
+      ...spawnCrabOnPlatform(
+        platforms[platforms.length - 1],
+        newSpikes.length > 0,
+        initTropicalBlend,
+        initSpaceBlend,
+        startBiome,
+        i
+      )
+    )
+    const jetpackFromChain = spawnJetpack(
+      platform,
+      jetpacks.length,
+      lastJetpackY,
+      initMushroomBlend,
+      initTropicalBlend,
+      initSpaceBlend,
+      startBiome
+    )
     if (jetpackFromChain.length) {
       jetpacks.push(...jetpackFromChain)
       lastJetpackY = jetpackFromChain[0].y
     }
     if (i > 1) {
-      const sibling = trySpawnSiblingPlatform(y, i + 9000, playWidth, 0, platforms, initMushroomBlend, initTropicalBlend)
+      const sibling = trySpawnSiblingPlatform(y, i + 9000, playWidth, 0, platforms, initMushroomBlend, initTropicalBlend, initSpaceBlend)
       if (sibling) {
         platforms.push(sibling)
-        const sSpikes = spawnSpikes(sibling, spikeAllowed, initMushroomBlend, initTropicalBlend, startBiome, 0)
+        const sSpikes = spawnSpikes(
+          sibling,
+          spikeAllowed,
+          initMushroomBlend,
+          initTropicalBlend,
+          startBiome,
+          0,
+          false,
+          initSpaceBlend
+        )
         spikes.push(...sSpikes)
         platforms[platforms.length - 1] = maybeAttachPalmTree(
           { ...platforms[platforms.length - 1], topPalmTree: undefined },
@@ -1280,20 +1705,43 @@ function createInitialWorld(
           initTropicalBlend,
           sSpikes.length > 0
         )
-        crabs.push(...spawnCrabOnPlatform(platforms[platforms.length - 1], sSpikes.length > 0, initTropicalBlend, startBiome, i + 9000))
-        const jetpackFromSib = spawnJetpack(sibling, jetpacks.length, lastJetpackY, initMushroomBlend, initTropicalBlend, startBiome)
+        crabs.push(
+          ...spawnCrabOnPlatform(
+            platforms[platforms.length - 1],
+            sSpikes.length > 0,
+            initTropicalBlend,
+            initSpaceBlend,
+            startBiome,
+            i + 9000
+          )
+        )
+        const jetpackFromSib = spawnJetpack(
+          sibling,
+          jetpacks.length,
+          lastJetpackY,
+          initMushroomBlend,
+          initTropicalBlend,
+          initSpaceBlend,
+          startBiome
+        )
         if (jetpackFromSib.length) {
           jetpacks.push(...jetpackFromSib)
           lastJetpackY = jetpackFromSib[0].y
         }
       }
     }
-    const stepLo = isMushroomGameplay(startBiome, initMushroomBlend, initTropicalBlend) ? 54 : 48
-    const step = clamp(randomInRange(stepLo, 88), MIN_CHAIN_VERTICAL_GAP, MAX_CHAIN_VERTICAL_GAP)
+    const stepLo =
+      startBiome === 'space'
+        ? 48
+        : isMushroomGameplay(startBiome, initMushroomBlend, initTropicalBlend)
+          ? 54
+          : 48
+    const stepHi = startBiome === 'space' ? 66 : 88
+    const step = clamp(randomInRange(stepLo, stepHi), MIN_CHAIN_VERTICAL_GAP, MAX_CHAIN_VERTICAL_GAP)
     y -= step
   }
 
-  const spawnSurface = pickPlatformSurface(initMushroomBlend, initTropicalBlend)
+  const spawnSurface = pickPlatformSurface(initMushroomBlend, initTropicalBlend, initSpaceBlend)
   platforms[mainChainIndices[0]] = {
     ...platforms[mainChainIndices[0]],
     x: playWidth / 2 - 58,
@@ -1316,13 +1764,7 @@ function createInitialWorld(
     platforms[curI] = enforceChainReachable(platforms[prevI], platforms[curI], playWidth, 0)
   }
 
-  const platformByIdInit = new Map(platforms.map((p) => [p.id, p]))
-  const spikesResynced = spikes.map((spike) => {
-    const hostId = spike.id.replace('spike-', '')
-    const host = platformByIdInit.get(hostId)
-    if (!host) return spike
-    return { ...spike, x: host.x + spike.offsetX, y: host.y - spike.height }
-  })
+  const spikesResynced = syncSpikesToPlatforms(spikes, platforms)
 
   const spawn = platforms[0]
   const player: Player = {
@@ -1338,7 +1780,7 @@ function createInitialWorld(
   }
 
   let safeSpikes = filterUnfairSpikes(spikesResynced, platforms)
-    const minInitialSpikes = startBiome === 'mushroom' || startBiome === 'tropical' ? 3 : 2
+  const minInitialSpikes = startBiome === 'mushroom' || startBiome === 'tropical' ? 3 : 2
   if (safeSpikes.length < minInitialSpikes) {
     const usedHostIds = new Set(safeSpikes.map((s) => s.id.replace('spike-', '')))
     const candidateChain = mainChainIndices
@@ -1365,7 +1807,9 @@ function createInitialWorld(
     chests,
     chestSpawnedThisRun,
     crabs,
+    asteroids,
     lastJetpackY,
+    lastAsteroidSpawnHeight: -MIN_ASTEROID_SPAWN_HEIGHT_SEP,
   }
 }
 
@@ -1396,13 +1840,16 @@ function createInitialState(
     chests: world.chests,
     chestSpawnedThisRun: world.chestSpawnedThisRun,
     crabs: world.crabs,
+    asteroids: world.asteroids,
     cameraY: 0,
     heightScore: 0,
     lastJetpackY: world.lastJetpackY,
+    lastAsteroidSpawnHeight: world.lastAsteroidSpawnHeight,
     jetpackFuelMs: 0,
     jetpackEndGraceMs: 0,
     jetpackAnimTick: 0,
     uiAnimTick: 0,
+    flameAnimTick: 0,
     jetpacksUsedThisRun: 0,
     deathCause: null,
     startBiome,
@@ -1411,6 +1858,13 @@ function createInitialState(
 
 /** Platform / cloud / spring SVG wrappers — no accent; module scope for memoized game tiles. */
 const wjWorldStyles = StyleSheet.create({
+  playerShadow: {
+    position: 'absolute',
+    width: 18,
+    height: 6,
+    borderRadius: 4,
+    backgroundColor: 'rgba(23, 46, 58, 0.32)',
+  },
   cloudRoot: {
     position: 'absolute',
     overflow: 'visible',
@@ -1561,7 +2015,30 @@ const SURFACE_PALETTES: Record<
     topHi: '#c45a6e',
     blade: '#4a2830',
   },
+  moon: {
+    dirtA: '#7d7973',
+    dirtB: '#959088',
+    top: '#eceae4',
+    topLine: '#d6d4cd',
+    topHi: '#f9f7f2',
+    blade: '#6e6a64',
+  },
 }
+
+/** Fixed star positions (viewBox 0–100) for space backdrop — avoids per-frame randomness. */
+const SPACE_STAR_FIELD: { x: number; y: number; r: number; o: number }[] = (() => {
+  const out: { x: number; y: number; r: number; o: number }[] = []
+  for (let i = 0; i < 92; i++) {
+    const t = i * 7919 + 104729
+    out.push({
+      x: (t * 0.137) % 100,
+      y: (t * 0.073) % 100,
+      r: 0.32 + (i % 6) * 0.11,
+      o: 0.42 + (i % 4) * 0.12,
+    })
+  }
+  return out
+})()
 
 const PLATFORM_FACE_VB_W = 100
 const PLATFORM_FACE_VB_H = 14
@@ -1579,9 +2056,79 @@ const PLATFORM_FACE_GRASS_STONES = [
   { x: 89.7, y: 10.9, rx: 1.05, ry: 0.65, o: 0.24 },
 ]
 
+function platformFaceSeed(id: string, x: number, width: number) {
+  let h = 2166136261 >>> 0
+  for (let i = 0; i < id.length; i++) {
+    h ^= id.charCodeAt(i)
+    h = Math.imul(h, 16777619) >>> 0
+  }
+  return (h ^ (Math.round(x) * 1597334677) ^ (Math.round(width) * 974934)) >>> 0
+}
+
+const SAND_STYLE_PATH = {
+  dirtA: 'M1.2,5.15 L0.4,12.5 L4.1,13.8 L9.6,12.4 L16,13.6 L23.4,12.2 L31.3,13.7 L39.8,12.1 L48.4,13.6 L56.9,12 L65.4,13.4 L73.7,11.9 L82.2,13.3 L90.4,11.9 L96.2,12.9 L99.4,11.8 L98.5,5.15 Z',
+  dirtB:
+    'M2,5.25 L1.5,10.9 L6.6,12.2 L13.5,10.95 L20.7,11.95 L28.8,10.8 L37.2,12.35 L45.9,10.8 L54.8,12.2 L63.9,10.65 L72.8,11.85 L81.7,10.8 L90.3,11.95 L96.1,10.95 L98.4,11.3 L97.8,5.25 Z',
+  top: 'M0,0.9 C4.1,0.2 8.2,-0.16 12.3,0.66 C16.3,1.42 20.5,1.3 24.5,0.58 C28.6,-0.1 32.7,-0.1 36.8,0.72 C40.8,1.5 45,1.38 49.1,0.6 C53.1,-0.12 57.2,-0.08 61.3,0.74 C65.4,1.52 69.5,1.4 73.6,0.62 C77.6,-0.12 81.8,-0.1 85.9,0.74 C90,1.52 94.1,1.42 98.2,0.66 L100,0.62 L100,4.65 L0,4.65 Z',
+  topLine:
+    'M0,1.4 C4.5,0.6 8.8,0.08 13.1,0.95 C17.2,1.72 21.5,1.62 25.8,0.84 C29.9,0.1 34.2,0.1 38.5,0.95 C42.6,1.74 46.9,1.62 51.2,0.84 C55.3,0.08 59.6,0.12 63.9,0.96 C68,1.72 72.3,1.62 76.6,0.84 C80.8,0.1 85.1,0.1 89.5,0.94 C93.6,1.72 97.1,1.6 100,1.02 L100,2.72 C96.9,3.28 93.4,3.42 89.3,2.78 C85,2.12 80.8,2.16 76.5,2.84 C72.2,3.52 67.9,3.44 63.8,2.78 C59.5,2.1 55.2,2.14 51.1,2.82 C46.8,3.52 42.5,3.46 38.4,2.8 C34.1,2.12 29.8,2.14 25.7,2.82 C21.4,3.5 17.1,3.46 13,2.8 C8.7,2.14 4.4,2.2 0,2.88 Z',
+} as const
+
+const SAND_STYLE_PEBBLES: { x: number; y: number; rx: number; ry: number; o: number }[] = [
+  { x: 10, y: 8.6, rx: 1.1, ry: 0.68, o: 0.24 },
+  { x: 24, y: 10.1, rx: 0.9, ry: 0.58, o: 0.2 },
+  { x: 38, y: 9.2, rx: 1.05, ry: 0.65, o: 0.22 },
+  { x: 52, y: 10.7, rx: 0.95, ry: 0.62, o: 0.19 },
+  { x: 66, y: 9.5, rx: 1.15, ry: 0.72, o: 0.23 },
+  { x: 80, y: 10.9, rx: 0.9, ry: 0.58, o: 0.2 },
+  { x: 92, y: 9.8, rx: 0.95, ry: 0.62, o: 0.19 },
+]
+
+/** Prebuilt sand/moon/mycelium faces — built once per palette (not per platform per frame). */
+const SAND_STYLE_PLATFORM_FACE_CACHE: Partial<Record<PlatformSurfaceKind, ReactNode>> = {}
+
+function renderSandStylePlatformFace(p: (typeof SURFACE_PALETTES)[PlatformSurfaceKind]) {
+  return (
+    <>
+      <Path fill={p.dirtA} d={SAND_STYLE_PATH.dirtA} />
+      <Path fill={p.dirtB} d={SAND_STYLE_PATH.dirtB} opacity={0.96} />
+      <Path d={SAND_STYLE_PATH.top} fill={p.top} />
+      <Path d={SAND_STYLE_PATH.topLine} fill={p.topLine} opacity={0.86} />
+      <Rect x="0" y="0.05" width={PLATFORM_FACE_VB_W} height={0.95} fill={p.topHi} opacity={0.62} />
+      <Rect x="0" y="4.15" width={PLATFORM_FACE_VB_W} height={0.56} fill={p.blade} opacity={0.82} />
+      {PLATFORM_FACE_BLADE_XS.map((cx, i) => {
+        const h = i % 2 === 0 ? 1.8 : 1.45
+        return (
+          <Rect
+            key={`ssb-${i}`}
+            x={cx - 0.42}
+            y={PLATFORM_FACE_GRASS_H - 1.55}
+            width={0.84}
+            height={h}
+            rx={0.16}
+            fill={p.blade}
+            opacity={0.48}
+          />
+        )
+      })}
+      {SAND_STYLE_PEBBLES.map((s, i) => (
+        <Ellipse key={`ssp-${i}`} cx={s.x} cy={s.y} rx={s.rx} ry={s.ry} fill={p.topLine} opacity={s.o} />
+      ))}
+    </>
+  )
+}
+
+function getSandStylePlatformFace(surface: PlatformSurfaceKind): ReactNode {
+  let cached = SAND_STYLE_PLATFORM_FACE_CACHE[surface]
+  if (!cached) {
+    cached = renderSandStylePlatformFace(SURFACE_PALETTES[surface])
+    SAND_STYLE_PLATFORM_FACE_CACHE[surface] = cached
+  }
+  return cached
+}
+
 /** Dirt + grass/mycelium cap paths in the 100×14 viewBox. Callers wrap these in an <Svg> or <G transform>. */
-function renderPlatformFaceShapes(surface: PlatformSurfaceKind) {
-  const p = SURFACE_PALETTES[surface]
+function renderPlatformFaceShapes(surface: PlatformSurfaceKind, _faceSeed = 0) {
   if (surface === 'grass') {
     return (
       <>
@@ -1668,45 +2215,7 @@ function renderPlatformFaceShapes(surface: PlatformSurfaceKind) {
       </>
     )
   }
-  return (
-    <>
-      <Path
-        fill={p.dirtA}
-        d="M1.2,5.15 L0.4,12.5 L4.1,13.8 L9.6,12.4 L16,13.6 L23.4,12.2 L31.3,13.7 L39.8,12.1 L48.4,13.6 L56.9,12 L65.4,13.4 L73.7,11.9 L82.2,13.3 L90.4,11.9 L96.2,12.9 L99.4,11.8 L98.5,5.15 Z"
-      />
-      <Path
-        fill={p.dirtB}
-        d="M2,5.25 L1.5,10.9 L6.6,12.2 L13.5,10.95 L20.7,11.95 L28.8,10.8 L37.2,12.35 L45.9,10.8 L54.8,12.2 L63.9,10.65 L72.8,11.85 L81.7,10.8 L90.3,11.95 L96.1,10.95 L98.4,11.3 L97.8,5.25 Z"
-        opacity={0.96}
-      />
-      <Path
-        d="M0,0.9 C4.1,0.2 8.2,-0.16 12.3,0.66 C16.3,1.42 20.5,1.3 24.5,0.58 C28.6,-0.1 32.7,-0.1 36.8,0.72 C40.8,1.5 45,1.38 49.1,0.6 C53.1,-0.12 57.2,-0.08 61.3,0.74 C65.4,1.52 69.5,1.4 73.6,0.62 C77.6,-0.12 81.8,-0.1 85.9,0.74 C90,1.52 94.1,1.42 98.2,0.66 L100,0.62 L100,4.65 L0,4.65 Z"
-        fill={p.top}
-      />
-      <Path
-        d="M0,1.4 C4.5,0.6 8.8,0.08 13.1,0.95 C17.2,1.72 21.5,1.62 25.8,0.84 C29.9,0.1 34.2,0.1 38.5,0.95 C42.6,1.74 46.9,1.62 51.2,0.84 C55.3,0.08 59.6,0.12 63.9,0.96 C68,1.72 72.3,1.62 76.6,0.84 C80.8,0.1 85.1,0.1 89.5,0.94 C93.6,1.72 97.1,1.6 100,1.02 L100,2.72 C96.9,3.28 93.4,3.42 89.3,2.78 C85,2.12 80.8,2.16 76.5,2.84 C72.2,3.52 67.9,3.44 63.8,2.78 C59.5,2.1 55.2,2.14 51.1,2.82 C46.8,3.52 42.5,3.46 38.4,2.8 C34.1,2.12 29.8,2.14 25.7,2.82 C21.4,3.5 17.1,3.46 13,2.8 C8.7,2.14 4.4,2.2 0,2.88 Z"
-        fill={p.topLine}
-        opacity={0.86}
-      />
-      <Rect x="0" y="0.05" width={PLATFORM_FACE_VB_W} height={0.95} fill={p.topHi} opacity={0.62} />
-      <Rect x="0" y="4.15" width={PLATFORM_FACE_VB_W} height={0.56} fill={p.blade} opacity={0.82} />
-      {PLATFORM_FACE_BLADE_XS.map((cx, i) => {
-        const h = i % 2 === 0 ? 1.8 : 1.45
-        return <Rect key={i} x={cx - 0.42} y={PLATFORM_FACE_GRASS_H - 1.55} width={0.84} height={h} rx={0.16} fill={p.blade} opacity={0.48} />
-      })}
-      {[
-        [10, 8.6, 1.1, 0.68, 0.24],
-        [24, 10.1, 0.9, 0.58, 0.2],
-        [38, 9.2, 1.05, 0.65, 0.22],
-        [52, 10.7, 0.95, 0.62, 0.19],
-        [66, 9.5, 1.15, 0.72, 0.23],
-        [80, 10.9, 0.9, 0.58, 0.2],
-        [92, 9.8, 0.95, 0.62, 0.19],
-      ].map(([x, y, rx, ry, o], i) => (
-        <Ellipse key={`st2-${i}`} cx={x} cy={y} rx={rx} ry={ry} fill={p.topLine} opacity={o} />
-      ))}
-    </>
-  )
+  return getSandStylePlatformFace(surface)
 }
 
 /** Pixel-style grass / mycelium cap + jagged dirt; palette from biome surface. */
@@ -1714,10 +2223,12 @@ const BiomePlatformFace = memo(function BiomePlatformFace({
   width,
   height,
   surface,
+  faceSeed = 0,
 }: {
   width: number
   height: number
   surface: PlatformSurfaceKind
+  faceSeed?: number
 }) {
   return (
     <Svg
@@ -1726,7 +2237,7 @@ const BiomePlatformFace = memo(function BiomePlatformFace({
       viewBox={`0 0 ${PLATFORM_FACE_VB_W} ${PLATFORM_FACE_VB_H}`}
       preserveAspectRatio="none"
     >
-      {renderPlatformFaceShapes(surface)}
+      {renderPlatformFaceShapes(surface, faceSeed)}
     </Svg>
   )
 })
@@ -1738,10 +2249,12 @@ const BreakableSplitPlatformFace = memo(function BreakableSplitPlatformFace({
   width,
   height,
   surface,
+  faceSeed = 0,
 }: {
   width: number
   height: number
   surface: PlatformSurfaceKind
+  faceSeed?: number
 }) {
   const gap = Math.max(6, Math.min(11, width * 0.095))
   const halfW = width / 2 - gap / 2
@@ -1760,7 +2273,7 @@ const BreakableSplitPlatformFace = memo(function BreakableSplitPlatformFace({
           },
         ]}
       >
-        <BiomePlatformFace width={width} height={height} surface={surface} />
+        <BiomePlatformFace width={width} height={height} surface={surface} faceSeed={faceSeed} />
       </View>
       <View
         style={[
@@ -1774,7 +2287,7 @@ const BreakableSplitPlatformFace = memo(function BreakableSplitPlatformFace({
         ]}
       >
         <View style={{ marginLeft: -(width / 2 + gap / 2) }}>
-          <BiomePlatformFace width={width} height={height} surface={surface} />
+          <BiomePlatformFace width={width} height={height} surface={surface} faceSeed={faceSeed} />
         </View>
       </View>
       <Svg
@@ -1811,18 +2324,20 @@ const GrasslandPlatformGraphic = memo(function GrasslandPlatformGraphic({
   height,
   kind,
   surface,
+  faceSeed = 0,
 }: {
   width: number
   height: number
   kind: GrasslandPlatformKind
   surface: PlatformSurfaceKind
+  faceSeed?: number
 }) {
   if (kind === 'breakable') {
-    return <BreakableSplitPlatformFace width={width} height={height} surface={surface} />
+    return <BreakableSplitPlatformFace width={width} height={height} surface={surface} faceSeed={faceSeed} />
   }
   return (
     <View style={wjWorldStyles.platformGraphicWrap} pointerEvents="none">
-      <BiomePlatformFace width={width} height={height} surface={surface} />
+      <BiomePlatformFace width={width} height={height} surface={surface} faceSeed={faceSeed} />
       {kind === 'moving' ? <View style={wjWorldStyles.platformTintMoving} /> : null}
     </View>
   )
@@ -2118,18 +2633,21 @@ const MergedPlatformFace = memo(function MergedPlatformFace({
   width,
   height,
   surface,
+  faceSeed = 0,
   topFlowers,
   topMushrooms,
 }: {
   width: number
   height: number
   surface: PlatformSurfaceKind
+  faceSeed?: number
   topFlowers?: PlatformTopFlower[]
   topMushrooms?: PlatformTopMushroom[]
 }) {
   const svgW = width
   const svgH = MERGED_DECO_OVERHANG + height
   const faceTransform = `translate(0, ${MERGED_DECO_OVERHANG}) scale(${width / PLATFORM_FACE_VB_W}, ${height / PLATFORM_FACE_VB_H})`
+  const faceShapes = useMemo(() => renderPlatformFaceShapes(surface, faceSeed), [surface, faceSeed])
   return (
     <Svg
       pointerEvents="none"
@@ -2139,7 +2657,7 @@ const MergedPlatformFace = memo(function MergedPlatformFace({
       viewBox={`0 0 ${svgW} ${svgH}`}
       preserveAspectRatio="none"
     >
-      <G transform={faceTransform}>{renderPlatformFaceShapes(surface)}</G>
+      <G transform={faceTransform}>{faceShapes}</G>
       {topMushrooms?.map((m, i) => {
         const vbW = m.kind === 'single' ? MUSHROOM_SINGLE_VB_W : MUSHROOM_GROUP_VB_W
         const vbH = m.kind === 'single' ? MUSHROOM_SINGLE_VB_H : MUSHROOM_GROUP_VB_H
@@ -2179,6 +2697,7 @@ const JumpPlatformRow = memo(function JumpPlatformRow({
   shellHeight,
   graphicKind,
   surface,
+  faceSeed,
   isBouncy,
   isFalling,
   topMushrooms,
@@ -2191,6 +2710,7 @@ const JumpPlatformRow = memo(function JumpPlatformRow({
   shellHeight: number
   graphicKind: GrasslandPlatformKind
   surface: PlatformSurfaceKind
+  faceSeed: number
   isBouncy: boolean
   isFalling: boolean
   topMushrooms?: PlatformTopMushroom[]
@@ -2209,7 +2729,13 @@ const JumpPlatformRow = memo(function JumpPlatformRow({
     >
       {isBreakable ? (
         <>
-          <GrasslandPlatformGraphic width={width} height={shellHeight} kind={graphicKind} surface={surface} />
+          <GrasslandPlatformGraphic
+            width={width}
+            height={shellHeight}
+            kind={graphicKind}
+            surface={surface}
+            faceSeed={faceSeed}
+          />
           {topMushrooms?.length ? <PlatformTopMushroomsLayer mushrooms={topMushrooms} /> : null}
           {topFlowers?.length ? <PlatformTopFlowersLayer flowers={topFlowers} /> : null}
         </>
@@ -2219,6 +2745,7 @@ const JumpPlatformRow = memo(function JumpPlatformRow({
             width={width}
             height={shellHeight}
             surface={surface}
+            faceSeed={faceSeed}
             topFlowers={topFlowers}
             topMushrooms={topMushrooms}
           />
@@ -2280,6 +2807,9 @@ const WonderJumpGiftboxFromAsset = memo(function WonderJumpGiftboxFromAsset({
 const WJ_DOCK_GIFT_BOX_PX = 58
 /** Hub dock: Daily Rewards stage is 236px; scale to fit `wjChestDockTile`. */
 const WJ_DOCK_GIFT_STAGE_PX = 82
+
+const JP_EQUIPPED_FLAME_GRAD_ID = 'wjEquippedJetpackFlameGrad'
+const JP_EQUIPPED_FLAME_CORE_ID = 'wjEquippedJetpackFlameCore'
 
 const WonderJumpJetpackFromAsset = memo(function WonderJumpJetpackFromAsset({
   width,
@@ -2467,16 +2997,28 @@ const CrabView = memo(function CrabView({
   )
 })
 
+function playerJetpackFxPropsEqual(
+  prev: { left: number; top: number; frame: number; active: boolean },
+  next: { left: number; top: number; frame: number; active: boolean },
+): boolean {
+  if (!prev.active && !next.active) return true
+  if (prev.active !== next.active) return false
+  return prev.left === next.left && prev.top === next.top && (prev.frame >> 1) === (next.frame >> 1)
+}
+
 const PlayerJetpackFx = memo(function PlayerJetpackFx({
   left,
   top,
   frame,
+  active,
 }: {
   left: number
   top: number
   frame: number
+  active: boolean
 }) {
-  const t = frame * 0.72
+  const animFrame = frame >> 1
+  const t = animFrame * 0.72
   const pulse = (Math.sin(t) + 1) * 0.5
   const pulseAlt = (Math.sin(t + 1.2) + 1) * 0.5
   const violence = (Math.sin(t * 1.9) + 1) * 0.5
@@ -2490,10 +3032,19 @@ const PlayerJetpackFx = memo(function PlayerJetpackFx({
   const rightFlameX = EQUIPPED_JETPACK_RIGHT_NOZZLE_X + rightJitter
   const leftFlameTip = flameL + 34
   const rightFlameTip = flameR + 34
-  const flameGradId = useRef(`jpEqFlame_${Math.random().toString(36).slice(2, 9)}`).current
-  const flameCoreId = useRef(`jpEqCore_${Math.random().toString(36).slice(2, 9)}`).current
   return (
-    <View pointerEvents="none" style={{ position: 'absolute', left, top, width: 52, height: 82 }}>
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: 52,
+        height: 82,
+        opacity: active ? 1 : 0,
+      }}
+      collapsable={false}
+    >
       <Svg
         pointerEvents="none"
         style={{ position: 'absolute', left: 0, top: EQUIPPED_JETPACK_FLAME_TOP, width: 52, height: 128 }}
@@ -2503,43 +3054,57 @@ const PlayerJetpackFx = memo(function PlayerJetpackFx({
         preserveAspectRatio="none"
       >
         <Defs>
-          <LinearGradient id={flameGradId} x1="0%" y1="0%" x2="0%" y2="100%">
+          <LinearGradient id={JP_EQUIPPED_FLAME_GRAD_ID} x1="0%" y1="0%" x2="0%" y2="100%">
             <Stop offset="0%" stopColor="#fff7d4" />
             <Stop offset="42%" stopColor="#ffb13a" />
             <Stop offset="100%" stopColor="#d33b10" />
           </LinearGradient>
-          <LinearGradient id={flameCoreId} x1="0%" y1="0%" x2="0%" y2="100%">
+          <LinearGradient id={JP_EQUIPPED_FLAME_CORE_ID} x1="0%" y1="0%" x2="0%" y2="100%">
             <Stop offset="0%" stopColor="#ffffff" />
             <Stop offset="60%" stopColor="#ffe08f" />
             <Stop offset="100%" stopColor="#ff8f2e" />
           </LinearGradient>
         </Defs>
-        <Ellipse cx={leftFlameX} cy={5 + pulse * 3} rx={6.2} ry={9.6} fill="#ff7f2a" opacity={0.28 + pulse * 0.18} />
-        <Ellipse cx={rightFlameX} cy={5 + pulseAlt * 3} rx={6.2} ry={9.6} fill="#ff7f2a" opacity={0.28 + pulseAlt * 0.18} />
-        <Ellipse cx={EQUIPPED_JETPACK_LEFT_NOZZLE_X + smokeDrift * 0.45} cy={1 + pulse * 1.2} rx={4.4 + pulse * 0.8} ry={2.5 + pulse * 0.7} fill="#59616a" opacity={0.18} />
-        <Ellipse cx={EQUIPPED_JETPACK_RIGHT_NOZZLE_X - smokeDrift * 0.45} cy={1 + pulseAlt * 1.2} rx={4.4 + pulseAlt * 0.8} ry={2.5 + pulseAlt * 0.7} fill="#59616a" opacity={0.18} />
-        <Polygon
-          points={`${leftFlameX - 2.7},0 ${leftFlameX - 5.8},10 ${leftFlameX - 3.4},18 ${leftFlameX - 8.6},31 ${leftFlameX - 4.8},43 ${leftFlameX - 9.6},58 ${leftFlameX - 5.2},${leftFlameTip - 16} ${leftFlameX},${leftFlameTip} ${leftFlameX + 5.2},${leftFlameTip - 16} ${leftFlameX + 9.6},58 ${leftFlameX + 4.8},43 ${leftFlameX + 8.6},31 ${leftFlameX + 3.4},18 ${leftFlameX + 5.8},10 ${leftFlameX + 2.7},0`}
-          fill={`url(#${flameGradId})`}
-        />
-        <Polygon
-          points={`${leftFlameX - 1.2},2 ${leftFlameX - 3.2},13 ${leftFlameX - 1.8},22 ${leftFlameX - 4.4},35 ${leftFlameX - 2.3},47 ${leftFlameX - 4.8},60 ${leftFlameX - 2},${leftFlameTip - 20} ${leftFlameX},${leftFlameTip - 10} ${leftFlameX + 2},${leftFlameTip - 20} ${leftFlameX + 4.8},60 ${leftFlameX + 2.3},47 ${leftFlameX + 4.4},35 ${leftFlameX + 1.8},22 ${leftFlameX + 3.2},13 ${leftFlameX + 1.2},2`}
-          fill={`url(#${flameCoreId})`}
-          opacity={0.94}
-        />
-        <Polygon
-          points={`${rightFlameX - 2.7},0 ${rightFlameX - 5.8},10 ${rightFlameX - 3.4},18 ${rightFlameX - 8.6},31 ${rightFlameX - 4.8},43 ${rightFlameX - 9.6},58 ${rightFlameX - 5.2},${rightFlameTip - 16} ${rightFlameX},${rightFlameTip} ${rightFlameX + 5.2},${rightFlameTip - 16} ${rightFlameX + 9.6},58 ${rightFlameX + 4.8},43 ${rightFlameX + 8.6},31 ${rightFlameX + 3.4},18 ${rightFlameX + 5.8},10 ${rightFlameX + 2.7},0`}
-          fill={`url(#${flameGradId})`}
-        />
-        <Polygon
-          points={`${rightFlameX - 1.2},2 ${rightFlameX - 3.2},13 ${rightFlameX - 1.8},22 ${rightFlameX - 4.4},35 ${rightFlameX - 2.3},47 ${rightFlameX - 4.8},60 ${rightFlameX - 2},${rightFlameTip - 20} ${rightFlameX},${rightFlameTip - 10} ${rightFlameX + 2},${rightFlameTip - 20} ${rightFlameX + 4.8},60 ${rightFlameX + 2.3},47 ${rightFlameX + 4.4},35 ${rightFlameX + 1.8},22 ${rightFlameX + 3.2},13 ${rightFlameX + 1.2},2`}
-          fill={`url(#${flameCoreId})`}
-          opacity={0.94}
-        />
-        <Ellipse cx={EQUIPPED_JETPACK_LEFT_NOZZLE_X - 2 + leftJitter} cy={72 + pulse * 13} rx={1.1} ry={2.8} fill="#ffd98e" opacity={0.7} />
-        <Ellipse cx={EQUIPPED_JETPACK_LEFT_NOZZLE_X + 3 + leftJitter} cy={86 + violence * 16} rx={0.9} ry={2.4} fill="#ffb13a" opacity={0.55} />
-        <Ellipse cx={EQUIPPED_JETPACK_RIGHT_NOZZLE_X - 3 + rightJitter} cy={75 + pulseAlt * 12} rx={1.1} ry={2.8} fill="#ffd98e" opacity={0.7} />
-        <Ellipse cx={EQUIPPED_JETPACK_RIGHT_NOZZLE_X + 3 + rightJitter} cy={88 + violenceAlt * 15} rx={0.9} ry={2.4} fill="#ffb13a" opacity={0.55} />
+        {active ? (
+          <>
+            <Ellipse cx={leftFlameX} cy={5 + pulse * 3} rx={6.2} ry={9.6} fill="#ff7f2a" opacity={0.28 + pulse * 0.18} />
+            <Ellipse cx={rightFlameX} cy={5 + pulseAlt * 3} rx={6.2} ry={9.6} fill="#ff7f2a" opacity={0.28 + pulseAlt * 0.18} />
+            <Ellipse
+              cx={EQUIPPED_JETPACK_LEFT_NOZZLE_X + smokeDrift * 0.45}
+              cy={1 + pulse * 1.2}
+              rx={4.4 + pulse * 0.8}
+              ry={2.5 + pulse * 0.7}
+              fill="#59616a"
+              opacity={0.18}
+            />
+            <Ellipse
+              cx={EQUIPPED_JETPACK_RIGHT_NOZZLE_X - smokeDrift * 0.45}
+              cy={1 + pulseAlt * 1.2}
+              rx={4.4 + pulseAlt * 0.8}
+              ry={2.5 + pulseAlt * 0.7}
+              fill="#59616a"
+              opacity={0.18}
+            />
+            <Polygon
+              points={`${leftFlameX - 2.7},0 ${leftFlameX - 5.8},10 ${leftFlameX - 3.4},18 ${leftFlameX - 8.6},31 ${leftFlameX - 4.8},43 ${leftFlameX - 9.6},58 ${leftFlameX - 5.2},${leftFlameTip - 16} ${leftFlameX},${leftFlameTip} ${leftFlameX + 5.2},${leftFlameTip - 16} ${leftFlameX + 9.6},58 ${leftFlameX + 4.8},43 ${leftFlameX + 8.6},31 ${leftFlameX + 3.4},18 ${leftFlameX + 5.8},10 ${leftFlameX + 2.7},0`}
+              fill={`url(#${JP_EQUIPPED_FLAME_GRAD_ID})`}
+            />
+            <Polygon
+              points={`${leftFlameX - 1.2},2 ${leftFlameX - 3.2},13 ${leftFlameX - 1.8},22 ${leftFlameX - 4.4},35 ${leftFlameX - 2.3},47 ${leftFlameX - 4.8},60 ${leftFlameX - 2},${leftFlameTip - 20} ${leftFlameX},${leftFlameTip - 10} ${leftFlameX + 2},${leftFlameTip - 20} ${leftFlameX + 4.8},60 ${leftFlameX + 2.3},47 ${leftFlameX + 4.4},35 ${leftFlameX + 1.8},22 ${leftFlameX + 3.2},13 ${leftFlameX + 1.2},2`}
+              fill={`url(#${JP_EQUIPPED_FLAME_CORE_ID})`}
+              opacity={0.94}
+            />
+            <Polygon
+              points={`${rightFlameX - 2.7},0 ${rightFlameX - 5.8},10 ${rightFlameX - 3.4},18 ${rightFlameX - 8.6},31 ${rightFlameX - 4.8},43 ${rightFlameX - 9.6},58 ${rightFlameX - 5.2},${rightFlameTip - 16} ${rightFlameX},${rightFlameTip} ${rightFlameX + 5.2},${rightFlameTip - 16} ${rightFlameX + 9.6},58 ${rightFlameX + 4.8},43 ${rightFlameX + 8.6},31 ${rightFlameX + 3.4},18 ${rightFlameX + 5.8},10 ${rightFlameX + 2.7},0`}
+              fill={`url(#${JP_EQUIPPED_FLAME_GRAD_ID})`}
+            />
+            <Polygon
+              points={`${rightFlameX - 1.2},2 ${rightFlameX - 3.2},13 ${rightFlameX - 1.8},22 ${rightFlameX - 4.4},35 ${rightFlameX - 2.3},47 ${rightFlameX - 4.8},60 ${rightFlameX - 2},${rightFlameTip - 20} ${rightFlameX},${rightFlameTip - 10} ${rightFlameX + 2},${rightFlameTip - 20} ${rightFlameX + 4.8},60 ${rightFlameX + 2.3},47 ${rightFlameX + 4.4},35 ${rightFlameX + 1.8},22 ${rightFlameX + 3.2},13 ${rightFlameX + 1.2},2`}
+              fill={`url(#${JP_EQUIPPED_FLAME_CORE_ID})`}
+              opacity={0.94}
+            />
+          </>
+        ) : null}
       </Svg>
       <View
         pointerEvents="none"
@@ -2553,6 +3118,58 @@ const PlayerJetpackFx = memo(function PlayerJetpackFx({
       >
         <WonderJumpJetpackGraphic width={EQUIPPED_JETPACK_VISUAL_W} height={EQUIPPED_JETPACK_VISUAL_H} />
       </View>
+    </View>
+  )
+}, playerJetpackFxPropsEqual)
+
+const WonderJumpPlayerStack = memo(function WonderJumpPlayerStack({
+  characterStyle,
+  playerX,
+  playerY,
+  playerWidth,
+  playerHeight,
+  jetpackFuelMs,
+  jetpackAnimTick,
+  jetpackFxLatched,
+}: {
+  characterStyle: WonderJumpCharacterStyle
+  playerX: number
+  playerY: number
+  playerWidth: number
+  playerHeight: number
+  jetpackFuelMs: number
+  jetpackAnimTick: number
+  jetpackFxLatched: boolean
+}) {
+  const jetpackActive = jetpackFuelMs > 0
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+      {characterStyle === 'classic' ? (
+        <View
+          style={[
+            wjWorldStyles.playerShadow,
+            {
+              left: playerX + 2,
+              top: playerY + playerHeight - 3,
+            },
+          ]}
+        />
+      ) : null}
+      <WonderJumpPlayerVisual
+        characterStyle={characterStyle}
+        left={playerX}
+        top={playerY}
+        width={playerWidth}
+        height={playerHeight}
+      />
+      {jetpackFxLatched ? (
+        <PlayerJetpackFx
+          left={playerX + EQUIPPED_JETPACK_CENTER_OFFSET_X}
+          top={playerY + EQUIPPED_JETPACK_TOP_OFFSET_Y}
+          frame={jetpackAnimTick}
+          active={jetpackActive}
+        />
+      ) : null}
     </View>
   )
 })
@@ -2627,26 +3244,33 @@ const WonderSkyBackdrop = memo(function WonderSkyBackdrop({
   height,
   mushroomBlend,
   tropicalBlend,
+  spaceBlend,
 }: {
   width: number
   height: number
   mushroomBlend: number
   tropicalBlend: number
+  spaceBlend: number
 }) {
   const gradId = useRef(`wjSky_${Math.random().toString(36).slice(2, 9)}`).current
   const m = clamp(mushroomBlend, 0, 1)
   const t = clamp(tropicalBlend, 0, 1)
+  const s = clamp(spaceBlend, 0, 1)
   const tropicalStrong = clamp(t, 0, 1)
   const mushroomStrong = clamp(m * (1 - tropicalStrong * 0.8), 0, 1)
-  const grassOpacity = 1
-  const mushroomOverlayOpacity = mushroomStrong * 0.62
-  const tropicalOverlayOpacity = tropicalStrong * 0.6
+  const priorOpacity = 1 - s
+  const grassOpacity = priorOpacity
+  const mushroomOverlayOpacity = mushroomStrong * 0.62 * priorOpacity
+  const tropicalOverlayOpacity = tropicalStrong * 0.6 * priorOpacity
   const mushroomTop = '#5f507f'
   const mushroomMid = '#74659e'
   const mushroomBottom = '#8b7cb4'
   const tropicalTop = '#328792'
   const tropicalMid = '#3f9ea9'
   const tropicalBottom = '#4eb3bb'
+  const galaxyCx = width * 0.72
+  const galaxyCy = height * 0.22
+  const galaxyR = Math.max(width, height) * 0.42
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
       <Image
@@ -2667,9 +3291,30 @@ const WonderSkyBackdrop = memo(function WonderSkyBackdrop({
             <Stop offset="0.54" stopColor={tropicalMid} stopOpacity={tropicalOverlayOpacity} />
             <Stop offset="1" stopColor={tropicalTop} stopOpacity={tropicalOverlayOpacity} />
           </LinearGradient>
+          <LinearGradient id={`${gradId}_space`} x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor="#020208" stopOpacity={s} />
+            <Stop offset="1" stopColor="#000000" stopOpacity={s} />
+          </LinearGradient>
+          <RadialGradient id={`${gradId}_galaxy`} cx="50%" cy="50%" rx="50%" ry="50%">
+            <Stop offset="0%" stopColor="#6b5ce8" stopOpacity={0.22 * s} />
+            <Stop offset="45%" stopColor="#3d4a9e" stopOpacity={0.1 * s} />
+            <Stop offset="100%" stopColor="#000000" stopOpacity={0} />
+          </RadialGradient>
         </Defs>
         <Rect x={0} y={0} width={width} height={height} fill={`url(#${gradId})`} />
         <Rect x={0} y={0} width={width} height={height} fill={`url(#${gradId}_tropical)`} />
+        <Rect x={0} y={0} width={width} height={height} fill={`url(#${gradId}_space)`} />
+        <Ellipse cx={galaxyCx} cy={galaxyCy} rx={galaxyR} ry={galaxyR * 0.55} fill={`url(#${gradId}_galaxy)`} />
+        {SPACE_STAR_FIELD.map((star, i) => (
+          <Circle
+            key={`star-${i}`}
+            cx={(star.x / 100) * width}
+            cy={(star.y / 100) * height}
+            r={star.r}
+            fill="#ffffff"
+            opacity={star.o * s}
+          />
+        ))}
       </Svg>
     </View>
   )
@@ -2689,15 +3334,23 @@ const WonderJumpAmbientDecor = memo(function WonderJumpAmbientDecor({
   playHeight,
   mushroomBlend,
   tropicalBlend,
+  spaceBlend,
 }: {
   playWidth: number
   playHeight: number
   mushroomBlend: number
   tropicalBlend: number
+  spaceBlend: number
 }) {
   return (
     <>
-      <WonderSkyBackdrop width={playWidth} height={playHeight} mushroomBlend={mushroomBlend} tropicalBlend={tropicalBlend} />
+      <WonderSkyBackdrop
+        width={playWidth}
+        height={playHeight}
+        mushroomBlend={mushroomBlend}
+        tropicalBlend={tropicalBlend}
+        spaceBlend={spaceBlend}
+      />
     </>
   )
 })
@@ -2727,7 +3380,8 @@ const WonderJumpPlayerVisual = memo(function WonderJumpPlayerVisual({
   )
 })
 
-const DEFAULT_WONDER_JUMP_UNLOCKED: WonderJumpStartBiome[] = ['grassland', 'mushroom', 'tropical']
+const MENU_START_BIOME: WonderJumpStartBiome = 'grassland'
+const DEFAULT_WONDER_JUMP_UNLOCKED: WonderJumpStartBiome[] = ['grassland']
 
 export function WonderJump({
   navigation,
@@ -2761,27 +3415,31 @@ export function WonderJump({
     () => Math.min(playHeight * 0.94, playHeight - 12),
     [playHeight]
   )
-  const hubPanelScrollMaxHeight = useMemo(() => {
-    const dockPaddingV = 14 + 12
-    return Math.max(200, hubPanelOuterMaxHeight - dockPaddingV)
-  }, [hubPanelOuterMaxHeight])
-  const gameOverPanelDockStyle = useMemo(
+  const hubPanelOverlayStyle = useMemo(
+    () =>
+      ({
+        ...StyleSheet.absoluteFillObject,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 26,
+        zIndex: 8,
+      }) as const,
+    []
+  )
+  const hubPanelCardStyle = useMemo(
     () => ({
-      bottom: Math.max(8, insets.bottom + 6),
+      position: 'relative' as const,
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+      width: '100%' as const,
       maxHeight: hubPanelOuterMaxHeight,
       overflow: 'hidden' as const,
     }),
-    [hubPanelOuterMaxHeight, insets.bottom]
+    [hubPanelOuterMaxHeight]
   )
 
-  const routeSeedBiome: WonderJumpStartBiome =
-    route?.params?.startBiome === 'mushroom'
-      ? 'mushroom'
-      : route?.params?.startBiome === 'tropical'
-        ? 'tropical'
-        : 'grassland'
-
-  const [menuStartBiome, setMenuStartBiome] = useState<WonderJumpStartBiome>(routeSeedBiome)
   const [controlScheme, setControlScheme] = useState<ControlScheme>('touchSplit')
   const [characterStyle, setCharacterStyle] = useState<WonderJumpCharacterStyle>('classic')
   /** Locked when a run starts; ignores store/focus updates until run ends (menu / game over). */
@@ -2814,19 +3472,22 @@ export function WonderJump({
       chests: world.chests.map((c) => ({ ...c })),
       chestSpawnedThisRun: world.chestSpawnedThisRun,
       crabs: world.crabs.map((c) => ({ ...c })),
+      asteroids: world.asteroids.map((a) => ({ ...a })),
       cameraY: 0,
       heightScore: 0,
       lastJetpackY: world.lastJetpackY,
+      lastAsteroidSpawnHeight: world.lastAsteroidSpawnHeight,
       jetpackFuelMs: 0,
       jetpackEndGraceMs: 0,
       jetpackAnimTick: 0,
       uiAnimTick: 0,
+      flameAnimTick: 0,
       jetpacksUsedThisRun: 0,
       deathCause: null,
       startBiome: biome,
     }
   }
-  const [gameState, setGameState] = useState<GameState>(() => createMenuPreviewState(routeSeedBiome))
+  const [gameState, setGameState] = useState<GameState>(() => createMenuPreviewState(MENU_START_BIOME))
   const panelEntryAnim = useRef(new Animated.Value(0)).current
   const inputRef = useRef<InputState>({
     leftPressed: false,
@@ -2840,6 +3501,11 @@ export function WonderJump({
   const wonderJumpChestUnlocksAtRef = useRef<string | null>(null)
   const [serverChestDocked, setServerChestDocked] = useState(false)
   const [serverChestUnlocksAt, setServerChestUnlocksAt] = useState<string | null>(null)
+  const showGiftDock = Boolean(sessionToken && serverChestDocked)
+  const hubPanelScrollMaxHeight = useMemo(() => {
+    const dockPaddingV = showGiftDock ? 14 + 12 : 0
+    return Math.max(200, hubPanelOuterMaxHeight - dockPaddingV)
+  }, [hubPanelOuterMaxHeight, showGiftDock])
   const [chestHubTick, setChestHubTick] = useState(0)
   const [chestClaimBusy, setChestClaimBusy] = useState(false)
   const [hubChestRevealPhase, setHubChestRevealPhase] = useState<
@@ -2850,6 +3516,8 @@ export function WonderJump({
   const hubChestGiftOpacity = useRef(new Animated.Value(1)).current
   /** Ensures we POST pickup at least once after game over if a collected chest is still in state (RAF safety net). */
   const gameOverChestPickupPostedRef = useRef(false)
+  /** After first jetpack use in a run, keep FX mounted (hidden when empty) to avoid equip hitch. */
+  const jetpackFxLatchRef = useRef(false)
 
   useEffect(() => {
     sessionTokenRef.current = sessionToken
@@ -2876,6 +3544,10 @@ export function WonderJump({
   }, [isFocused, gameState.mode])
 
   useEffect(() => {
+    void ensureJetpackSvgXml()
+  }, [])
+
+  useEffect(() => {
     if (!sessionToken) {
       setUnlockedBiomes([...DEFAULT_WONDER_JUMP_UNLOCKED])
       wonderJumpChestDockedRef.current = false
@@ -2890,7 +3562,7 @@ export function WonderJump({
         if (cancelled) return
         setBestScore((b) => Math.max(b, p.highScore))
         const next = p.unlockedBiomes.filter((x): x is WonderJumpStartBiome =>
-          x === 'grassland' || x === 'mushroom' || x === 'tropical'
+          x === 'grassland' || x === 'mushroom' || x === 'tropical' || x === 'space'
         )
         setUnlockedBiomes(next.length > 0 ? next : [...DEFAULT_WONDER_JUMP_UNLOCKED])
         wonderJumpChestDockedRef.current = p.chestDocked === true
@@ -2948,13 +3620,21 @@ export function WonderJump({
     prevRunModeForProgressSyncRef.current = gameState.mode
     if (prev !== 'playing' || gameState.mode !== 'gameOver' || !sessionToken) return
     const runScore = displayRunScore(gameState.heightScore)
-    const biomeSet = new Set<WonderJumpStartBiome>([...unlockedBiomes, gameState.startBiome])
-    const merged = Array.from(biomeSet)
-    void saveWonderJumpProgress(sessionToken, { highScore: runScore, unlockedBiomes: merged })
+    const fromRun = biomesUnlockedForHeight(gameState.heightScore, gameState.startBiome)
+    const merged = Array.from(new Set<WonderJumpStartBiome>([...unlockedBiomes, ...fromRun]))
+    const reached = maxBiomeAccent(
+      accentBiomeAtHeight(gameState.heightScore, gameState.startBiome),
+      accentBiomeFromDisplayScore(runScore)
+    )
+    void saveWonderJumpProgress(sessionToken, {
+      highScore: runScore,
+      unlockedBiomes: merged,
+      bestBiomeReached: reached,
+    })
       .then((p) => {
         setBestScore((b) => Math.max(b, p.highScore))
         const next = p.unlockedBiomes.filter((x): x is WonderJumpStartBiome =>
-          x === 'grassland' || x === 'mushroom' || x === 'tropical'
+          x === 'grassland' || x === 'mushroom' || x === 'tropical' || x === 'space'
         )
         if (next.length > 0) setUnlockedBiomes(next)
         wonderJumpChestDockedRef.current = p.chestDocked === true
@@ -2982,15 +3662,8 @@ export function WonderJump({
   }, [gameState.mode, sessionToken])
 
   useEffect(() => {
-    const p = route?.params?.startBiome
-    if (p !== 'grassland' && p !== 'mushroom' && p !== 'tropical') return
-    setMenuStartBiome(p)
-    setGameState((prev) => (prev.mode === 'menu' ? createMenuPreviewState(p) : prev))
-  }, [route?.params?.startBiome, playWidth, playHeight])
-
-  useEffect(() => {
     menuWorldCacheRef.current = {}
-    setGameState((prev) => (prev.mode === 'menu' ? createMenuPreviewState(menuStartBiome) : prev))
+    setGameState((prev) => (prev.mode === 'menu' ? createMenuPreviewState(MENU_START_BIOME) : prev))
   }, [playWidth, playHeight])
 
   useEffect(() => {
@@ -3024,12 +3697,14 @@ export function WonderJump({
         const difficulty = Math.min(1, previous.heightScore / 2200)
         const mushroomBlendTick = getMushroomBlend(previous.heightScore, previous.startBiome)
         const tropicalBlendTick = getTropicalBlend(previous.heightScore, previous.startBiome)
+        const spaceBlendTick = getSpaceBlend(previous.heightScore, previous.startBiome)
         const tokenForChest = sessionTokenRef.current
         const allowServerChest =
           Boolean(tokenForChest && tokenForChest.length > 0) &&
           !wonderJumpChestDockedRef.current &&
           wonderJumpChestUnlocksAtRef.current == null
         const speed = BASE_SPEED + difficulty * 1.5
+        let platformsArrayRebuilt = false
         const nextPlatforms = previous.platforms.map((platform) => {
           let x = platform.x
           let y = platform.y
@@ -3064,11 +3739,13 @@ export function WonderJump({
           ) {
             return platform
           }
+          platformsArrayRebuilt = true
           return { ...platform, x, y, moveDir, breakProgress, isFalling, fallingVelocityY }
         })
+        const stableNextPlatforms = platformsArrayRebuilt ? nextPlatforms : previous.platforms
 
         const prevById = new Map(previous.platforms.map((p) => [p.id, p]))
-        const nextById = new Map(nextPlatforms.map((p) => [p.id, p]))
+        const nextById = new Map(stableNextPlatforms.map((p) => [p.id, p]))
 
         const prevPlayer = previous.player
         const player: Player = { ...prevPlayer }
@@ -3095,7 +3772,7 @@ export function WonderJump({
 
         if (player.onGround) {
           let support: PlatformItem | null = null
-          for (const platform of nextPlatforms) {
+          for (const platform of stableNextPlatforms) {
             if (!isSolid(platform)) continue
             const topY = platformTopY(platform)
             const closeToTop = Math.abs(player.y + player.height - topY) <= GROUND_SUPPORT_SLACK_PX
@@ -3149,7 +3826,7 @@ export function WonderJump({
           if (nextVelocityY > 0) {
             let best: PlatformItem | null = null
             let bestTopY = -Infinity
-            for (const platform of nextPlatforms) {
+            for (const platform of stableNextPlatforms) {
               if (!isSolid(platform)) continue
               if (!horizontalLandOverlap(player, platform)) continue
               const topY = platformTopY(platform)
@@ -3185,7 +3862,7 @@ export function WonderJump({
         }
 
         const mutatedPlatforms = crumblePlatformId
-          ? nextPlatforms.map((platform) => {
+          ? stableNextPlatforms.map((platform) => {
               if (platform.id !== crumblePlatformId) return platform
               if (platform.isFalling && platform.fallingVelocityY === 1.4) return platform
               return {
@@ -3194,25 +3871,17 @@ export function WonderJump({
                 fallingVelocityY: 1.4,
               }
             })
-          : nextPlatforms
+          : stableNextPlatforms
 
         const platformById = crumblePlatformId
           ? new Map(mutatedPlatforms.map((p) => [p.id, p]))
           : nextById
 
         const currentSpikes = filterUnfairSpikes(
-          previous.spikes
-            .filter((spike) => spike.y - previous.cameraY < playHeight + 140)
-            .map((spike) => {
-              const hostId = spike.id.replace('spike-', '')
-              const host = platformById.get(hostId)
-              if (!host) return spike
-              return {
-                ...spike,
-                x: host.x + spike.offsetX,
-                y: host.y - spike.height,
-              }
-            }),
+          syncSpikesToPlatforms(
+            previous.spikes.filter((spike) => spike.y - previous.cameraY < playHeight + 140),
+            mutatedPlatforms
+          ),
           mutatedPlatforms
         )
 
@@ -3267,7 +3936,7 @@ export function WonderJump({
         const playerOnScreenY = player.y - cameraY
         if (playerOnScreenY < followThreshold) cameraY = player.y - followThreshold
 
-        let platforms = [...mutatedPlatforms]
+        let platforms = mutatedPlatforms
         let spikes = [...currentSpikes]
         let jetpacks = [...resolvedJetpacks]
         /** Keep already-collected chests in state so pickup + hub sync survive extra sim ticks in the same frame. */
@@ -3277,9 +3946,30 @@ export function WonderJump({
         ]
         let chestSpawnedThisRun = previous.chestSpawnedThisRun
         let crabs = [...previous.crabs]
+        let asteroids = [...(previous.asteroids ?? [])]
         let lastJetpackY = previous.lastJetpackY
+        let lastAsteroidSpawnHeight = previous.lastAsteroidSpawnHeight ?? -MIN_ASTEROID_SPAWN_HEIGHT_SEP
         const hostById = platformById
         const tickMs = SIM_TICK_MS
+        asteroids = asteroids.map((asteroid) => ({
+          ...asteroid,
+          y: asteroid.y + asteroid.velocityY,
+        }))
+        const heightScoreForSpawn = Math.max(previous.heightScore, Math.floor(-cameraY))
+        const asteroidSpawned = trySpawnAsteroid(
+          cameraY,
+          playWidth,
+          heightScoreForSpawn,
+          previous.uiAnimTick,
+          spaceBlendTick,
+          previous.startBiome,
+          asteroids.length,
+          lastAsteroidSpawnHeight
+        )
+        if (asteroidSpawned) {
+          asteroids.push(asteroidSpawned)
+          lastAsteroidSpawnHeight = heightScoreForSpawn
+        }
         // Update crabs (walk back/forth on their host platform).
         crabs = crabs
           .map((crab) => {
@@ -3316,19 +4006,27 @@ export function WonderJump({
           const p = platforms[pi]
           if (p.y < chainPlatform.y) chainPlatform = p
         }
+        const chainSpawnState = createChainSpawnState()
         let highestY = chainPlatform.y
         let seed = platforms.length + 1
         let jetpacksAliveSpawn = countJetpacksAlive(jetpacks)
+        let platformsOwnCopy = false
         while (highestY > cameraY - playHeight * 2.55) {
+          if (!platformsOwnCopy && platforms === previous.platforms) {
+            platforms = [...platforms]
+            platformsOwnCopy = true
+          }
           let gapMin = 42 + difficulty * 8
           let gapMax = 62 + difficulty * 24
-          if (isMushroomGameplay(previous.startBiome, mushroomBlendTick, tropicalBlendTick)) {
-            gapMin += MUSHROOM_CHAIN_GAP_EXTRA_MIN
-            gapMax += MUSHROOM_CHAIN_GAP_EXTRA_MAX
-          }
-          if (tropicalBlendTick >= TROPICAL_GAMEPLAY_BLEND) {
+          if (spaceBlendTick >= SPACE_GAMEPLAY_BLEND) {
+            gapMin += SPACE_CHAIN_GAP_EXTRA_MIN + spaceBlendTick * 2
+            gapMax += SPACE_CHAIN_GAP_EXTRA_MAX + spaceBlendTick * 3
+          } else if (tropicalBlendTick >= TROPICAL_GAMEPLAY_BLEND) {
             gapMin += 6 + tropicalBlendTick * 6
             gapMax += 10 + tropicalBlendTick * 10
+          } else if (isMushroomGameplay(previous.startBiome, mushroomBlendTick, tropicalBlendTick)) {
+            gapMin += MUSHROOM_CHAIN_GAP_EXTRA_MIN
+            gapMax += MUSHROOM_CHAIN_GAP_EXTRA_MAX
           }
           const verticalGap = clamp(
             randomInRange(gapMin, gapMax),
@@ -3349,15 +4047,22 @@ export function WonderJump({
             chainPlatform,
             verticalGap,
             mushroomBlendTick,
-            tropicalBlendTick
+            tropicalBlendTick,
+            spaceBlendTick,
+            chainSpawnState
           )
           platform = enforceChainReachable(chainPlatform, platform, playWidth, difficulty)
           highestY = platform.y
           platforms.push(platform)
           chainPlatform = platform
           const spikeAllowed =
-            previous.heightScore >= spikeActivationHeight(previous.startBiome, mushroomBlendTick, tropicalBlendTick)
-          const forceInterval = isMushroomGameplay(previous.startBiome, mushroomBlendTick, tropicalBlendTick) ? 4 : 11
+            previous.heightScore >=
+            spikeActivationHeight(previous.startBiome, mushroomBlendTick, tropicalBlendTick, spaceBlendTick)
+          const forceInterval =
+            isMushroomGameplay(previous.startBiome, mushroomBlendTick, tropicalBlendTick) ||
+            isSpaceGameplay(previous.startBiome, spaceBlendTick)
+              ? 4
+              : 11
           const forceSpike = seed % forceInterval === 0
           const newSpikes = spawnSpikes(
             platform,
@@ -3366,7 +4071,8 @@ export function WonderJump({
             tropicalBlendTick,
             previous.startBiome,
             difficulty,
-            forceSpike
+            forceSpike,
+            spaceBlendTick
           )
           spikes.push(...newSpikes)
           platforms[platforms.length - 1] = maybeAttachPalmTree(
@@ -3382,6 +4088,7 @@ export function WonderJump({
             lastJetpackY,
             mushroomBlendTick,
             tropicalBlendTick,
+            spaceBlendTick,
             previous.startBiome
           )
           if (jetpackAdded.length) {
@@ -3393,13 +4100,23 @@ export function WonderJump({
             chainPlatform,
             chestSpawnedThisRun,
             tropicalBlendTick,
+            spaceBlendTick,
             allowServerChest
           )
           if (chestAdded.length) {
             chests.push(...chestAdded)
             chestSpawnedThisRun = true
           }
-          crabs.push(...spawnCrabOnPlatform(chainPlatform, newSpikes.length > 0, tropicalBlendTick, previous.startBiome, seed))
+          crabs.push(
+            ...spawnCrabOnPlatform(
+              chainPlatform,
+              newSpikes.length > 0,
+              tropicalBlendTick,
+              spaceBlendTick,
+              previous.startBiome,
+              seed
+            )
+          )
           const sibling = trySpawnSiblingPlatform(
             highestY,
             seed + 60000,
@@ -3407,7 +4124,8 @@ export function WonderJump({
             difficulty,
             platforms,
             mushroomBlendTick,
-            tropicalBlendTick
+            tropicalBlendTick,
+            spaceBlendTick
           )
           if (sibling) {
             platforms.push(sibling)
@@ -3417,7 +4135,9 @@ export function WonderJump({
               mushroomBlendTick,
               tropicalBlendTick,
               previous.startBiome,
-              difficulty
+              difficulty,
+              false,
+              spaceBlendTick
             )
             spikes.push(...sSpikes)
             platforms[platforms.length - 1] = maybeAttachPalmTree(
@@ -3427,7 +4147,14 @@ export function WonderJump({
               sSpikes.length > 0
             )
             crabs.push(
-              ...spawnCrabOnPlatform(platforms[platforms.length - 1], sSpikes.length > 0, tropicalBlendTick, previous.startBiome, seed + 60000)
+              ...spawnCrabOnPlatform(
+                platforms[platforms.length - 1],
+                sSpikes.length > 0,
+                tropicalBlendTick,
+                spaceBlendTick,
+                previous.startBiome,
+                seed + 60000
+              )
             )
             const jetpackSibling = spawnJetpack(
               sibling,
@@ -3435,6 +4162,7 @@ export function WonderJump({
               lastJetpackY,
               mushroomBlendTick,
               tropicalBlendTick,
+              spaceBlendTick,
               previous.startBiome
             )
             if (jetpackSibling.length) {
@@ -3451,8 +4179,10 @@ export function WonderJump({
           return screenY > -220 && screenY < playHeight + 220
         })
         const livePlatformById = new Map(platforms.map((p) => [p.id, p]))
+        spikes = syncSpikesToPlatforms(spikes, platforms)
         spikes = filterUnfairSpikes(spikes, platforms)
         spikes = spikes.filter((spike) => {
+          if (!livePlatformById.has(spike.id.replace('spike-', ''))) return false
           const screenY = spike.y - cameraY
           /*
            * Keep spikes much farther above camera than visible bounds.
@@ -3465,6 +4195,12 @@ export function WonderJump({
           if (!host) return false
           const y = host.y - cameraY
           return y > -playHeight - 180 && y < playHeight + 280
+        })
+        asteroids = asteroids.filter((asteroid) => {
+          const plumeReach = getMeteorPlumeReach(asteroid.height, asteroid.variant)
+          const topScreenY = asteroid.y - plumeReach - cameraY
+          const bottomScreenY = asteroid.y + asteroid.height - cameraY
+          return bottomScreenY > -playHeight - 140 && topScreenY < playHeight + 220
         })
         jetpacks = jetpacks.filter((jetpack) => {
           if (jetpack.collected) return false
@@ -3511,12 +4247,32 @@ export function WonderJump({
           }
         }
 
+        let touchedAsteroid = false
+        for (const asteroid of asteroids) {
+          if (playerHitsAsteroid(player, asteroid) && jetpackFuelMs <= 0) {
+            touchedAsteroid = true
+            break
+          }
+        }
+
         const heightScore = Math.max(previous.heightScore, Math.floor(-cameraY))
         const fallenOut = player.y - cameraY > playHeight + 120
-        const shouldEnd = fallenOut || hitSpike || touchedCrab
+        const shouldEnd = fallenOut || hitSpike || touchedCrab || touchedAsteroid
+
+        platforms = reuseShallowArray(platforms, previous.platforms)
+        spikes = reuseShallowArray(spikes, previous.spikes)
+        jetpacks = reuseShallowArray(jetpacks, previous.jetpacks)
+        crabs = reuseShallowArray(crabs, previous.crabs)
+        asteroids = reuseShallowArray(asteroids, previous.asteroids ?? [])
 
         if (shouldEnd) {
-          const deathCause: WonderJumpDeathCause = fallenOut ? 'fall' : hitSpike ? 'spike' : 'crab'
+          const deathCause: WonderJumpDeathCause = fallenOut
+            ? 'fall'
+            : hitSpike
+              ? 'spike'
+              : touchedAsteroid
+                ? 'asteroid'
+                : 'crab'
           return {
             ...previous,
             mode: 'gameOver',
@@ -3527,13 +4283,16 @@ export function WonderJump({
             chests,
             chestSpawnedThisRun,
             crabs,
+            asteroids,
             cameraY,
             heightScore,
             lastJetpackY,
+            lastAsteroidSpawnHeight,
             jetpackFuelMs,
             jetpackEndGraceMs,
             jetpackAnimTick,
             uiAnimTick,
+            flameAnimTick: previous.flameAnimTick,
             jetpacksUsedThisRun,
             deathCause,
             startBiome: previous.startBiome,
@@ -3549,13 +4308,16 @@ export function WonderJump({
           chests,
           chestSpawnedThisRun,
           crabs,
+          asteroids,
           cameraY,
           heightScore,
           lastJetpackY,
+          lastAsteroidSpawnHeight,
           jetpackFuelMs,
           jetpackEndGraceMs,
           jetpackAnimTick,
           uiAnimTick,
+          flameAnimTick: previous.flameAnimTick,
           jetpacksUsedThisRun,
           deathCause: null,
           startBiome: previous.startBiome,
@@ -3586,12 +4348,19 @@ export function WonderJump({
 
       let next = prevSnap
       let stepped = false
-      while (acc >= SIM_TICK_MS) {
+      let simSteps = 0
+      while (acc >= SIM_TICK_MS && simSteps < MAX_SIM_STEPS_PER_FRAME) {
         acc -= SIM_TICK_MS
         next = tickPlayingState(next)
         playingSimSnapRef.current = next
         stepped = true
+        simSteps += 1
         if (next.mode !== 'playing') break
+      }
+
+      if (next.mode === 'playing') {
+        next = { ...next, flameAnimTick: prevSnap.flameAnimTick + 1 }
+        playingSimSnapRef.current = next
       }
 
       if (stepped && (next.mode === 'playing' || next.mode === 'gameOver')) {
@@ -3629,11 +4398,15 @@ export function WonderJump({
         }
       }
 
-      if (stepped || next.mode !== 'playing') {
+      const flameAdvanced = next.mode === 'playing' && next.flameAnimTick !== prevSnap.flameAnimTick
+      if (stepped || next.mode !== 'playing' || flameAdvanced) {
         if (next.mode === 'gameOver') {
           setBestScore((current) => Math.max(current, displayRunScore(next.heightScore)))
         }
         setGameState(next)
+        if (next.mode === 'playing') {
+          playingSimSnapRef.current = next
+        }
       }
 
       if (playingSimSnapRef.current?.mode === 'playing') {
@@ -3659,31 +4432,61 @@ export function WonderJump({
   /** Coarser height steps so sky + scene colors don’t recompute every sim tick (big SVG + style churn). */
   const skyHeightScoreStep =
     gameState.mode === 'menu' ? 0 : Math.floor(gameState.heightScore / 88) * 88
-  const skyBlendCacheRef = useRef({ mushroom: NaN, tropical: NaN, obj: { mushroom: 0, tropical: 0 } })
+  const skyBlendCacheRef = useRef({ mushroom: NaN, tropical: NaN, space: NaN, obj: { mushroom: 0, tropical: 0, space: 0 } })
   const skyBlend = useMemo(() => {
     const mushroom =
       gameState.mode !== 'menu'
         ? getMushroomBlend(skyHeightScoreStep, gameState.startBiome)
-        : getMushroomBlend(0, menuStartBiome)
+        : getMushroomBlend(0, MENU_START_BIOME)
     const tropical =
       gameState.mode !== 'menu'
         ? getTropicalBlend(skyHeightScoreStep, gameState.startBiome)
-        : getTropicalBlend(0, menuStartBiome)
+        : getTropicalBlend(0, MENU_START_BIOME)
+    const space =
+      gameState.mode !== 'menu'
+        ? getSpaceBlend(skyHeightScoreStep, gameState.startBiome)
+        : getSpaceBlend(0, MENU_START_BIOME)
     const c = skyBlendCacheRef.current
-    if (c.mushroom === mushroom && c.tropical === tropical) return c.obj
-    const obj = { mushroom, tropical }
-    skyBlendCacheRef.current = { mushroom, tropical, obj }
+    if (c.mushroom === mushroom && c.tropical === tropical && c.space === space) return c.obj
+    const obj = { mushroom, tropical, space }
+    skyBlendCacheRef.current = { mushroom, tropical, space, obj }
     return obj
-  }, [gameState.mode, skyHeightScoreStep, gameState.startBiome, menuStartBiome])
+  }, [gameState.mode, skyHeightScoreStep, gameState.startBiome])
 
   const sceneColorsCacheRef = useRef({ key: '', obj: null as unknown as WonderJumpSceneColors })
   const sceneColors = useMemo(() => {
+    const prior = lerp3Color(
+      GRASSLAND_THEME.screenBg,
+      MUSHROOM_THEME.screenBg,
+      TROPICAL_THEME.screenBg,
+      skyBlend.mushroom,
+      skyBlend.tropical,
+    )
+    const priorTile = lerp3Color(
+      GRASSLAND_THEME.tileBg,
+      MUSHROOM_THEME.tileBg,
+      TROPICAL_THEME.tileBg,
+      skyBlend.mushroom,
+      skyBlend.tropical,
+    )
     const next: WonderJumpSceneColors = {
-      screenBg: lerp3Color(GRASSLAND_THEME.screenBg, MUSHROOM_THEME.screenBg, TROPICAL_THEME.screenBg, skyBlend.mushroom, skyBlend.tropical),
-      tileBg: lerp3Color(GRASSLAND_THEME.tileBg, MUSHROOM_THEME.tileBg, TROPICAL_THEME.tileBg, skyBlend.mushroom, skyBlend.tropical),
-      sunCore: lerp3Color('#fff8d2', '#e8dcf8', '#fff0cf', skyBlend.mushroom, skyBlend.tropical),
-      hillFar: lerp3Color(GRASSLAND_THEME.hillFar, MUSHROOM_THEME.hillFar, TROPICAL_THEME.hillFar, skyBlend.mushroom, skyBlend.tropical),
-      hillNear: lerp3Color(GRASSLAND_THEME.hillNear, MUSHROOM_THEME.hillNear, TROPICAL_THEME.hillNear, skyBlend.mushroom, skyBlend.tropical),
+      screenBg: lerpColor(prior, SPACE_THEME.screenBg, skyBlend.space),
+      tileBg: lerpColor(priorTile, SPACE_THEME.tileBg, skyBlend.space),
+      sunCore: lerpColor(
+        lerp3Color('#fff8d2', '#e8dcf8', '#fff0cf', skyBlend.mushroom, skyBlend.tropical),
+        '#c8d0ff',
+        skyBlend.space,
+      ),
+      hillFar: lerpColor(
+        lerp3Color(GRASSLAND_THEME.hillFar, MUSHROOM_THEME.hillFar, TROPICAL_THEME.hillFar, skyBlend.mushroom, skyBlend.tropical),
+        SPACE_THEME.hillFar,
+        skyBlend.space,
+      ),
+      hillNear: lerpColor(
+        lerp3Color(GRASSLAND_THEME.hillNear, MUSHROOM_THEME.hillNear, TROPICAL_THEME.hillNear, skyBlend.mushroom, skyBlend.tropical),
+        SPACE_THEME.hillNear,
+        skyBlend.space,
+      ),
     }
     const key = `${next.screenBg}|${next.tileBg}|${next.sunCore}|${next.hillFar}|${next.hillNear}`
     const c = sceneColorsCacheRef.current
@@ -3711,19 +4514,21 @@ export function WonderJump({
     return next
   }, [gameState.mode, gameState.jetpackFuelMs, jetpackShakePhase])
 
+  if (gameState.jetpackFuelMs > 0) {
+    jetpackFxLatchRef.current = true
+  }
+  const jetpackFxLatched = jetpackFxLatchRef.current
+
   /** Match sky coarsening so biome HUD text isn’t recomputed on every height pixel. */
   const hudBiomeLabel = useMemo(() => {
     const m = getMushroomBlend(skyHeightScoreStep, gameState.startBiome)
     const t = getTropicalBlend(skyHeightScoreStep, gameState.startBiome)
-    return biomeHudLabel(m, t, gameState.startBiome)
+    const s = getSpaceBlend(skyHeightScoreStep, gameState.startBiome)
+    return biomeHudLabel(m, t, s, gameState.startBiome)
   }, [skyHeightScoreStep, gameState.startBiome, gameState.mode])
   const gameOverBiomeAccent = hudBiomeLabelToAccentBiome(hudBiomeLabel)
   const activePanelBiome: WonderJumpStartBiome =
-    gameState.mode === 'menu'
-      ? menuStartBiome
-      : gameState.mode === 'gameOver'
-        ? gameOverBiomeAccent
-        : gameState.startBiome
+    gameState.mode === 'menu' ? MENU_START_BIOME : gameState.mode === 'gameOver' ? gameOverBiomeAccent : gameState.startBiome
   const panelAccent = BIOME_UI_ACCENTS[activePanelBiome]
   const primaryButtonTone = useMemo(() => {
     const hex = wonderportTheme?.brandAccent ?? BRAND_ACCENT_LIME_HEX
@@ -3741,25 +4546,6 @@ export function WonderJump({
   )
   const panelBiomeLabel = panelAccent.label
   const isHubPanel = gameState.mode === 'menu' || gameState.mode === 'gameOver'
-
-  const giftDockEmptyTile = useMemo(
-    () => (
-      <View style={[styles.wjChestDockTile, styles.wjChestDockTileEmptySlot]}>
-        <View style={styles.wjDockEmptyComposer} pointerEvents="none">
-          <View style={styles.wjDockEmptyOrbit} />
-          <View style={styles.wjDockEmptyPad}>
-            <Svg width={28} height={28} viewBox="0 0 28 28">
-              <Path
-                d="M14 4L16.85 11.15L24 14L16.85 16.85L14 24L11.15 16.85L4 14L11.15 11.15L14 4Z"
-                fill="rgba(203, 255, 0, 0.72)"
-              />
-            </Svg>
-          </View>
-        </View>
-      </View>
-    ),
-    [],
-  )
 
   const leaderboardScrollMaxH = useMemo(
     () => Math.min(resolvedHeight * 0.58, 420),
@@ -3834,9 +4620,10 @@ export function WonderJump({
     inputRef.current.leftPressed = false
     inputRef.current.rightPressed = false
     playingSimSnapRef.current = null
+    jetpackFxLatchRef.current = false
     void loadWonderJumpCharacterStyle().then((style) => {
       setRunCharacterLocked(style)
-      setGameState(createInitialState('playing', playWidth, playHeight, menuStartBiome))
+      setGameState(createInitialState('playing', playWidth, playHeight, MENU_START_BIOME))
     })
   }
   const restartRun = () => {
@@ -3844,9 +4631,10 @@ export function WonderJump({
     inputRef.current.leftPressed = false
     inputRef.current.rightPressed = false
     playingSimSnapRef.current = null
+    jetpackFxLatchRef.current = false
     void loadWonderJumpCharacterStyle().then((style) => {
       setRunCharacterLocked(style)
-      setGameState(createInitialState('playing', playWidth, playHeight, menuStartBiome))
+      setGameState(createInitialState('playing', playWidth, playHeight, MENU_START_BIOME))
     })
   }
   const pauseGame = () => {
@@ -3873,7 +4661,7 @@ export function WonderJump({
     inputRef.current.leftPressed = false
     inputRef.current.rightPressed = false
     playingSimSnapRef.current = null
-    setGameState(createMenuPreviewState(menuStartBiome))
+    setGameState(createMenuPreviewState(MENU_START_BIOME))
   }
   const goHome = () => {
     setSettingsOpen(false)
@@ -3881,11 +4669,6 @@ export function WonderJump({
     inputRef.current.rightPressed = false
     navigation?.navigate?.('Tabs' as never, { screen: 'Home' } as never)
   }
-  const selectMenuBiome = (biome: WonderJumpStartBiome) => {
-    setMenuStartBiome(biome)
-    setGameState((prev) => (prev.mode === 'menu' ? createMenuPreviewState(biome) : prev))
-  }
-
   const resetHubChestRevealAnim = useCallback(() => {
     hubChestGiftPop.setValue(0)
     hubChestGiftOpacity.setValue(1)
@@ -4000,11 +4783,29 @@ export function WonderJump({
       (p) => (p.y > lo && p.y < hi) || (standId != null && p.id === standId)
     )
   }, [gameState.platforms, cam, playHeight, gameState.player.groundPlatformId])
+  /** Platforms in camera range — spikes/crabs resolve hosts from this map. */
+  const platformByIdNear = useMemo(() => {
+    const lo = cam - 420
+    const hi = cam + playHeight + 420
+    const m = new Map<string, PlatformItem>()
+    for (const p of gameState.platforms) {
+      if (p.y >= lo && p.y <= hi) m.set(p.id, p)
+    }
+    return m
+  }, [gameState.platforms, cam, playHeight])
   const visibleSpikes = useMemo(() => {
     const lo = cam - 28
     const hi = cam + playHeight + 32
-    return gameState.spikes.filter((s) => s.y > lo && s.y < hi)
-  }, [gameState.spikes, cam, playHeight])
+    const out: Spike[] = []
+    for (const spike of gameState.spikes) {
+      const host = platformByIdNear.get(spike.id.replace('spike-', ''))
+      if (!host) continue
+      const y = host.y - spike.height
+      if (y <= lo || y >= hi) continue
+      out.push({ ...spike, x: host.x + spike.offsetX, y })
+    }
+    return out
+  }, [gameState.spikes, platformByIdNear, cam, playHeight])
   const hudDisplayScore = useMemo(() => displayRunScore(gameState.heightScore), [gameState.heightScore])
   const visibleJetpacks = useMemo(() => {
     const lo = cam - playHeight - 200
@@ -4017,15 +4818,6 @@ export function WonderJump({
     const list = gameState.chests ?? []
     return list.filter((c) => !c.collected && c.y > lo && c.y < hi)
   }, [gameState.chests, cam, playHeight])
-  const platformByIdNear = useMemo(() => {
-    const lo = cam - 420
-    const hi = cam + playHeight + 420
-    const m = new Map<string, PlatformItem>()
-    for (const p of gameState.platforms) {
-      if (p.y >= lo && p.y <= hi) m.set(p.id, p)
-    }
-    return m
-  }, [gameState.platforms, cam, playHeight])
   const visibleCrabs = useMemo(() => {
     return (gameState.crabs ?? []).filter((crab) => {
       const host = platformByIdNear.get(crab.hostPlatformId)
@@ -4034,6 +4826,16 @@ export function WonderJump({
       return y > cam - 55 && y < cam + playHeight + 60
     })
   }, [gameState.crabs, platformByIdNear, cam, playHeight])
+  const visibleAsteroids = useMemo(() => {
+    const lo = cam - playHeight - 200
+    const hi = cam + playHeight + 100
+    return (gameState.asteroids ?? []).filter((a) => {
+      const plumeReach = getMeteorPlumeReach(a.height, a.variant)
+      const topY = a.y - plumeReach
+      const bottomY = a.y + a.height
+      return bottomY > lo && topY < hi
+    })
+  }, [gameState.asteroids, cam, playHeight])
 
   /** Integer world X; Y scroll is one parent `translateY` (smoother than per-sprite screen math). */
   const snapX = (x: number) => Math.round(x)
@@ -4068,16 +4870,26 @@ export function WonderJump({
 
   return (
     <View style={screenShellStyle}>
+      {gameState.mode === 'menu' ? (
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', left: -120, top: -120, width: 1, height: 1, opacity: 0 }}
+        >
+          <WonderJumpJetpackGraphic width={EQUIPPED_JETPACK_VISUAL_W} height={EQUIPPED_JETPACK_VISUAL_H} />
+        </View>
+      ) : null}
       <View style={gameTileShellStyle}>
         <WonderJumpAmbientDecor
           playWidth={playWidth}
           playHeight={playHeight}
           mushroomBlend={skyBlend.mushroom}
           tropicalBlend={skyBlend.tropical}
+          spaceBlend={skyBlend.space}
         />
 
         <View pointerEvents="box-none" style={worldRollStyle}>
         {clouds.map((cloud) => {
+          if (skyBlend.space > 0.2) return null
           if (gameState.heightScore <= 320) return null
           if (cloud.y < cam - 90 || cloud.y > cam + playHeight + 50) return null
           return (
@@ -4087,7 +4899,7 @@ export function WonderJump({
 
         {visiblePlatforms.map((platform) => {
           const isBouncy = platform.kind === 'bouncy'
-          const visualH = PLATFORM_HEIGHT + PLATFORM_VISUAL_OVERHANG
+          const visualH = platformVisualShellHeight(platform.surface)
           const graphicKind: GrasslandPlatformKind =
             platform.kind === 'moving'
               ? 'moving'
@@ -4103,6 +4915,7 @@ export function WonderJump({
               shellHeight={visualH}
               graphicKind={graphicKind}
               surface={platform.surface}
+              faceSeed={platformFaceSeed(platform.id, platform.x, platform.width)}
               isBouncy={isBouncy}
               isFalling={platform.isFalling}
               topMushrooms={platform.topMushrooms}
@@ -4167,33 +4980,27 @@ export function WonderJump({
           )
         })}
 
-        <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
-          {activeWonderJumpCharacter === 'classic' ? (
-            <View
-              style={[
-                styles.playerShadow,
-                {
-                  left: snapX(gameState.player.x + 2 + jetpackShake.x),
-                  top: Math.round(gameState.player.y + gameState.player.height - 3 + jetpackShake.y),
-                },
-              ]}
-            />
-          ) : null}
-          <WonderJumpPlayerVisual
-            characterStyle={activeWonderJumpCharacter}
-            left={snapX(gameState.player.x + jetpackShake.x)}
-            top={Math.round(gameState.player.y + jetpackShake.y)}
-            width={gameState.player.width}
-            height={gameState.player.height}
+        {visibleAsteroids.map((asteroid) => (
+          <MeteorComposite
+            key={asteroid.id}
+            left={snapX(asteroid.x)}
+            top={Math.round(asteroid.y)}
+            variant={asteroid.variant}
+            flamePhase={asteroid.flamePhase}
+            flameAnimTick={gameState.flameAnimTick}
           />
-          {gameState.jetpackFuelMs > 0 ? (
-            <PlayerJetpackFx
-              left={snapX(gameState.player.x + EQUIPPED_JETPACK_CENTER_OFFSET_X + jetpackShake.x)}
-              top={Math.round(gameState.player.y + EQUIPPED_JETPACK_TOP_OFFSET_Y + jetpackShake.y)}
-              frame={gameState.jetpackAnimTick}
-            />
-          ) : null}
-        </View>
+        ))}
+
+        <WonderJumpPlayerStack
+          characterStyle={activeWonderJumpCharacter}
+          playerX={snapX(gameState.player.x + jetpackShake.x)}
+          playerY={Math.round(gameState.player.y + jetpackShake.y)}
+          playerWidth={gameState.player.width}
+          playerHeight={gameState.player.height}
+          jetpackFuelMs={gameState.jetpackFuelMs}
+          jetpackAnimTick={gameState.jetpackAnimTick}
+          jetpackFxLatched={jetpackFxLatched}
+        />
         </View>
 
         <View style={styles.hud}>
@@ -4268,11 +5075,11 @@ export function WonderJump({
             <Text style={styles.panelSubtitle}>Take a breath, then jump back in.</Text>
             <Pressable
               onPress={() => setLeaderboardOpen(true)}
-              style={styles.secondaryButton}
+              style={styles.leaderboardHeroTile}
               accessibilityRole="button"
               accessibilityLabel="Open leaderboard"
             >
-              <Text style={styles.secondaryButtonText}>Leaderboard</Text>
+              <Text style={styles.leaderboardHeroTileText}>Leaderboard</Text>
             </Pressable>
             <Pressable onPress={resumeGame} style={[styles.primaryButton, primaryButtonTone]}>
               <Text style={[styles.primaryButtonText, styles.gameOverMontserratButton]}>Resume</Text>
@@ -4290,6 +5097,7 @@ export function WonderJump({
         ) : null}
 
         {isHubPanel && !settingsOpen ? (
+          <View style={hubPanelOverlayStyle} pointerEvents="box-none">
           <Animated.View
             style={[
               styles.panel,
@@ -4297,7 +5105,7 @@ export function WonderJump({
               panelAccentGlow,
               panelEntryStyle,
               styles.gameOverPanelDock,
-              gameOverPanelDockStyle,
+              hubPanelCardStyle,
             ]}
           >
             <ScrollView
@@ -4321,12 +5129,12 @@ export function WonderJump({
                   styles.gameOverDeadBiome,
                   {
                     color: GAME_OVER_DEAD_BIOME_TEXT[
-                      gameState.mode === 'gameOver' ? gameOverBiomeAccent : menuStartBiome
+                      gameState.mode === 'gameOver' ? gameOverBiomeAccent : MENU_START_BIOME
                     ],
                   },
                 ]}
               >
-                {gameState.mode === 'gameOver' ? hudBiomeLabel : BIOME_UI_ACCENTS[menuStartBiome].label}
+                {gameState.mode === 'gameOver' ? hudBiomeLabel : BIOME_UI_ACCENTS[MENU_START_BIOME].label}
               </Text>
               <View style={styles.gameOverHeroCard}>
                 {gameState.mode === 'gameOver' ? (
@@ -4345,13 +5153,11 @@ export function WonderJump({
                     </View>
                     <Pressable
                       onPress={() => setLeaderboardOpen(true)}
-                      style={[styles.leaderboardHeroTile, { borderColor: panelAccent.accentSoft }]}
+                      style={styles.leaderboardHeroTile}
                       accessibilityRole="button"
                       accessibilityLabel="Open leaderboard"
                     >
-                      <Text style={[styles.leaderboardHeroTileText, { color: panelAccent.accent }]}>
-                        Leaderboard
-                      </Text>
+                      <Text style={styles.leaderboardHeroTileText}>Leaderboard</Text>
                     </Pressable>
                   </>
                 ) : (
@@ -4360,13 +5166,11 @@ export function WonderJump({
                     <Text style={styles.gameOverHeroValue}>{bestScore}</Text>
                     <Pressable
                       onPress={() => setLeaderboardOpen(true)}
-                      style={[styles.leaderboardHeroTile, { borderColor: panelAccent.accentSoft }]}
+                      style={styles.leaderboardHeroTile}
                       accessibilityRole="button"
                       accessibilityLabel="Open leaderboard"
                     >
-                      <Text style={[styles.leaderboardHeroTileText, { color: panelAccent.accent }]}>
-                        Leaderboard
-                      </Text>
+                      <Text style={styles.leaderboardHeroTileText}>Leaderboard</Text>
                     </Pressable>
                   </>
                 )}
@@ -4374,12 +5178,10 @@ export function WonderJump({
               {gameOverNewBest ? <Text style={styles.gameOverNewBest}>New high score!</Text> : null}
             </View>
 
-            <View style={styles.wjChestHubCard}>
-              <View style={styles.wjChestHubRow}>
-                {!sessionToken ? (
-                  giftDockEmptyTile
-                ) : serverChestDocked ? (
-                  serverChestUnlocksAt ? (
+            {showGiftDock ? (
+              <View style={styles.wjChestHubCard}>
+                <View style={styles.wjChestHubRow}>
+                  {serverChestUnlocksAt ? (
                     wjChestReadyToOpen ? (
                       <Pressable
                         onPress={() => void beginHubChestReveal()}
@@ -4401,16 +5203,10 @@ export function WonderJump({
                     >
                       <DailyRewardsMysteryGiftVisual maxStageSize={WJ_DOCK_GIFT_STAGE_PX} ready={false} />
                     </Pressable>
-                  )
-                ) : (
-                  giftDockEmptyTile
-                )}
-                <View style={styles.wjChestHubCopy}>
-                  <Text style={styles.wjChestHubTitle}>Gift dock</Text>
-                  {!sessionToken ? (
-                    <Text style={styles.wjChestHubMeta}>Sign in to stash Keys gifts.</Text>
-                  ) : serverChestDocked ? (
-                    serverChestUnlocksAt ? (
+                  )}
+                  <View style={styles.wjChestHubCopy}>
+                    <Text style={styles.wjChestHubTitle}>Gift dock</Text>
+                    {serverChestUnlocksAt ? (
                       wjChestReadyToOpen ? (
                         <Text style={styles.wjChestHubMeta}>Tap to open.</Text>
                       ) : (
@@ -4420,69 +5216,13 @@ export function WonderJump({
                       )
                     ) : (
                       <Text style={styles.wjChestHubMeta}>Tap Open to start a 6-hour unlock timer.</Text>
-                    )
-                  ) : (
-                    <Text style={styles.wjChestHubMeta}>Empty. Run Keys for drops.</Text>
-                  )}
+                    )}
+                  </View>
                 </View>
               </View>
-            </View>
+            ) : null}
 
             <View style={styles.gameOverFooter}>
-              <View style={styles.panelBiomeRow}>
-                <Pressable
-                  onPress={() => selectMenuBiome('grassland')}
-                  style={[
-                    styles.panelBiomeChip,
-                    styles.panelBiomeChipGrass,
-                    menuStartBiome === 'grassland' ? styles.panelBiomeChipGrassActive : null,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.gameOverBiomeChipText,
-                      menuStartBiome === 'grassland' ? styles.gameOverBiomeChipTextActive : null,
-                    ]}
-                  >
-                    Grasslands
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => selectMenuBiome('mushroom')}
-                  style={[
-                    styles.panelBiomeChip,
-                    styles.panelBiomeChipMushroom,
-                    menuStartBiome === 'mushroom' ? styles.panelBiomeChipMushroomActive : null,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.gameOverBiomeChipText,
-                      menuStartBiome === 'mushroom' ? styles.gameOverBiomeChipTextActive : null,
-                    ]}
-                  >
-                    Mushroom Isles
-                  </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => selectMenuBiome('tropical')}
-                  style={[
-                    styles.panelBiomeChip,
-                    styles.panelBiomeChipTropical,
-                    menuStartBiome === 'tropical' ? styles.panelBiomeChipTropicalActive : null,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.gameOverBiomeChipText,
-                      menuStartBiome === 'tropical' ? styles.gameOverBiomeChipTextActive : null,
-                    ]}
-                  >
-                    Sunset Keys
-                  </Text>
-                </Pressable>
-              </View>
-
               <Pressable
                 onPress={gameState.mode === 'gameOver' ? restartRun : startGame}
                 style={[styles.primaryButton, primaryButtonTone]}
@@ -4514,6 +5254,7 @@ export function WonderJump({
             </View>
             </ScrollView>
           </Animated.View>
+          </View>
         ) : null}
 
         {gameState.mode === 'playing' && controlScheme === 'touchSplit' ? (
@@ -4659,26 +5400,20 @@ export function WonderJump({
           >
             <View style={styles.leaderboardModalHeader}>
               <Text style={styles.leaderboardModalTitle}>WonderJump leaderboard</Text>
-              <Text style={styles.leaderboardModalHint}>
-                {leaderboardFetchState === 'error'
-                  ? 'Could not load scores. Try again later.'
-                  : leaderboardFetchState === 'loading'
-                    ? 'Loading…'
-                    : 'Best saved runs · everyone sees the same board'}
-              </Text>
             </View>
             <View style={styles.leaderboardTableHead}>
               <Text style={styles.leaderboardThRank}>#</Text>
               <Text style={styles.leaderboardThPlayer}>Player</Text>
+              <Text style={styles.leaderboardThBiome}>Biome</Text>
               <Text style={styles.leaderboardThScore}>Score</Text>
             </View>
             {leaderboardFetchState === 'loading' ? (
-              <View style={[styles.leaderboardScroll, styles.leaderboardLoadingBox, { minHeight: 160 }]}>
-                <ActivityIndicator size="large" color={panelAccent.accent} />
+              <View style={[styles.leaderboardListShell, styles.leaderboardLoadingBox, { minHeight: 160 }]}>
+                <ActivityIndicator size="large" color={wonderportTheme?.brandAccent ?? BRAND_ACCENT_LIME_HEX} />
               </View>
             ) : (
               <ScrollView
-                style={[styles.leaderboardScroll, { maxHeight: leaderboardScrollMaxH }]}
+                style={[styles.leaderboardListShell, styles.leaderboardScroll, { maxHeight: leaderboardScrollMaxH }]}
                 contentContainerStyle={styles.leaderboardScrollContent}
                 showsVerticalScrollIndicator
                 nestedScrollEnabled
@@ -4694,14 +5429,12 @@ export function WonderJump({
                 ) : (
                   leaderboardEntries.map((row, index) => {
                     const rank = index + 1
+                    const biomeId = resolveLeaderboardBiomeId(row.biomeReached, row.score)
+                    const isLastRow = index === leaderboardEntries.length - 1
                     return (
                       <View
                         key={row.userId}
-                        style={[
-                          styles.leaderboardRow,
-                          rank % 2 === 0 ? styles.leaderboardRowAlt : null,
-                          rank <= 3 ? styles.leaderboardRowSpotlit : null,
-                        ]}
+                        style={[styles.leaderboardRow, isLastRow ? styles.leaderboardRowLast : null]}
                       >
                         <Text
                           style={[
@@ -4719,6 +5452,15 @@ export function WonderJump({
                         </Text>
                         <Text style={styles.leaderboardCellPlayer} numberOfLines={1}>
                           {row.username}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.leaderboardCellBiome,
+                            { color: wonderJumpLeaderboardBiomeColor(biomeId) },
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {wonderJumpBiomeDisplayLabel(biomeId)}
                         </Text>
                         <Text style={styles.leaderboardCellScore}>{row.score.toLocaleString()}</Text>
                       </View>
@@ -4899,23 +5641,25 @@ function createWonderJumpStyles(theme: any) {
     fontSize: 24,
     letterSpacing: 0.2,
   },
-  /** Leaderboard entry inside hero score card (menu + game over). */
+  /** Leaderboard CTA — hollow black fill, neon lime outline + label (menu + game over). */
   leaderboardHeroTile: {
     alignSelf: 'stretch',
     width: '100%',
     marginTop: 8,
-    paddingVertical: 9,
+    paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 11,
-    borderWidth: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1.5,
+    borderColor: A,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   leaderboardHeroTileText: {
+    color: A,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 12,
-    letterSpacing: 1,
+    letterSpacing: 1.15,
     textTransform: 'uppercase',
   },
   gameOverDeathBlurb: {
@@ -5111,14 +5855,14 @@ function createWonderJumpStyles(theme: any) {
     zIndex: 1,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(190, 220, 255, 0.28)',
-    backgroundColor: 'rgba(10, 16, 36, 0.97)',
+    borderColor: S(0.38),
+    backgroundColor: '#000000',
     paddingTop: 18,
     paddingBottom: 16,
     paddingHorizontal: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.5,
     shadowRadius: 20,
     elevation: 12,
   },
@@ -5126,7 +5870,6 @@ function createWonderJumpStyles(theme: any) {
     width: '100%',
     alignItems: 'center',
     marginBottom: 12,
-    gap: 4,
   },
   leaderboardModalTitle: {
     color: '#f6fbff',
@@ -5135,12 +5878,11 @@ function createWonderJumpStyles(theme: any) {
     letterSpacing: 0.2,
     textAlign: 'center',
   },
-  leaderboardModalHint: {
-    color: 'rgba(180, 206, 236, 0.85)',
-    fontFamily: WONDER_JUMP_UI_BOLD,
-    fontSize: 11,
-    letterSpacing: 0.2,
-    textAlign: 'center',
+  leaderboardListShell: {
+    width: '100%',
+    backgroundColor: '#000000',
+    borderRadius: 10,
+    overflow: 'hidden',
   },
   leaderboardTableHead: {
     flexDirection: 'row',
@@ -5148,9 +5890,9 @@ function createWonderJumpStyles(theme: any) {
     width: '100%',
     paddingVertical: 8,
     paddingHorizontal: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(140, 170, 210, 0.25)',
-    marginBottom: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.14)',
+    marginBottom: 0,
   },
   leaderboardThRank: {
     width: 36,
@@ -5168,8 +5910,16 @@ function createWonderJumpStyles(theme: any) {
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
+  leaderboardThBiome: {
+    width: 92,
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 11,
+    color: 'rgba(200, 220, 245, 0.75)',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
   leaderboardThScore: {
-    width: 72,
+    width: 64,
     textAlign: 'right',
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 11,
@@ -5179,6 +5929,7 @@ function createWonderJumpStyles(theme: any) {
   },
   leaderboardScroll: {
     width: '100%',
+    backgroundColor: '#000000',
   },
   leaderboardLoadingBox: {
     alignItems: 'center',
@@ -5202,16 +5953,13 @@ function createWonderJumpStyles(theme: any) {
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
-    paddingVertical: 9,
+    paddingVertical: 10,
     paddingHorizontal: 8,
-    borderRadius: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255, 255, 255, 0.12)',
   },
-  leaderboardRowAlt: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-  },
-  leaderboardRowSpotlit: {
-    borderWidth: 1,
-    borderColor: 'rgba(255, 215, 120, 0.12)',
+  leaderboardRowLast: {
+    borderBottomWidth: 0,
   },
   leaderboardCellRank: {
     width: 36,
@@ -5238,8 +5986,15 @@ function createWonderJumpStyles(theme: any) {
     letterSpacing: 0.12,
     paddingRight: 8,
   },
+  leaderboardCellBiome: {
+    width: 92,
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 11,
+    letterSpacing: 0.1,
+    paddingRight: 6,
+  },
   leaderboardCellScore: {
-    width: 72,
+    width: 64,
     textAlign: 'right',
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 14,
@@ -5420,7 +6175,8 @@ function createWonderJumpStyles(theme: any) {
   },
   panelBiomeRow: {
     flexDirection: 'row',
-    gap: 10,
+    flexWrap: 'wrap',
+    gap: 8,
     width: '100%',
     justifyContent: 'center',
     marginVertical: 4,
@@ -5444,6 +6200,10 @@ function createWonderJumpStyles(theme: any) {
   panelBiomeChipTropical: {
     borderColor: 'rgba(29, 127, 117, 0.42)',
   },
+  panelBiomeChipSpace: {
+    borderColor: 'rgba(184, 196, 232, 0.45)',
+    backgroundColor: 'rgba(8, 10, 18, 0.55)',
+  },
   panelBiomeChipGrassActive: {
     borderColor: A,
     backgroundColor: 'rgba(45, 106, 58, 0.22)',
@@ -5455,6 +6215,10 @@ function createWonderJumpStyles(theme: any) {
   panelBiomeChipTropicalActive: {
     borderColor: A,
     backgroundColor: 'rgba(29, 127, 117, 0.22)',
+  },
+  panelBiomeChipSpaceActive: {
+    borderColor: A,
+    backgroundColor: 'rgba(139, 154, 212, 0.2)',
   },
   panelBiomeChipText: {
     color: APP_UI_TEXT_MUTED,

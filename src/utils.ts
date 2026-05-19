@@ -509,6 +509,20 @@ export async function claimDailyReward(sessionToken: string): Promise<DailyRewar
   return status
 }
 
+/** Display-score bands aligned with WonderJump HUD / leaderboard (not raw height). */
+function accentBiomeIdFromDisplayScore(displayScore: number): string {
+  const s = Math.floor(displayScore)
+  if (s >= 700) return 'space'
+  if (s >= 300) return 'tropical'
+  if (s >= 130) return 'mushroom'
+  return 'grassland'
+}
+
+function maxBiomeId(a: string, b: string): string {
+  const rank: Record<string, number> = { grassland: 0, mushroom: 1, tropical: 2, space: 3 }
+  return (rank[a] ?? 0) >= (rank[b] ?? 0) ? a : b
+}
+
 /** Public: no auth. Returns display high scores saved from WonderJump runs. */
 export async function fetchWonderJumpLeaderboard(limit = 50): Promise<WonderJumpLeaderboardEntry[]> {
   const safe = Math.min(100, Math.max(1, Math.floor(limit)))
@@ -530,8 +544,12 @@ export async function fetchWonderJumpLeaderboard(limit = 50): Promise<WonderJump
     const userId = typeof (e as any).userId === 'string' ? (e as any).userId : ''
     const username = typeof (e as any).username === 'string' ? (e as any).username : 'Player'
     const score = typeof (e as any).score === 'number' && Number.isFinite((e as any).score) ? (e as any).score : 0
+    const biomeRaw = typeof (e as any).biomeReached === 'string' ? (e as any).biomeReached : 'grassland'
+    const stored =
+      biomeRaw === 'mushroom' || biomeRaw === 'tropical' || biomeRaw === 'space' ? biomeRaw : 'grassland'
+    const biomeReached = maxBiomeId(stored, accentBiomeIdFromDisplayScore(score))
     if (!userId) continue
-    out.push({ userId, username, score })
+    out.push({ userId, username, score, biomeReached })
   }
   return out
 }
@@ -562,12 +580,17 @@ export async function fetchWonderJumpProgress(sessionToken: string): Promise<Won
   const chestDocked = data.chestDocked === true
   const chestUnlocksAt =
     typeof data.chestUnlocksAt === 'string' && data.chestUnlocksAt.length > 0 ? data.chestUnlocksAt : null
-  return { highScore, unlockedBiomes, chestDocked, chestUnlocksAt }
+  const bestBiomeRaw = typeof data.bestBiomeReached === 'string' ? data.bestBiomeReached : 'grassland'
+  const bestBiomeReached =
+    bestBiomeRaw === 'mushroom' || bestBiomeRaw === 'tropical' || bestBiomeRaw === 'space'
+      ? bestBiomeRaw
+      : 'grassland'
+  return { highScore, unlockedBiomes, bestBiomeReached, chestDocked, chestUnlocksAt }
 }
 
 export async function saveWonderJumpProgress(
   sessionToken: string,
-  payload: { highScore?: number; unlockedBiomes?: string[] }
+  payload: { highScore?: number; unlockedBiomes?: string[]; bestBiomeReached?: string }
 ): Promise<WonderJumpProgress> {
   const response = await fetch(`${DOMAIN}/auth/wonder-jump-progress`, {
     method: 'PUT',
@@ -597,7 +620,12 @@ export async function saveWonderJumpProgress(
   const chestDocked = data.chestDocked === true
   const chestUnlocksAt =
     typeof data.chestUnlocksAt === 'string' && data.chestUnlocksAt.length > 0 ? data.chestUnlocksAt : null
-  return { highScore, unlockedBiomes, chestDocked, chestUnlocksAt }
+  const bestBiomeRaw = typeof data.bestBiomeReached === 'string' ? data.bestBiomeReached : 'grassland'
+  const bestBiomeReached =
+    bestBiomeRaw === 'mushroom' || bestBiomeRaw === 'tropical' || bestBiomeRaw === 'space'
+      ? bestBiomeRaw
+      : 'grassland'
+  return { highScore, unlockedBiomes, bestBiomeReached, chestDocked, chestUnlocksAt }
 }
 
 export async function pickupWonderJumpChest(sessionToken: string): Promise<WonderJumpProgress> {
@@ -624,7 +652,12 @@ export async function pickupWonderJumpChest(sessionToken: string): Promise<Wonde
   const chestDocked = data.chestDocked === true
   const chestUnlocksAt =
     typeof data.chestUnlocksAt === 'string' && data.chestUnlocksAt.length > 0 ? data.chestUnlocksAt : null
-  return { highScore, unlockedBiomes, chestDocked, chestUnlocksAt }
+  const bestBiomeRaw = typeof data.bestBiomeReached === 'string' ? data.bestBiomeReached : 'grassland'
+  const bestBiomeReached =
+    bestBiomeRaw === 'mushroom' || bestBiomeRaw === 'tropical' || bestBiomeRaw === 'space'
+      ? bestBiomeRaw
+      : 'grassland'
+  return { highScore, unlockedBiomes, bestBiomeReached, chestDocked, chestUnlocksAt }
 }
 
 export async function startWonderJumpChestOpen(sessionToken: string): Promise<WonderJumpProgress> {
@@ -651,7 +684,12 @@ export async function startWonderJumpChestOpen(sessionToken: string): Promise<Wo
   const chestDocked = data.chestDocked === true
   const chestUnlocksAt =
     typeof data.chestUnlocksAt === 'string' && data.chestUnlocksAt.length > 0 ? data.chestUnlocksAt : null
-  return { highScore, unlockedBiomes, chestDocked, chestUnlocksAt }
+  const bestBiomeRaw = typeof data.bestBiomeReached === 'string' ? data.bestBiomeReached : 'grassland'
+  const bestBiomeReached =
+    bestBiomeRaw === 'mushroom' || bestBiomeRaw === 'tropical' || bestBiomeRaw === 'space'
+      ? bestBiomeRaw
+      : 'grassland'
+  return { highScore, unlockedBiomes, bestBiomeReached, chestDocked, chestUnlocksAt }
 }
 
 export async function claimWonderJumpChest(sessionToken: string): Promise<WonderJumpChestClaimResult> {

@@ -90,6 +90,8 @@ export interface DailyRewardStatus {
 export interface WonderJumpProgress {
   highScore: number
   unlockedBiomes: string[]
+  /** Furthest biome accent reached in any run (`grassland` | `mushroom` | `tropical` | `space`). */
+  bestBiomeReached: string
   /** True when a chest has been picked up and is waiting in the dock. */
   chestDocked: boolean
   /** ISO time when tropical chest becomes openable; null if no chest in progress. */
@@ -101,6 +103,8 @@ export interface WonderJumpLeaderboardEntry {
   userId: string
   username: string
   score: number
+  /** Biome accent id from server (`grassland`, `mushroom`, `tropical`, `space`). */
+  biomeReached: string
 }
 
 /** Result of POST /auth/wonder-jump-chest/claim */
