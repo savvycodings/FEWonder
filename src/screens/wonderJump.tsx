@@ -255,8 +255,8 @@ const PLATFORM_PALM_EDGE_PAD = 14
 const PALM_TREE_W = 44
 const PALM_TREE_H = 74
 const PALM_TREE_BASE_Y = 20
-const PALM_TREE_IMAGE = require('../../public/wonderjump/palm-tree.png')
-const GRASSLAND_BG_IMAGE = require('../../assets/wj-grassland-bg.png')
+const PALM_TREE_IMAGE = require('../../public/wonderjump/palm-tree.webp')
+const GRASSLAND_BG_IMAGE = require('../../assets/wj-grassland-bg.jpg')
 /** Chest sits on platform tops in full tropical only (`tropicalBlend === 1`, not the climb-in gradient). */
 const TROPICAL_CHEST_MIN_BLEND = 1
 /** ~1-in-200 “vibe” per eligible main-chain roll in full tropical (Bernoulli each roll, not a literal counter). */

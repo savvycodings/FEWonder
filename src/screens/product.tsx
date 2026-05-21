@@ -767,7 +767,9 @@ export function Product({ route, navigation }: any) {
                 onPress={continueDeliveryThenPay}
                 activeOpacity={0.9}
               >
-                <Text style={styles.deliveryContinueText}>Continue to payment</Text>
+                <Text style={styles.deliveryContinueText} numberOfLines={1}>
+                  Payment
+                </Text>
               </TouchableOpacity>
             </View>
                   </View>
@@ -1271,14 +1273,17 @@ const getStyles = (theme: any) => {
   deliveryContinueBtn: {
     flex: 1,
     paddingVertical: 14,
+    paddingHorizontal: 8,
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: theme.brandAccent,
   },
   deliveryContinueText: {
     fontFamily: theme.boldFont,
     fontSize: 14,
     color: HOME_ACCENT_TEXT,
+    textAlign: 'center',
   },
   checkoutBackdrop: {
     flex: 1,

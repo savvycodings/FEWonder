@@ -516,7 +516,9 @@ export function CartCheckout({ navigation }: { navigation: any }) {
                 {checkoutBusy ? (
                   <ActivityIndicator color={HOME_ACCENT_TEXT} />
                 ) : (
-                  <Text style={styles.deliveryContinueText}>Continue to payment</Text>
+                  <Text style={styles.deliveryContinueText} numberOfLines={1}>
+                    Payment
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -761,11 +763,18 @@ function getStyles(theme: any) {
     deliveryContinueBtn: {
       flex: 1,
       paddingVertical: 14,
+      paddingHorizontal: 8,
       borderRadius: 12,
       alignItems: 'center',
+      justifyContent: 'center',
       backgroundColor: theme.brandAccent,
     },
-    deliveryContinueText: { fontFamily: theme.boldFont, fontSize: 14, color: HOME_ACCENT_TEXT },
+    deliveryContinueText: {
+      fontFamily: theme.boldFont,
+      fontSize: 14,
+      color: HOME_ACCENT_TEXT,
+      textAlign: 'center',
+    },
     checkoutBackdrop: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.72)',

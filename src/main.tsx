@@ -40,6 +40,7 @@ import { WonderJumpControllerIcon } from './components'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AuthPayload, User } from '../types'
 import { logoutUser } from './utils'
+import { FLOATING_TAB_BAR_BOTTOM, FLOATING_TAB_BAR_HEIGHT } from './tabBarLayout'
 
 /** Tab shell padding below status bar; Search hero bleed should match. */
 const TAB_SHELL_TOP_EXTRA = 6
@@ -455,8 +456,8 @@ function Tabs({
             /** `start`/`end` override the library’s full-width `styles.bottom` (not `left`/`right`). */
             start: tabBarSideInset,
             end: tabBarSideInset,
-            bottom: 8,
-            height: 64,
+            bottom: FLOATING_TAB_BAR_BOTTOM,
+            height: FLOATING_TAB_BAR_HEIGHT,
             borderRadius: TAB_BAR_RADIUS,
             overflow: 'hidden',
             borderTopWidth: 0,

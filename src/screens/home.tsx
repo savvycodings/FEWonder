@@ -33,17 +33,17 @@ import { ShopifyProduct } from '../../types'
 import { formatMoney } from '../money'
 
 /** Home row chips — each maps to DB-backed lists (see load effect). */
-const HOME_CHIPS = ['New', 'Pops', 'Plushies', 'Brands'] as const
+const HOME_CHIPS = ['New', 'Pops', 'Plushie', 'Brands'] as const
 
 /** If no collection title matches, search title/type/vendor/tags via API `q`. */
 const CHIP_SEARCH_FALLBACK: Record<string, string> = {
   Pops: 'pop',
-  Plushies: 'plush',
+  Plushie: 'plush',
 }
 
 const COLLECTION_MATCHERS: Record<string, (c: DbCategorySummary) => boolean> = {
   Pops: (c) => /pop|funko|vinyl/i.test(`${c.handle} ${c.title}`),
-  Plushies: (c) => /plush|plushie|stuffed|soft toy|cuddle/i.test(`${c.handle} ${c.title}`),
+  Plushie: (c) => /plush|plushie|stuffed|soft toy|cuddle/i.test(`${c.handle} ${c.title}`),
 }
 
 function matchCollectionHandle(chip: string, categories: DbCategorySummary[]): string | undefined {
@@ -784,12 +784,16 @@ function HomeCategoryChip({
             style={styles.chipCardOuter}
             contentStyle={styles.chipCardInner}
           >
-            <Text style={styles.chipText}>{label}</Text>
+            <Text style={styles.chipText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+              {label}
+            </Text>
           </WonderportAccentCard>
         ) : (
           <View style={styles.chipPlainOuter}>
             <View style={styles.chipCardInner}>
-              <Text style={styles.chipText}>{label}</Text>
+              <Text style={styles.chipText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+                {label}
+              </Text>
             </View>
           </View>
         )}

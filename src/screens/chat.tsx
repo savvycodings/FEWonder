@@ -15,6 +15,7 @@ import {
 import EventSource from 'react-native-sse'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs'
 import { ThemeContext } from '../context'
 import { CommunityMessage, User } from '../../types'
 import { DOMAIN } from '../../constants'
@@ -41,6 +42,7 @@ import Animated, {
 import * as ImagePicker from 'expo-image-picker'
 import { AvatarFrameWrapper, coerceAvatarFrameId, useEquippedAvatarFrame } from '../components'
 import { brandAccentRgba } from '../brandAccent'
+import { CONTENT_ABOVE_TAB_BAR_GAP, floatingTabBarClearance } from '../tabBarLayout'
 
 const REF_ITEM_PREFIX = '__REF_ITEM__:'
 
@@ -50,9 +52,6 @@ const CHAT_TILE_GREY = '#2d2d2d'
 const CHAT_SURFACE = '#111111'
 const CHAT_TEXT_PRIMARY = '#ffffff'
 const CHAT_TEXT_MUTED = 'rgba(255,255,255,0.72)'
-
-/** Gap above the floating tab bar when keyboard is hidden (clearance over the pill nav). */
-const CHAT_ABOVE_TAB_BAR = 68
 
 /** Approximate composer row height for list padding / stacking (attach + field + send). */
 const COMPOSER_BAR_HEIGHT = 58
@@ -520,10 +519,11 @@ export function Chat({
   }
 
   const pageBg = { backgroundColor: CHAT_BLACK }
-  const closedComposerBottom = useMemo(
-    () => insets.bottom + CHAT_ABOVE_TAB_BAR,
-    [insets.bottom]
-  )
+  const tabBarHeight = useBottomTabBarHeight()
+  const closedComposerBottom = useMemo(() => {
+    if (tabBarHeight > 0) return tabBarHeight + CONTENT_ABOVE_TAB_BAR_GAP
+    return floatingTabBarClearance(insets.bottom)
+  }, [tabBarHeight, insets.bottom])
 
   const keyboard = useAnimatedKeyboard()
   const chatLiftY = useSharedValue(0)
