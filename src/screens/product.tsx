@@ -44,13 +44,7 @@ import {
 } from '../productStock'
 import { productShowsPackagingChoice } from '../productPurchaseMode'
 
-const CHECKOUT_FILL = '#000000'
-const PRODUCT_PAGE_BG = '#000000'
-const PRODUCT_SURFACE_BG = '#111111'
-const PRODUCT_TEXT_PRIMARY = '#ffffff'
-const PRODUCT_TEXT_MUTED = 'rgba(255,255,255,0.72)'
-const HOME_CHIP_FILL = '#000000'
-const HOME_ACCENT_TEXT = '#000000'
+const ACCENT_ON_BADGE_TEXT = '#ffffff'
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
 
 async function copyLabelValue(label: string, value: string) {
@@ -82,6 +76,7 @@ export function Product({ route, navigation }: any) {
   const insets = useSafeAreaInsets()
   const { width } = useWindowDimensions()
   const styles = getStyles(theme)
+  const frameFill = theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
   const initialProduct = (route?.params?.product || {}) as ShopifyProduct
   const [product, setProduct] = useState<ShopifyProduct>(initialProduct)
   const productHandle = String(route?.params?.product?.handle || '').trim()
@@ -483,7 +478,7 @@ export function Product({ route, navigation }: any) {
         <WonderportAccentCard
           borderWidth={2}
           borderRadius={18}
-          innerBackgroundColor={HOME_CHIP_FILL}
+          innerBackgroundColor={frameFill}
           style={styles.infoCardOuter}
           contentStyle={styles.infoCardInner}
         >
@@ -598,7 +593,7 @@ export function Product({ route, navigation }: any) {
             onPress={onBuyNowPress}
           >
             {checkoutBusy ? (
-              <ActivityIndicator color={HOME_ACCENT_TEXT} />
+              <ActivityIndicator color={ACCENT_ON_BADGE_TEXT} />
             ) : (
               <Text style={styles.buyButtonText}>Buy now</Text>
             )}
@@ -784,7 +779,7 @@ export function Product({ route, navigation }: any) {
           <WonderportAccentCard
             borderWidth={3}
             borderRadius={18}
-            innerBackgroundColor={CHECKOUT_FILL}
+            innerBackgroundColor={frameFill}
             style={styles.checkoutShell}
             contentStyle={styles.checkoutInner}
           >
@@ -856,7 +851,7 @@ export function Product({ route, navigation }: any) {
               disabled={eftUploadBusy}
             >
               {eftUploadBusy ? (
-                <ActivityIndicator color={CHECKOUT_FILL} />
+                <ActivityIndicator color={ACCENT_ON_BADGE_TEXT} />
               ) : (
                 <Text style={styles.checkoutPrimaryBtnText}>Upload proof of payment</Text>
               )}
@@ -897,13 +892,19 @@ export function Product({ route, navigation }: any) {
 const getStyles = (theme: any) => {
   const L = (a: number) => brandAccentRgba(theme, a)
   const surfaceBorder = L(0.3)
+  const pageBg = theme.appBackgroundColor || theme.backgroundColor
+  const surfaceBg = theme.sheetBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
+  const frameFill = theme.frameInnerBackgroundColor || surfaceBg
+  const textPrimary = theme.textColor
+  const textMuted = theme.mutedForegroundColor
+  const modalOverlay = theme.modalOverlayColor || 'rgba(0, 0, 0, 0.38)'
   return StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: PRODUCT_PAGE_BG,
+    backgroundColor: pageBg,
   },
   safeTop: {
-    backgroundColor: PRODUCT_PAGE_BG,
+    backgroundColor: pageBg,
   },
   /** ~44pt content area under status bar — iOS nav bar convention */
   topNavRow: {
@@ -925,7 +926,7 @@ const getStyles = (theme: any) => {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: HOME_CHIP_FILL,
+    backgroundColor: frameFill,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
@@ -933,14 +934,14 @@ const getStyles = (theme: any) => {
   },
   heroImageWrap: {
     borderRadius: 16,
-    backgroundColor: PRODUCT_SURFACE_BG,
+    backgroundColor: surfaceBg,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: surfaceBorder,
   },
   heroImageLoadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: modalOverlay,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -953,7 +954,7 @@ const getStyles = (theme: any) => {
   heroPlaceholderText: {
     fontFamily: theme.semiBoldFont,
     fontSize: 16,
-    color: PRODUCT_TEXT_MUTED,
+    color: textMuted,
     textAlign: 'center',
   },
   infoCardOuter: {
@@ -968,7 +969,7 @@ const getStyles = (theme: any) => {
     fontFamily: HOME_MONTSERRAT_BOLD,
     fontSize: 22,
     lineHeight: 28,
-    color: '#ffffff',
+    color: textPrimary,
   },
   titleRow: {
     flexDirection: 'row',
@@ -979,7 +980,7 @@ const getStyles = (theme: any) => {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: theme.sheetRowBackgroundColor || frameFill,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -998,7 +999,7 @@ const getStyles = (theme: any) => {
     fontSize: 22,
   },
   compareAtPrice: {
-    color: 'rgba(255,255,255,0.45)',
+    color: textMuted,
     fontFamily: theme.mediumFont,
     fontSize: 16,
     textDecorationLine: 'line-through',
@@ -1013,7 +1014,7 @@ const getStyles = (theme: any) => {
     marginTop: 14,
   },
   sectionCard: {
-    backgroundColor: PRODUCT_SURFACE_BG,
+    backgroundColor: surfaceBg,
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
@@ -1027,7 +1028,7 @@ const getStyles = (theme: any) => {
   optionButton: {
     flex: 1,
     borderRadius: 999,
-    backgroundColor: HOME_CHIP_FILL,
+    backgroundColor: frameFill,
     paddingVertical: 12,
     paddingHorizontal: 10,
     borderWidth: 1,
@@ -1036,7 +1037,7 @@ const getStyles = (theme: any) => {
   optionButtonActive: {
     borderWidth: 2,
     borderColor: theme.brandAccent,
-    backgroundColor: HOME_CHIP_FILL,
+    backgroundColor: frameFill,
   },
   optionText: {
     color: theme.brandAccent,
@@ -1054,13 +1055,13 @@ const getStyles = (theme: any) => {
   },
   sectionTitle: {
     fontFamily: HOME_MONTSERRAT_BOLD,
-    color: PRODUCT_TEXT_PRIMARY,
+    color: textPrimary,
     fontSize: 18,
     marginBottom: 10,
   },
   sectionBody: {
     fontFamily: theme.regularFont,
-    color: PRODUCT_TEXT_MUTED,
+    color: textMuted,
     fontSize: 15,
     lineHeight: 23,
   },
@@ -1074,7 +1075,7 @@ const getStyles = (theme: any) => {
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: HOME_CHIP_FILL,
+    backgroundColor: frameFill,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
@@ -1087,7 +1088,7 @@ const getStyles = (theme: any) => {
     minWidth: 56,
     height: 42,
     borderRadius: 21,
-    backgroundColor: HOME_CHIP_FILL,
+    backgroundColor: frameFill,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
@@ -1104,7 +1105,7 @@ const getStyles = (theme: any) => {
     left: 12,
     right: 12,
     bottom: 14,
-    backgroundColor: HOME_CHIP_FILL,
+    backgroundColor: frameFill,
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -1150,7 +1151,7 @@ const getStyles = (theme: any) => {
     justifyContent: 'center',
   },
   buyButtonText: {
-    color: HOME_ACCENT_TEXT,
+    color: ACCENT_ON_BADGE_TEXT,
     fontFamily: theme.semiBoldFont,
     fontSize: 13,
   },
@@ -1159,7 +1160,7 @@ const getStyles = (theme: any) => {
   },
   deliveryBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.65)',
+    backgroundColor: modalOverlay,
   },
   deliveryKeyboardWrap: {
     flex: 1,
@@ -1174,14 +1175,14 @@ const getStyles = (theme: any) => {
     borderRadius: 18,
     padding: 16,
     maxHeight: '92%',
-    backgroundColor: PRODUCT_SURFACE_BG,
+    backgroundColor: surfaceBg,
     borderWidth: 1,
     borderColor: surfaceBorder,
   },
   deliveryTitle: {
     fontFamily: HOME_MONTSERRAT_BOLD,
     fontSize: 20,
-    color: PRODUCT_TEXT_PRIMARY,
+    color: textPrimary,
     marginBottom: 12,
   },
   deliveryChipsRow: {
@@ -1194,7 +1195,7 @@ const getStyles = (theme: any) => {
     borderRadius: 999,
     paddingVertical: 11,
     alignItems: 'center',
-    backgroundColor: HOME_CHIP_FILL,
+    backgroundColor: frameFill,
     borderWidth: 1,
     borderColor: L(0.3),
   },
@@ -1218,7 +1219,7 @@ const getStyles = (theme: any) => {
   deliveryFieldLabel: {
     fontFamily: theme.mediumFont,
     fontSize: 12,
-    color: PRODUCT_TEXT_MUTED,
+    color: textMuted,
     marginBottom: 6,
     marginTop: 10,
   },
@@ -1227,7 +1228,7 @@ const getStyles = (theme: any) => {
     marginBottom: 2,
     fontFamily: theme.semiBoldFont,
     fontSize: 13,
-    color: PRODUCT_TEXT_PRIMARY,
+    color: textPrimary,
   },
   deliveryInput: {
     borderWidth: 1,
@@ -1238,8 +1239,8 @@ const getStyles = (theme: any) => {
     marginBottom: 4,
     fontFamily: theme.mediumFont,
     fontSize: 15,
-    color: PRODUCT_TEXT_PRIMARY,
-    backgroundColor: HOME_CHIP_FILL,
+    color: textPrimary,
+    backgroundColor: frameFill,
   },
   deliveryInputMultiline: {
     minHeight: 72,
@@ -1263,12 +1264,12 @@ const getStyles = (theme: any) => {
     alignItems: 'center',
     borderWidth: 1,
     borderColor: surfaceBorder,
-    backgroundColor: HOME_CHIP_FILL,
+    backgroundColor: frameFill,
   },
   deliveryCancelText: {
     fontFamily: theme.semiBoldFont,
     fontSize: 14,
-    color: PRODUCT_TEXT_PRIMARY,
+    color: textPrimary,
   },
   deliveryContinueBtn: {
     flex: 1,
@@ -1282,12 +1283,12 @@ const getStyles = (theme: any) => {
   deliveryContinueText: {
     fontFamily: theme.boldFont,
     fontSize: 14,
-    color: HOME_ACCENT_TEXT,
+    color: ACCENT_ON_BADGE_TEXT,
     textAlign: 'center',
   },
   checkoutBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.72)',
+    backgroundColor: modalOverlay,
     justifyContent: 'center',
     paddingHorizontal: 14,
     paddingVertical: 24,
@@ -1312,7 +1313,7 @@ const getStyles = (theme: any) => {
   checkoutSubtitle: {
     fontFamily: theme.mediumFont,
     fontSize: 13,
-    color: 'rgba(255,255,255,0.72)',
+    color: textMuted,
     lineHeight: 19,
     marginBottom: 16,
   },
@@ -1334,12 +1335,12 @@ const getStyles = (theme: any) => {
   checkoutValueMono: {
     fontFamily: theme.boldFont,
     fontSize: 16,
-    color: '#ffffff',
+    color: textPrimary,
   },
   checkoutHint: {
     fontFamily: theme.regularFont,
     fontSize: 13,
-    color: 'rgba(255,255,255,0.65)',
+    color: textMuted,
     lineHeight: 20,
     marginTop: 12,
   },
@@ -1352,7 +1353,7 @@ const getStyles = (theme: any) => {
     paddingHorizontal: 10,
     marginBottom: 8,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: theme.sheetRowBackgroundColor || frameFill,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: L(0.25),
   },
@@ -1379,7 +1380,7 @@ const getStyles = (theme: any) => {
     marginTop: 6,
   },
   checkoutPrimaryBtnText: {
-    color: CHECKOUT_FILL,
+    color: ACCENT_ON_BADGE_TEXT,
     fontFamily: theme.boldFont,
     fontSize: 15,
   },

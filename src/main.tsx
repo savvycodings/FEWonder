@@ -61,68 +61,107 @@ const TAB_BAR_SIDE_INSET_RATIO = 0.045
  * Blur smears content behind; each layer tints without killing legibility of icons.
  */
 function FrostedTabBarBackground() {
+  const { theme } = useContext(ThemeContext)
+  const isLight = theme?.tabBarBlurTint === 'light'
   const blurIntensity = Platform.OS === 'ios' ? 100 : Platform.OS === 'android' ? 72 : 88
   const shell = [StyleSheet.absoluteFill, { borderRadius: TAB_BAR_RADIUS, overflow: 'hidden' }]
   return (
     <View pointerEvents="none" style={shell}>
-      <BlurView intensity={blurIntensity} tint="dark" style={StyleSheet.absoluteFill} />
-      {/* Base sheet — neutral charcoal over blur */}
-      <View
-        pointerEvents="none"
-        style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(20, 20, 22, 0.48)' }]}
-      />
-      {/* Vertical depth: lighter cap → mid grey → deeper base (read as thick glass) */}
-      <LinearGradient
-        pointerEvents="none"
-        colors={[
-          'rgba(56, 56, 60, 0.42)',
-          'rgba(34, 34, 38, 0.5)',
-          'rgba(18, 18, 22, 0.58)',
-          'rgba(10, 10, 12, 0.62)',
-        ]}
-        locations={[0, 0.35, 0.72, 1]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      {/* Horizontal vignette — edges slightly darker than centre */}
-      <LinearGradient
-        pointerEvents="none"
-        colors={['rgba(0, 0, 0, 0.18)', 'transparent', 'rgba(0, 0, 0, 0.18)']}
-        locations={[0, 0.5, 1]}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        style={StyleSheet.absoluteFill}
-      />
-      {/* Top rim highlight — frosted edge catch-light */}
-      <LinearGradient
-        pointerEvents="none"
-        colors={['rgba(255, 255, 255, 0.16)', 'rgba(255, 255, 255, 0.05)', 'transparent']}
-        locations={[0, 0.18, 0.45]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      {/* Bottom weight — subtle grounding shadow inside the pill */}
-      <LinearGradient
-        pointerEvents="none"
-        colors={['transparent', 'rgba(0, 0, 0, 0.22)']}
-        locations={[0.55, 1]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View
-        pointerEvents="none"
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            borderRadius: TAB_BAR_RADIUS,
-            borderWidth: StyleSheet.hairlineWidth,
-            borderColor: 'rgba(255, 255, 255, 0.14)',
-          },
-        ]}
-      />
+      <BlurView intensity={blurIntensity} tint={isLight ? 'light' : 'dark'} style={StyleSheet.absoluteFill} />
+      {isLight ? (
+        <>
+          <View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(255, 255, 255, 0.72)' }]}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={[
+              'rgba(255, 255, 255, 0.88)',
+              'rgba(246, 244, 239, 0.82)',
+              'rgba(240, 238, 232, 0.78)',
+            ]}
+            locations={[0, 0.5, 1]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(0, 0, 0, 0.06)', 'transparent', 'rgba(0, 0, 0, 0.06)']}
+            locations={[0, 0.5, 1]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                borderRadius: TAB_BAR_RADIUS,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: theme.tabBarBorderColor || 'rgba(0, 0, 0, 0.1)',
+              },
+            ]}
+          />
+        </>
+      ) : (
+        <>
+          <View
+            pointerEvents="none"
+            style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(20, 20, 22, 0.48)' }]}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={[
+              'rgba(56, 56, 60, 0.42)',
+              'rgba(34, 34, 38, 0.5)',
+              'rgba(18, 18, 22, 0.58)',
+              'rgba(10, 10, 12, 0.62)',
+            ]}
+            locations={[0, 0.35, 0.72, 1]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(0, 0, 0, 0.18)', 'transparent', 'rgba(0, 0, 0, 0.18)']}
+            locations={[0, 0.5, 1]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={['rgba(255, 255, 255, 0.16)', 'rgba(255, 255, 255, 0.05)', 'transparent']}
+            locations={[0, 0.18, 0.45]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            pointerEvents="none"
+            colors={['transparent', 'rgba(0, 0, 0, 0.22)']}
+            locations={[0.55, 1]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              {
+                borderRadius: TAB_BAR_RADIUS,
+                borderWidth: StyleSheet.hairlineWidth,
+                borderColor: 'rgba(255, 255, 255, 0.14)',
+              },
+            ]}
+          />
+        </>
+      )}
     </View>
   )
 }
@@ -554,7 +593,23 @@ function Tabs({
   );
 }
 
+function themedNativeHeaderOptions(theme: {
+  appBackgroundColor?: string
+  backgroundColor?: string
+  textColor?: string
+  boldFont?: string
+}) {
+  return {
+    headerBackTitle: '',
+    headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+    headerTintColor: theme.textColor,
+    headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
+    headerShadowVisible: false,
+  } as const
+}
+
 export function Main() {
+  const { theme } = useContext(ThemeContext)
   const [user, setUser] = useState<User | null>(null)
   const [sessionToken, setSessionToken] = useState<string>('')
   const [isHydrated, setIsHydrated] = useState(false)
@@ -635,12 +690,8 @@ export function Main() {
         component={CategoryProducts}
         options={({ route }) => ({
           headerShown: true,
-          headerBackTitle: '',
           headerTitle: String(route.params?.headerLabel || 'Category'),
-          headerStyle: { backgroundColor: '#000000' },
-          headerTintColor: '#ffffff',
-          headerTitleStyle: { color: '#ffffff', fontFamily: 'Geist-Bold' },
-          headerShadowVisible: false,
+          ...themedNativeHeaderOptions(theme),
         })}
       />
       <Stack.Screen
@@ -648,8 +699,8 @@ export function Main() {
         component={CommunityUserProfile}
         options={{
           headerShown: true,
-          headerBackTitle: '',
           headerTitle: 'Member',
+          ...themedNativeHeaderOptions(theme),
         }}
       />
     </Stack.Navigator>

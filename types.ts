@@ -9,7 +9,7 @@ export interface IThemeContext {
   theme: any
   setTheme: Dispatch<SetStateAction<string>>
   themeName: string
-  /** Wonder Store color accent id: `default` (lime) or a purchased theme id. */
+  /** Wonder Store color accent id: `default` (Wonderport red) or a purchased theme id. */
   brandAccentId: string
   setBrandAccentId: (id: string) => void
 }
@@ -126,6 +126,7 @@ export interface ShopifyProduct {
   productType?: string | null
   tags?: string[]
   featuredImageUrl?: string | null
+  images?: string[]
   price?: ShopifyMoney | null
   compareAtPrice?: ShopifyMoney | null
   packagePrices?: {

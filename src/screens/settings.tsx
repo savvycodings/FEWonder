@@ -147,6 +147,7 @@ export function Settings({ user, sessionToken, onUserUpdated, onLogout }: Settin
 
 const getStyles = (theme:any) => {
   const L = (a: number) => brandAccentRgba(theme, a)
+  const cardFill = theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
   return StyleSheet.create({
   buttonContainer: {
     marginBottom: 20
@@ -266,9 +267,9 @@ const getStyles = (theme:any) => {
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#000000',
+    backgroundColor: cardFill,
     borderWidth: 1,
-    borderColor: '#000000',
+    borderColor: L(0.28),
   },
   textWrap: {
     flex: 1,

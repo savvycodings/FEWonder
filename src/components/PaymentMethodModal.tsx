@@ -11,10 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { ThemeContext } from '../context'
 import { brandAccentRgba } from '../brandAccent'
 
-const PRODUCT_SURFACE_BG = '#111111'
-const PRODUCT_TEXT_PRIMARY = '#ffffff'
-const HOME_CHIP_FILL = '#000000'
-const HOME_ACCENT_TEXT = '#000000'
+const ACCENT_ON_BADGE_TEXT = '#ffffff'
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
 
 type Props = {
@@ -57,14 +54,18 @@ export function PaymentMethodModal({ visible, showCard, onEft, onCard, onCancel 
   )
 }
 
-function getStyles(theme: { brandAccent: string; semiBoldFont: string; boldFont: string }) {
+function getStyles(theme: any) {
   const L = (a: number) => brandAccentRgba(theme, a)
   const surfaceBorder = L(0.3)
+  const surfaceBg = theme.sheetBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
+  const frameFill = theme.frameInnerBackgroundColor || surfaceBg
+  const textPrimary = theme.textColor
+  const modalOverlay = theme.modalOverlayColor || 'rgba(0, 0, 0, 0.38)'
 
   return StyleSheet.create({
     backdrop: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.72)',
+      backgroundColor: modalOverlay,
       justifyContent: 'center',
       paddingHorizontal: 22,
     },
@@ -82,7 +83,7 @@ function getStyles(theme: { brandAccent: string; semiBoldFont: string; boldFont:
       paddingHorizontal: 20,
       paddingTop: 22,
       paddingBottom: 18,
-      backgroundColor: PRODUCT_SURFACE_BG,
+      backgroundColor: surfaceBg,
       borderWidth: 1,
       borderColor: surfaceBorder,
       shadowColor: '#000',
@@ -94,7 +95,7 @@ function getStyles(theme: { brandAccent: string; semiBoldFont: string; boldFont:
     title: {
       fontFamily: HOME_MONTSERRAT_BOLD,
       fontSize: 20,
-      color: PRODUCT_TEXT_PRIMARY,
+      color: textPrimary,
       textAlign: 'center',
       marginBottom: 18,
     },
@@ -110,7 +111,7 @@ function getStyles(theme: { brandAccent: string; semiBoldFont: string; boldFont:
     primaryBtnText: {
       fontFamily: theme.boldFont,
       fontSize: 15,
-      color: HOME_ACCENT_TEXT,
+      color: ACCENT_ON_BADGE_TEXT,
     },
     cancelBtn: {
       paddingVertical: 14,
@@ -118,7 +119,7 @@ function getStyles(theme: { brandAccent: string; semiBoldFont: string; boldFont:
       alignItems: 'center',
       borderWidth: 1,
       borderColor: surfaceBorder,
-      backgroundColor: HOME_CHIP_FILL,
+      backgroundColor: frameFill,
       marginTop: 2,
     },
     cancelBtnText: {

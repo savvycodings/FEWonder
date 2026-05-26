@@ -1,11 +1,14 @@
-/** Default Wonderport UI accent (lime). */
+/** Default Wonderport UI accent (red). */
+export const BRAND_ACCENT_DEFAULT_HEX = '#E32828'
+
+/** @deprecated Pre-2025 default lime — kept for references; equip via Wonder Store `mint` etc. */
 export const BRAND_ACCENT_LIME_HEX = '#CBFF00'
 
 export const BRAND_ACCENT_STORAGE_KEY = 'wonderport-brand-accent-id'
 
-/** Accent palette keys match Wonder Store theme ids + `default` (lime). */
+/** Accent palette keys match Wonder Store theme ids + `default` (Wonderport red). */
 export const BRAND_ACCENT_ID_TO_HEX: Record<string, string> = {
-  default: BRAND_ACCENT_LIME_HEX,
+  default: BRAND_ACCENT_DEFAULT_HEX,
   midnight: '#8C00FF',
   sunset: '#fa5528',
   mint: '#6ee7b7',
@@ -16,10 +19,10 @@ export const BRAND_ACCENT_ID_TO_HEX: Record<string, string> = {
 
 export function hexToRgbString(hex: string): string {
   const raw = String(hex || '').replace('#', '').trim()
-  if (!raw) return '203, 255, 0'
+  if (!raw) return '227, 40, 40'
   const full = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw
   const n = parseInt(full, 16)
-  if (!Number.isFinite(n) || full.length !== 6) return '203, 255, 0'
+  if (!Number.isFinite(n) || full.length !== 6) return '227, 40, 40'
   const r = (n >> 16) & 255
   const g = (n >> 8) & 255
   const b = n & 255
@@ -34,11 +37,11 @@ export function normalizeBrandAccentId(id: string | undefined | null): string {
 
 export function resolveBrandAccentHex(id: string | undefined | null): string {
   const k = normalizeBrandAccentId(id)
-  return BRAND_ACCENT_ID_TO_HEX[k] ?? BRAND_ACCENT_LIME_HEX
+  return BRAND_ACCENT_ID_TO_HEX[k] ?? BRAND_ACCENT_DEFAULT_HEX
 }
 
 export function brandAccentRgba(theme: { brandAccentRgb?: string } | undefined, alpha: number): string {
-  const rgb = theme?.brandAccentRgb ?? hexToRgbString(BRAND_ACCENT_LIME_HEX)
+  const rgb = theme?.brandAccentRgb ?? hexToRgbString(BRAND_ACCENT_DEFAULT_HEX)
   return `rgba(${rgb},${alpha})`
 }
 

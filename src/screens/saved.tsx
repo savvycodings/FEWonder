@@ -111,7 +111,7 @@ const getStyles = (theme: any) => {
   const L = (a: number) => brandAccentRgba(theme, a)
   return StyleSheet.create({
     container: {
-      backgroundColor: theme.appBackgroundColor || theme.backgroundColor || '#000000',
+      backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
     },
     screenFill: {
       flex: 1,

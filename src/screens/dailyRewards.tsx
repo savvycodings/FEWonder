@@ -208,7 +208,7 @@ function wonderBadgeCardMeta(
 
 const weekDays = ['1', '2', '3', '4', '5', '6', '7']
 const weekRewards = [1, 2, 3, 4, 5, 6, 7]
-const DAILY_FILL = '#000000'
+const ACCENT_ON_BADGE_TEXT = '#ffffff'
 const THEME_STORE_OWNED_KEY = 'wonderport-theme-store-owned-ids'
 const THEME_STORE_ITEMS = [
   { id: 'midnight', name: 'Midnight', cost: 5, image: require('../../assets/dailyrewards/midnight.png') },
@@ -777,7 +777,7 @@ export function DailyRewards({ navigation, route }: any) {
                       Platform.OS === 'web' ? (
                         <SvgUri uri="/homepageimgs/dailyrewards/lighting.svg" width={30} height={30} />
                       ) : (
-                        <FeatherIcon name="zap" size={30} color="#050505" />
+                        <FeatherIcon name="zap" size={30} color={ACCENT_ON_BADGE_TEXT} />
                       )
                     ) : null}
                   </View>
@@ -812,7 +812,7 @@ export function DailyRewards({ navigation, route }: any) {
           <FeatherIcon
             name="chevron-left"
             size={24}
-            color={carouselCanGoBack ? '#ffffff' : 'rgba(255,255,255,0.28)'}
+            color={carouselCanGoBack ? theme.textColor : theme.mutedForegroundColor}
           />
         </Pressable>
         <Pressable
@@ -825,7 +825,7 @@ export function DailyRewards({ navigation, route }: any) {
           <FeatherIcon
             name="chevron-right"
             size={24}
-            color={carouselCanGoForward ? '#ffffff' : 'rgba(255,255,255,0.28)'}
+            color={carouselCanGoForward ? theme.textColor : theme.mutedForegroundColor}
           />
         </Pressable>
       </View>
@@ -1173,10 +1173,15 @@ export function DailyRewards({ navigation, route }: any) {
 
 function buildDailyRewardStyles(theme: any) {
   const L = (a: number) => brandAccentRgba(theme, a)
+  const pageBg = theme.appBackgroundColor || theme.backgroundColor
+  const cardFill = theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
+  const textPrimary = theme.textColor
+  const textMuted = theme.mutedForegroundColor
+  const onAccentText = theme.priceBadgeTextColor || ACCENT_ON_BADGE_TEXT
   return StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DAILY_FILL,
+    backgroundColor: pageBg,
   },
   content: {
     paddingHorizontal: 12,
@@ -1194,7 +1199,7 @@ function buildDailyRewardStyles(theme: any) {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: DAILY_FILL,
+    backgroundColor: cardFill,
     borderWidth: 1,
     borderColor: L(0.35),
     alignItems: 'center',
@@ -1203,7 +1208,7 @@ function buildDailyRewardStyles(theme: any) {
   mainScreenHeading: {
     flex: 1,
     minWidth: 0,
-    color: '#ffffff',
+    color: textPrimary,
     fontFamily: 'Montserrat_800ExtraBold',
     fontSize: 28,
     lineHeight: 32,
@@ -1225,7 +1230,7 @@ function buildDailyRewardStyles(theme: any) {
   },
   /** In-page section titles (matches Wonder Store / home chip weight) */
   sectionHeading: {
-    color: '#ffffff',
+    color: textPrimary,
     fontFamily: 'Montserrat_800ExtraBold',
     fontSize: 18,
     lineHeight: 22,
@@ -1233,7 +1238,7 @@ function buildDailyRewardStyles(theme: any) {
     marginBottom: 8,
   },
   bannerCard: {
-    backgroundColor: DAILY_FILL,
+    backgroundColor: cardFill,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: L(0.3),
@@ -1247,12 +1252,12 @@ function buildDailyRewardStyles(theme: any) {
     marginBottom: 4,
   },
   bannerTitle: {
-    color: '#ffffff',
+    color: textPrimary,
     fontFamily: 'Geist-SemiBold',
     fontSize: 16,
   },
   bannerSubtitle: {
-    color: 'rgba(255,255,255,0.72)',
+    color: textMuted,
     fontFamily: 'Geist-Regular',
     fontSize: 11,
     marginBottom: 10,
@@ -1266,7 +1271,7 @@ function buildDailyRewardStyles(theme: any) {
     alignItems: 'center',
   },
   dayLabel: {
-    color: 'rgba(255,255,255,0.9)',
+    color: textPrimary,
     fontFamily: 'Geist-Medium',
     fontSize: 11,
     marginBottom: 4,
@@ -1277,7 +1282,7 @@ function buildDailyRewardStyles(theme: any) {
     borderRadius: 18,
     borderWidth: 2,
     borderColor: L(0.35),
-    backgroundColor: DAILY_FILL,
+    backgroundColor: cardFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1322,14 +1327,14 @@ function buildDailyRewardStyles(theme: any) {
   },
   rewardCard: {
     minHeight: 280,
-    backgroundColor: DAILY_FILL,
+    backgroundColor: cardFill,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: L(0.3),
     padding: 12,
   },
   rewardCardDay: {
-    color: '#ffffff',
+    color: textPrimary,
     fontFamily: 'Geist-SemiBold',
     fontSize: 14,
   },
@@ -1363,7 +1368,7 @@ function buildDailyRewardStyles(theme: any) {
     backgroundColor: '#9fb4d8',
   },
   rewardClaimButtonText: {
-    color: '#050505',
+    color: onAccentText,
     fontFamily: 'Geist-SemiBold',
     fontSize: 13,
   },
@@ -1372,7 +1377,7 @@ function buildDailyRewardStyles(theme: any) {
     borderRadius: 8,
     borderWidth: 1,
     borderColor: L(0.35),
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    backgroundColor: theme.sheetRowBackgroundColor || cardFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1381,7 +1386,7 @@ function buildDailyRewardStyles(theme: any) {
     backgroundColor: L(0.14),
   },
   rewardStatusText: {
-    color: 'rgba(255,255,255,0.72)',
+    color: textMuted,
     fontFamily: 'Geist-SemiBold',
     fontSize: 12,
   },
@@ -1390,7 +1395,7 @@ function buildDailyRewardStyles(theme: any) {
   },
   infoText: {
     marginTop: 8,
-    color: 'rgba(255,255,255,0.74)',
+    color: textMuted,
     fontFamily: 'Geist-Medium',
     fontSize: 11,
   },
@@ -1404,7 +1409,7 @@ function buildDailyRewardStyles(theme: any) {
     marginTop: 14,
   },
   badgesHeading: {
-    color: '#ffffff',
+    color: textPrimary,
     fontFamily: 'Montserrat_800ExtraBold',
     fontSize: 17,
     marginBottom: 8,
@@ -1428,7 +1433,7 @@ function buildDailyRewardStyles(theme: any) {
     fontSize: 12,
   },
   badgeStoreCard: {
-    backgroundColor: DAILY_FILL,
+    backgroundColor: cardFill,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: L(0.28),
@@ -1443,7 +1448,7 @@ function buildDailyRewardStyles(theme: any) {
     flexShrink: 1,
   },
   badgeStoreCardEquipped: {
-    backgroundColor: 'rgba(0,0,0,0.62)',
+    backgroundColor: theme.sheetRowBackgroundColor || pageBg,
     borderColor: L(0.45),
   },
   badgeTitleSlot: {
@@ -1456,13 +1461,13 @@ function buildDailyRewardStyles(theme: any) {
     justifyContent: 'flex-start',
   },
   badgeCardTitle: {
-    color: '#ffffff',
+    color: textPrimary,
     fontFamily: 'Geist-SemiBold',
     fontSize: 13,
     lineHeight: 16,
   },
   badgeCardCaption: {
-    color: 'rgba(255,255,255,0.58)',
+    color: textMuted,
     fontFamily: 'Geist-Regular',
     fontSize: 11,
     lineHeight: 13,
@@ -1491,14 +1496,14 @@ function buildDailyRewardStyles(theme: any) {
     marginBottom: 1,
   },
   badgeProgressText: {
-    color: 'rgba(255,255,255,0.65)',
+    color: textMuted,
     fontFamily: 'Geist-Medium',
     fontSize: 10,
   },
   badgeProgressTrack: {
     height: 5,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: theme.sheetRowBackgroundColor || cardFill,
     overflow: 'hidden',
     alignSelf: 'stretch',
   },
@@ -1532,10 +1537,10 @@ function buildDailyRewardStyles(theme: any) {
     borderColor: L(0.45),
   },
   badgeEquipButtonDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: theme.sheetRowBackgroundColor || cardFill,
   },
   badgeEquipButtonText: {
-    color: '#050505',
+    color: onAccentText,
     fontFamily: 'Geist-SemiBold',
     fontSize: 12,
   },
@@ -1543,7 +1548,7 @@ function buildDailyRewardStyles(theme: any) {
     color: theme.brandAccent,
   },
   badgeEquipButtonTextDisabled: {
-    color: 'rgba(255,255,255,0.45)',
+    color: textMuted,
   },
   themeSection: {
     marginTop: 14,
@@ -1555,7 +1560,7 @@ function buildDailyRewardStyles(theme: any) {
   },
   themeCard: {
     width: '48.5%',
-    backgroundColor: DAILY_FILL,
+    backgroundColor: cardFill,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: L(0.28),
@@ -1567,7 +1572,7 @@ function buildDailyRewardStyles(theme: any) {
     borderRadius: 8,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: theme.tileBorderColor || theme.borderColor,
     marginBottom: 6,
   },
   themeSwatchImage: {
@@ -1576,7 +1581,7 @@ function buildDailyRewardStyles(theme: any) {
     transform: [{ scale: 1.1 }],
   },
   themeName: {
-    color: '#ffffff',
+    color: textPrimary,
     fontFamily: 'Geist-SemiBold',
     fontSize: 13,
     marginBottom: 4,
@@ -1609,12 +1614,12 @@ function buildDailyRewardStyles(theme: any) {
     borderColor: theme.brandAccent,
   },
   themeBuyButtonText: {
-    color: '#050505',
+    color: onAccentText,
     fontFamily: 'Geist-SemiBold',
     fontSize: 12,
   },
   themeBuyButtonTextOwned: {
-    color: '#050505',
+    color: onAccentText,
   },
   themeBuyButtonTextEquipped: {
     color: theme.brandAccent,
@@ -1642,7 +1647,7 @@ function buildDailyRewardStyles(theme: any) {
     flexBasis: '31%',
     minWidth: 108,
     flexGrow: 1,
-    backgroundColor: DAILY_FILL,
+    backgroundColor: cardFill,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: L(0.28),
@@ -1656,7 +1661,7 @@ function buildDailyRewardStyles(theme: any) {
     marginBottom: 6,
   },
   characterName: {
-    color: '#ffffff',
+    color: textPrimary,
     fontFamily: 'Geist-SemiBold',
     fontSize: 13,
     minHeight: 16,
@@ -1695,7 +1700,7 @@ function buildDailyRewardStyles(theme: any) {
     opacity: 0.5,
   },
   characterEquipButtonText: {
-    color: '#050505',
+    color: onAccentText,
     fontFamily: 'Geist-SemiBold',
     fontSize: 10,
   },
@@ -1716,7 +1721,7 @@ function buildDailyRewardStyles(theme: any) {
     alignItems: 'center',
   },
   plainFrameText: {
-    color: 'rgba(255,255,255,0.74)',
+    color: textMuted,
     fontFamily: 'Geist-Medium',
     fontSize: 12,
   },
@@ -1730,7 +1735,7 @@ function buildDailyRewardStyles(theme: any) {
     alignItems: 'center',
     gap: 5,
     borderRadius: 999,
-    backgroundColor: DAILY_FILL,
+    backgroundColor: cardFill,
     borderWidth: 1,
     borderColor: L(0.35),
     paddingHorizontal: 12,

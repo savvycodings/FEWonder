@@ -12,7 +12,7 @@ const SHIPPING_SINGLE_ZAR = 150
 const SHIPPING_WHOLE_SET_ZAR = 200
 const CART_CURRENCY = 'ZAR'
 
-const ACCENT_TEXT = '#000000'
+const ACCENT_ON_BADGE_TEXT = '#ffffff'
 const HEADING_FONT = 'Montserrat_700Bold' as const
 
 export function Cart({ navigation }: any) {
@@ -227,7 +227,7 @@ const getStyles = (theme: any) => {
   const L = (a: number) => brandAccentRgba(theme, a)
   return StyleSheet.create({
     container: {
-      backgroundColor: theme.appBackgroundColor || theme.backgroundColor || '#000000',
+      backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
     },
     screenFill: {
       flex: 1,
@@ -422,7 +422,7 @@ const getStyles = (theme: any) => {
       opacity: 0.45,
     },
     checkoutText: {
-      color: theme.brandAccent_TEXT,
+      color: ACCENT_ON_BADGE_TEXT,
       fontFamily: theme.boldFont,
       fontSize: 15,
     },

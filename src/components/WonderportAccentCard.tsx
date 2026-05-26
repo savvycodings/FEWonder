@@ -10,10 +10,10 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import { ThemeContext } from '../context'
-import { BRAND_ACCENT_LIME_HEX, hexToRgbString } from '../brandAccent'
+import { BRAND_ACCENT_DEFAULT_HEX, hexToRgbString } from '../brandAccent'
 
 /** @deprecated Use `theme.brandAccent` from context; kept for imports that expect a constant. */
-export const WONDERPORT_ACCENT_HEX = BRAND_ACCENT_LIME_HEX
+export const WONDERPORT_ACCENT_HEX = BRAND_ACCENT_DEFAULT_HEX
 
 type WonderportAccentCardProps = {
   children: ReactNode
@@ -26,9 +26,15 @@ type WonderportAccentCardProps = {
   /** Fill behind children; visible as the “card face” inside the gradient ring. */
   innerBackgroundColor?: string
   /**
+   * `gradient` — diagonal accent gradient ring (default).
+   * `solid` — uniform accent-colored frame box (storefront product tiles).
+   */
+  borderVariant?: 'gradient' | 'solid'
+  /**
    * When true, the same linear gradient (stops unchanged) rotates about the card center
-   * so the lime bands sweep around the border. Uses Reanimated on the UI thread; prefer
+   * so the accent bands sweep around the border. Uses Reanimated on the UI thread; prefer
    * enabling on one focused control at a time (e.g. active chip), not every list row.
+   * Ignored when `borderVariant` is `solid`.
    */
   animatedBorder?: boolean
   /** Full rotation period when `animatedBorder` is true. */
@@ -52,13 +58,40 @@ export function WonderportAccentCard({
   contentStyle,
   borderWidth = 2,
   borderRadius = 16,
-  innerBackgroundColor = '#000000',
+  innerBackgroundColor,
+  borderVariant = 'gradient',
   animatedBorder = false,
   borderRotationDurationMs = 10_000,
 }: WonderportAccentCardProps) {
   const { theme } = useContext(ThemeContext)
+  const resolvedInnerBg =
+    innerBackgroundColor ??
+    theme?.frameInnerBackgroundColor ??
+    theme?.tileBackgroundColor ??
+    '#FFFFFF'
+  const accentBorderColor = theme?.brandAccent ?? BRAND_ACCENT_DEFAULT_HEX
+
+  if (borderVariant === 'solid') {
+    return (
+      <View
+        style={[
+          styles.shell,
+          {
+            borderRadius,
+            borderWidth,
+            borderColor: accentBorderColor,
+            backgroundColor: resolvedInnerBg,
+            overflow: 'hidden',
+          },
+          style,
+        ]}
+      >
+        <View style={[styles.inner, contentStyle]}>{children}</View>
+      </View>
+    )
+  }
   const borderRgb = useMemo(() => {
-    const s = theme?.brandAccentRgb ?? hexToRgbString(BRAND_ACCENT_LIME_HEX)
+    const s = theme?.brandAccentRgb ?? hexToRgbString(BRAND_ACCENT_DEFAULT_HEX)
     const parts = s.split(',').map((p) => parseInt(p.trim(), 10))
     const r = Number.isFinite(parts[0]) ? parts[0] : 203
     const g = Number.isFinite(parts[1]) ? parts[1] : 255
@@ -147,7 +180,7 @@ export function WonderportAccentCard({
           styles.inner,
           {
             borderRadius: innerRadius,
-            backgroundColor: innerBackgroundColor,
+            backgroundColor: resolvedInnerBg,
             margin: borderWidth,
           },
           contentStyle,

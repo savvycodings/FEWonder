@@ -32,9 +32,7 @@ import {
 import { loadProfileHeroPreferences, type ProfileHeroPreferences } from '../profileHeroPreferences'
 import { brandAccentRgba } from '../brandAccent'
 
-const PROFILE_FILL = '#000000'
-/** Hero tile body (below banner) — dark grey section on profile. */
-const PROFILE_HERO_TILE_BG = '#262626'
+const ACCENT_ON_BADGE_TEXT = '#ffffff'
 export function Profile({
   navigation,
   user,
@@ -378,6 +376,9 @@ export function Profile({
 
 const getStyles = (theme: any) => {
   const L = (a: number) => brandAccentRgba(theme, a)
+  const cardFill = theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
+  const textPrimary = theme.textColor
+  const textMuted = theme.mutedForegroundColor
   return StyleSheet.create({
   container: {
     flex: 1,
@@ -394,9 +395,9 @@ const getStyles = (theme: any) => {
     marginBottom: 16,
     borderRadius: 14,
     overflow: 'visible',
-    backgroundColor: PROFILE_HERO_TILE_BG,
+    backgroundColor: cardFill,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: theme.tileBorderColor || theme.borderColor,
     position: 'relative',
   },
   profileHeroBanner: {
@@ -548,7 +549,7 @@ const getStyles = (theme: any) => {
   },
   statCard: {
     flex: 1,
-    backgroundColor: PROFILE_FILL,
+    backgroundColor: cardFill,
     borderRadius: 13,
     borderWidth: 1,
     borderColor: L(0.28),
@@ -562,7 +563,7 @@ const getStyles = (theme: any) => {
     marginBottom: 2,
   },
   statLabel: {
-    color: 'rgba(255,255,255,0.72)',
+    color: textMuted,
     fontFamily: 'Geist-Medium',
     fontSize: 12,
   },
@@ -613,7 +614,7 @@ const getStyles = (theme: any) => {
   actionRow: {
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: PROFILE_FILL,
+    backgroundColor: cardFill,
     borderRadius: 13,
     borderWidth: 1,
     borderColor: L(0.24),
@@ -630,20 +631,20 @@ const getStyles = (theme: any) => {
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#000000',
+    backgroundColor: cardFill,
     borderWidth: 1,
-    borderColor: '#000000',
+    borderColor: L(0.28),
     alignItems: 'center',
     justifyContent: 'center',
   },
   actionLabel: {
-    color: '#ffffff',
+    color: textPrimary,
     fontFamily: 'Geist-SemiBold',
     fontSize: 14,
     marginBottom: 1,
   },
   actionValue: {
-    color: 'rgba(255,255,255,0.7)',
+    color: textMuted,
     fontFamily: 'Geist-Regular',
     fontSize: 12,
   },
@@ -664,7 +665,7 @@ const getStyles = (theme: any) => {
   orderRow: {
     paddingHorizontal: 10,
     paddingVertical: 10,
-    backgroundColor: PROFILE_FILL,
+    backgroundColor: cardFill,
     borderRadius: 13,
     borderWidth: 1,
     borderColor: L(0.24),
@@ -676,7 +677,7 @@ const getStyles = (theme: any) => {
     width: 44,
     height: 44,
     borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: theme.sheetRowBackgroundColor || cardFill,
     borderWidth: 1,
     borderColor: L(0.22),
     alignItems: 'center',
@@ -693,13 +694,13 @@ const getStyles = (theme: any) => {
     marginRight: 10,
   },
   orderName: {
-    color: '#ffffff',
+    color: textPrimary,
     fontFamily: 'Geist-SemiBold',
     fontSize: 15,
     marginBottom: 2,
   },
   orderMeta: {
-    color: 'rgba(255,255,255,0.7)',
+    color: textMuted,
     fontFamily: 'Geist-Regular',
     fontSize: 12,
   },
@@ -709,7 +710,7 @@ const getStyles = (theme: any) => {
     gap: 8,
   },
   statusPill: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: theme.sheetRowBackgroundColor || cardFill,
     borderWidth: 1,
     borderColor: L(0.35),
     borderRadius: 999,

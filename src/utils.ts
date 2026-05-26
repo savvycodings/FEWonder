@@ -523,9 +523,13 @@ function maxBiomeId(a: string, b: string): string {
   return (rank[a] ?? 0) >= (rank[b] ?? 0) ? a : b
 }
 
-/** Public: no auth. Returns display high scores saved from WonderJump runs. */
-export async function fetchWonderJumpLeaderboard(limit = 50): Promise<WonderJumpLeaderboardEntry[]> {
-  const safe = Math.min(100, Math.max(1, Math.floor(limit)))
+export const WONDER_JUMP_LEADERBOARD_MAX = 100
+
+/** Public: no auth. Returns display high scores saved from WonderJump runs (max 100). */
+export async function fetchWonderJumpLeaderboard(
+  limit = WONDER_JUMP_LEADERBOARD_MAX,
+): Promise<WonderJumpLeaderboardEntry[]> {
+  const safe = Math.min(WONDER_JUMP_LEADERBOARD_MAX, Math.max(1, Math.floor(limit)))
   const response = await fetch(`${DOMAIN}/auth/wonder-jump-leaderboard?limit=${encodeURIComponent(String(safe))}`)
   const raw = await response.text()
   let data: any = {}
@@ -551,7 +555,7 @@ export async function fetchWonderJumpLeaderboard(limit = 50): Promise<WonderJump
     if (!userId) continue
     out.push({ userId, username, score, biomeReached })
   }
-  return out
+  return out.slice(0, WONDER_JUMP_LEADERBOARD_MAX)
 }
 
 export async function fetchWonderJumpProgress(sessionToken: string): Promise<WonderJumpProgress> {

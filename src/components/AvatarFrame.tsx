@@ -802,6 +802,9 @@ export function AvatarFramePreviewTile({
 }: AvatarFramePreviewTileProps) {
   const { theme } = useContext(ThemeContext)
   const accent = theme.brandAccent
+  const cardFill = theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
+  const textPrimary = theme.textColor
+  const onAccentText = theme.priceBadgeTextColor || '#ffffff'
   const meta = AVATAR_FRAME_SHOP.find((f) => f.id === frameId)
   const uri = previewUri?.trim() ? previewUri : null
   const primaryDisabled = busy || equipped || (!owned && !canAfford)
@@ -836,8 +839,8 @@ export function AvatarFramePreviewTile({
       style={[
         styles.tile,
         {
-          backgroundColor: '#000000',
-          borderColor: brandAccentRgba(theme, 0.28),
+          backgroundColor: cardFill,
+          borderColor: brandAccentRgba(theme, 0.35),
         },
       ]}
     >
@@ -846,7 +849,7 @@ export function AvatarFramePreviewTile({
           {previewChild}
         </AvatarFrameWrapper>
       </View>
-      <Text style={[styles.tileName, { color: '#ffffff' }]}>{meta?.name}</Text>
+      <Text style={[styles.tileName, { color: textPrimary }]}>{meta?.name}</Text>
       <View style={styles.tilePriceRow}>
         <WonderStaticCoin size={14} fallbackColor={accent} />
         <Text style={[styles.tilePrice, { color: accent }]}>{priceCoins}</Text>
@@ -870,7 +873,7 @@ export function AvatarFramePreviewTile({
         <Text
           style={[
             styles.tileButtonText,
-            { color: '#050505' },
+            { color: onAccentText },
             equipped ? { color: accent } : null,
           ]}
         >

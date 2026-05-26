@@ -16,8 +16,6 @@ import { WonderportAccentCard } from '../components'
 import { fetchMyOrders } from '../ordersApi'
 import { brandAccentRgba } from '../brandAccent'
 
-const CARD_FILL = '#000000'
-
 function formatTotal(cents: number, code: string) {
   return `${(cents / 100).toFixed(2)} ${code}`
 }
@@ -25,6 +23,7 @@ function formatTotal(cents: number, code: string) {
 export function MyOrders({ navigation }: any) {
   const { theme } = useContext(ThemeContext)
   const styles = getStyles(theme)
+  const frameFill = theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
   const [orders, setOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -68,7 +67,7 @@ export function MyOrders({ navigation }: any) {
               <WonderportAccentCard
                 borderWidth={2}
                 borderRadius={16}
-                innerBackgroundColor={CARD_FILL}
+                innerBackgroundColor={frameFill}
                 style={styles.cardOuter}
                 contentStyle={styles.cardInner}
               >

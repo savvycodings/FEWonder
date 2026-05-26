@@ -75,6 +75,7 @@ const darkTheme = {
   tabBarInactiveTintColor: 'rgba(255, 255, 255, .6)',
   tabBarBackgroundColor: '#111111',
   tabBarBorderColor: '#2a2a2a',
+  tabBarBlurTint: 'dark' as const,
   appBackgroundColor: colors.black,
   tileBackgroundColor: '#1f1f1f',
   tileBorderColor: '#303030',
@@ -194,9 +195,48 @@ const pink = {
   borderColor: 'rgba(233, 30, 140, .2)',
 }
 
+/** Default Wonderport shell — off-white canvas, dark type, red accents (Wonder Store overrides accent only). */
+const wonderportOffWhite = '#F6F4EF'
+const wonderportRed = '#E32828'
+
+const wonderportTheme = {
+  ...fonts,
+  name: 'Wonderport',
+  label: 'wonderport',
+  textColor: '#1a1a1a',
+  secondaryTextColor: colors.white,
+  mutedForegroundColor: 'rgba(26, 26, 26, 0.55)',
+  backgroundColor: wonderportOffWhite,
+  placeholderTextColor: 'rgba(0, 0, 0, 0.42)',
+  secondaryBackgroundColor: colors.white,
+  borderColor: 'rgba(0, 0, 0, 0.12)',
+  tintColor: wonderportRed,
+  tintTextColor: colors.white,
+  tabBarActiveTintColor: wonderportRed,
+  tabBarInactiveTintColor: 'rgba(26, 26, 26, 0.48)',
+  tabBarBackgroundColor: 'rgba(255, 255, 255, 0.94)',
+  tabBarBorderColor: 'rgba(0, 0, 0, 0.1)',
+  tabBarBlurTint: 'light' as const,
+  appBackgroundColor: wonderportOffWhite,
+  tileBackgroundColor: colors.white,
+  tileBorderColor: 'rgba(0, 0, 0, 0.1)',
+  tileActiveBackgroundColor: colors.white,
+  tileActiveTextColor: wonderportRed,
+  modalOverlayColor: 'rgba(0, 0, 0, 0.38)',
+  headingColor: '#1a1a1a',
+  sheetBackgroundColor: colors.white,
+  sheetRowBackgroundColor: wonderportOffWhite,
+  priceBadgeBackgroundColor: wonderportRed,
+  priceBadgeTextColor: colors.white,
+  contentAccentBorderColor: 'rgba(227, 40, 40, 0.45)',
+  /** Inner fill for `WonderportAccentCard` frame boxes. */
+  frameInnerBackgroundColor: colors.white,
+}
+
 export {
   lightTheme,
   darkTheme,
+  wonderportTheme,
   hackerNews,
   miami,
   vercel,

@@ -39,7 +39,7 @@ LogBox.ignoreLogs([
 ])
 
 export default function App() {
-  const [theme, setTheme] = useState<string>('dark')
+  const [theme, setTheme] = useState<string>('wonderport')
   const [brandAccentId, setBrandAccentId] = useState<string>('default')
   const [chatType, setChatType] = useState<Model>(MODELS.claudeOpus)
   const [imageModel, setImageModel] = useState<string>(IMAGE_MODELS.nanoBanana.label)
@@ -67,7 +67,7 @@ export default function App() {
   async function configureStorage() {
     try {
       const _theme = await AsyncStorage.getItem('rnai-theme')
-      if (_theme) setTheme(_theme)
+      if (_theme) setTheme(_theme === 'dark' ? 'wonderport' : _theme)
       const _accent = await AsyncStorage.getItem(BRAND_ACCENT_STORAGE_KEY)
       if (_accent) setBrandAccentId(normalizeBrandAccentId(_accent))
       const _chatType = await AsyncStorage.getItem('rnai-chatType')
@@ -277,7 +277,8 @@ function getTheme(theme: any) {
 
   const matched =
     allThemes.find((t) => t?.label === label) ??
-    allThemes.find((t) => t?.label === 'dark') ??
+    allThemes.find((t) => t?.label === 'wonderport') ??
+    (themes as any).wonderportTheme ??
     (themes as any).darkTheme
 
   return matched

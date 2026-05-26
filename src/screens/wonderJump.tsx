@@ -41,6 +41,7 @@ import {
   claimWonderJumpChest,
   fetchSessionUser,
   fetchWonderJumpLeaderboard,
+  WONDER_JUMP_LEADERBOARD_MAX,
   fetchWonderJumpProgress,
   pickupWonderJumpChest,
   saveWonderJumpProgress,
@@ -567,6 +568,10 @@ const APP_UI_TEXT = '#ffffff'
 const APP_UI_TEXT_MUTED = 'rgba(255, 255, 255, 0.72)'
 const APP_UI_TEXT_DIM = 'rgba(255, 255, 255, 0.58)'
 
+/** Menu / hub / game-over panels — white chrome (biome names keep their own colors). */
+const WONDER_JUMP_MENU_ACCENT = '#ffffff'
+const wonderJumpMenuAccentRgba = (alpha: number) => `rgba(255, 255, 255, ${alpha})`
+
 /** Game-over line: biome you died in (readable on dark panel). */
 const GAME_OVER_DEAD_BIOME_TEXT: Record<WonderJumpStartBiome, string> = {
   grassland: '#a8e9a0',
@@ -606,12 +611,12 @@ const BIOME_UI_ACCENTS: Record<
   },
 }
 
-/** Bright biome labels on the dark leaderboard card. */
+/** Biome labels on the off-white leaderboard (readable on light panels). */
 const LEADERBOARD_BIOME_TEXT_COLOR: Record<WonderJumpStartBiome, string> = {
-  grassland: '#8efc7a',
-  mushroom: '#ff5c7a',
-  tropical: '#3ee8ff',
-  space: '#b48cff',
+  grassland: '#2d6a3a',
+  mushroom: '#8b3d52',
+  tropical: '#0d7a72',
+  space: '#5a6ab8',
 }
 
 function hexToRgb(hex: string) {
@@ -4530,22 +4535,29 @@ export function WonderJump({
   const activePanelBiome: WonderJumpStartBiome =
     gameState.mode === 'menu' ? MENU_START_BIOME : gameState.mode === 'gameOver' ? gameOverBiomeAccent : gameState.startBiome
   const panelAccent = BIOME_UI_ACCENTS[activePanelBiome]
-  const primaryButtonTone = useMemo(() => {
-    const hex = wonderportTheme?.brandAccent ?? BRAND_ACCENT_LIME_HEX
-    return {
-      backgroundColor: hex,
-      borderColor: hex,
-    }
-  }, [wonderportTheme?.brandAccent])
+  const primaryButtonTone = useMemo(
+    () => ({
+      backgroundColor: WONDER_JUMP_MENU_ACCENT,
+      borderColor: WONDER_JUMP_MENU_ACCENT,
+    }),
+    [],
+  )
   const panelAccentGlow = useMemo(
     () => ({
-      borderColor: brandAccentRgba(wonderportTheme, 0.4),
-      shadowColor: wonderportTheme?.brandAccent ?? BRAND_ACCENT_LIME_HEX,
+      borderColor: 'rgba(255, 255, 255, 0.4)',
+      shadowColor: WONDER_JUMP_MENU_ACCENT,
     }),
-    [wonderportTheme],
+    [],
   )
   const panelBiomeLabel = panelAccent.label
   const isHubPanel = gameState.mode === 'menu' || gameState.mode === 'gameOver'
+  const leaderboardCloseTone = useMemo(
+    () => ({
+      backgroundColor: wonderportTheme?.tintColor ?? '#E32828',
+      borderColor: wonderportTheme?.tintColor ?? '#E32828',
+    }),
+    [wonderportTheme?.tintColor],
+  )
 
   const leaderboardScrollMaxH = useMemo(
     () => Math.min(resolvedHeight * 0.58, 420),
@@ -4556,7 +4568,7 @@ export function WonderJump({
     if (!leaderboardOpen) return
     let cancelled = false
     setLeaderboardFetchState('loading')
-    void fetchWonderJumpLeaderboard(50)
+    void fetchWonderJumpLeaderboard(WONDER_JUMP_LEADERBOARD_MAX)
       .then((entries) => {
         if (cancelled) return
         setLeaderboardEntries(entries)
@@ -5021,7 +5033,9 @@ export function WonderJump({
             style={[styles.panel, styles.panelDarkGlass, panelAccentGlow, panelEntryStyle, { top: panelTop }]}
           >
             <Text style={styles.panelTitle}>Settings</Text>
-            <Text style={styles.panelBiome}>{panelBiomeLabel}</Text>
+            <Text style={[styles.panelBiome, { color: panelAccent.accent }]}>
+              {panelBiomeLabel}
+            </Text>
             <Text style={styles.panelSubtitleSmall}>Movement controls</Text>
             <View style={styles.settingsOptionRow}>
               <Pressable
@@ -5071,7 +5085,9 @@ export function WonderJump({
             style={[styles.panel, styles.panelDarkGlass, panelAccentGlow, panelEntryStyle, { top: panelTop }]}
           >
             <Text style={styles.panelTitle}>Paused</Text>
-            <Text style={styles.panelBiome}>{panelBiomeLabel}</Text>
+            <Text style={[styles.panelBiome, { color: panelAccent.accent }]}>
+              {panelBiomeLabel}
+            </Text>
             <Text style={styles.panelSubtitle}>Take a breath, then jump back in.</Text>
             <Pressable
               onPress={() => setLeaderboardOpen(true)}
@@ -5336,11 +5352,11 @@ export function WonderJump({
                 <View style={styles.wjChestModalCoinsRow}>
                   <WonderSpinningCoin
                     size={56}
-                    fallbackColor={wonderportTheme?.brandAccent ?? BRAND_ACCENT_LIME_HEX}
+                    fallbackColor={WONDER_JUMP_MENU_ACCENT}
                   />
                   <WonderSpinningCoin
                     size={56}
-                    fallbackColor={wonderportTheme?.brandAccent ?? BRAND_ACCENT_LIME_HEX}
+                    fallbackColor={WONDER_JUMP_MENU_ACCENT}
                   />
                 </View>
                 <Text style={styles.wjChestModalSub}>They are already in your wallet.</Text>
@@ -5350,10 +5366,7 @@ export function WonderJump({
               </>
             ) : hubChestRevealPhase === 'claiming' ? (
               <View style={styles.wjChestModalClaiming}>
-                <ActivityIndicator
-                  size="large"
-                  color={wonderportTheme?.brandAccent ?? BRAND_ACCENT_LIME_HEX}
-                />
+                <ActivityIndicator size="large" color={WONDER_JUMP_MENU_ACCENT} />
                 <Text style={styles.wjChestModalClaimingText}>Adding coins…</Text>
               </View>
             ) : (
@@ -5400,6 +5413,7 @@ export function WonderJump({
           >
             <View style={styles.leaderboardModalHeader}>
               <Text style={styles.leaderboardModalTitle}>WonderJump leaderboard</Text>
+              <Text style={styles.leaderboardModalSubtitle}>Top {WONDER_JUMP_LEADERBOARD_MAX}</Text>
             </View>
             <View style={styles.leaderboardTableHead}>
               <Text style={styles.leaderboardThRank}>#</Text>
@@ -5409,7 +5423,10 @@ export function WonderJump({
             </View>
             {leaderboardFetchState === 'loading' ? (
               <View style={[styles.leaderboardListShell, styles.leaderboardLoadingBox, { minHeight: 160 }]}>
-                <ActivityIndicator size="large" color={wonderportTheme?.brandAccent ?? BRAND_ACCENT_LIME_HEX} />
+                <ActivityIndicator
+                  size="large"
+                  color={wonderportTheme?.tintColor ?? wonderportTheme?.brandAccent ?? '#E32828'}
+                />
               </View>
             ) : (
               <ScrollView
@@ -5471,9 +5488,9 @@ export function WonderJump({
             )}
             <Pressable
               onPress={() => setLeaderboardOpen(false)}
-              style={[styles.leaderboardModalClose, primaryButtonTone]}
+              style={[styles.leaderboardModalClose, leaderboardCloseTone]}
             >
-              <Text style={styles.wjChestModalButtonText}>Close</Text>
+              <Text style={styles.leaderboardModalCloseText}>Close</Text>
             </Pressable>
           </View>
         </View>
@@ -5485,6 +5502,16 @@ export function WonderJump({
 function createWonderJumpStyles(theme: any) {
   const A = theme?.brandAccent ?? BRAND_ACCENT_LIME_HEX
   const S = (a: number) => brandAccentRgba(theme, a)
+  const W = WONDER_JUMP_MENU_ACCENT
+  const M = wonderJumpMenuAccentRgba
+  const lbCanvas = theme?.appBackgroundColor ?? '#F6F4EF'
+  const lbCard = theme?.sheetBackgroundColor ?? theme?.tileBackgroundColor ?? '#ffffff'
+  const lbList = theme?.sheetRowBackgroundColor ?? lbCanvas
+  const lbText = theme?.textColor ?? theme?.headingColor ?? '#1a1a1a'
+  const lbMuted = theme?.mutedForegroundColor ?? 'rgba(26, 26, 26, 0.55)'
+  const lbBorder = theme?.tileBorderColor ?? theme?.borderColor ?? 'rgba(0, 0, 0, 0.1)'
+  const lbOverlay = theme?.modalOverlayColor ?? 'rgba(0, 0, 0, 0.38)'
+  const lbAccent = theme?.tintColor ?? theme?.brandAccent ?? '#E32828'
   return StyleSheet.create({
   screen: {
     flex: 1,
@@ -5601,7 +5628,7 @@ function createWonderJumpStyles(theme: any) {
     backgroundColor: APP_UI_SURFACE,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: S(0.4),
+    borderColor: M(0.4),
     paddingVertical: 18,
     paddingHorizontal: 16,
     alignItems: 'center',
@@ -5609,7 +5636,7 @@ function createWonderJumpStyles(theme: any) {
   },
   panelDarkGlass: {
     backgroundColor: 'rgba(0, 0, 0, 0.94)',
-    borderColor: S(0.4),
+    borderColor: M(0.4),
     shadowOpacity: 0.35,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
@@ -5641,7 +5668,7 @@ function createWonderJumpStyles(theme: any) {
     fontSize: 24,
     letterSpacing: 0.2,
   },
-  /** Leaderboard CTA — hollow black fill, neon lime outline + label (menu + game over). */
+  /** Leaderboard CTA — hollow black fill, white outline + label (menu + game over). */
   leaderboardHeroTile: {
     alignSelf: 'stretch',
     width: '100%',
@@ -5650,13 +5677,13 @@ function createWonderJumpStyles(theme: any) {
     paddingHorizontal: 12,
     borderRadius: 11,
     borderWidth: 1.5,
-    borderColor: A,
+    borderColor: W,
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   leaderboardHeroTileText: {
-    color: A,
+    color: W,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 12,
     letterSpacing: 1.15,
@@ -5687,7 +5714,7 @@ function createWonderJumpStyles(theme: any) {
     borderRadius: 14,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
     borderWidth: 1,
-    borderColor: S(0.4),
+    borderColor: M(0.4),
     alignItems: 'center',
   },
   gameOverHeroLabel: {
@@ -5698,7 +5725,7 @@ function createWonderJumpStyles(theme: any) {
     marginBottom: 4,
   },
   gameOverHeroValue: {
-    color: A,
+    color: W,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 52,
     letterSpacing: -1,
@@ -5738,7 +5765,7 @@ function createWonderJumpStyles(theme: any) {
   },
   gameOverNewBest: {
     marginTop: 6,
-    color: A,
+    color: W,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 15,
     letterSpacing: 0.25,
@@ -5759,13 +5786,13 @@ function createWonderJumpStyles(theme: any) {
     gap: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: S(0.22),
+    borderTopColor: M(0.22),
   },
   wjChestHubCard: {
     width: '100%',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: S(0.4),
+    borderColor: M(0.4),
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
     paddingTop: 8,
     paddingBottom: 9,
@@ -5788,7 +5815,7 @@ function createWonderJumpStyles(theme: any) {
     minHeight: 90,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: S(0.28),
+    borderColor: M(0.28),
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -5796,17 +5823,17 @@ function createWonderJumpStyles(theme: any) {
     overflow: 'visible',
   },
   wjChestDockTileReady: {
-    borderColor: A,
-    backgroundColor: S(0.12),
-    shadowColor: A,
+    borderColor: W,
+    backgroundColor: M(0.12),
+    shadowColor: W,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.35,
     shadowRadius: 14,
     elevation: 8,
   },
-  /** Empty dock: “open slot” — same black + lime shell as the rest of the app. */
+  /** Empty dock: “open slot” — black panel + white shell. */
   wjChestDockTileEmptySlot: {
-    borderColor: S(0.4),
+    borderColor: M(0.4),
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
   },
   wjDockEmptyComposer: {
@@ -5821,20 +5848,20 @@ function createWonderJumpStyles(theme: any) {
     height: 68,
     borderRadius: 34,
     borderWidth: 2,
-    borderColor: S(0.28),
-    backgroundColor: S(0.06),
+    borderColor: M(0.28),
+    backgroundColor: M(0.06),
   },
   wjDockEmptyPad: {
     width: 44,
     height: 44,
     borderRadius: 11,
-    backgroundColor: 'rgba(203, 255, 0, 0.08)',
+    backgroundColor: M(0.08),
     borderWidth: 1,
-    borderColor: S(0.4),
+    borderColor: M(0.4),
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 1,
-    shadowColor: A,
+    shadowColor: W,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.16,
     shadowRadius: 8,
@@ -5842,7 +5869,7 @@ function createWonderJumpStyles(theme: any) {
   },
   leaderboardModalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(4, 8, 18, 0.78)',
+    backgroundColor: lbOverlay,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -5855,33 +5882,44 @@ function createWonderJumpStyles(theme: any) {
     zIndex: 1,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: S(0.38),
-    backgroundColor: '#000000',
+    borderColor: lbBorder,
+    backgroundColor: lbCard,
     paddingTop: 18,
     paddingBottom: 16,
     paddingHorizontal: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
   },
   leaderboardModalHeader: {
     width: '100%',
     alignItems: 'center',
     marginBottom: 12,
+    gap: 4,
   },
   leaderboardModalTitle: {
-    color: '#f6fbff',
+    color: lbText,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 20,
     letterSpacing: 0.2,
     textAlign: 'center',
   },
+  leaderboardModalSubtitle: {
+    color: lbMuted,
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 12,
+    letterSpacing: 0.35,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
   leaderboardListShell: {
     width: '100%',
-    backgroundColor: '#000000',
+    backgroundColor: lbList,
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: lbBorder,
     overflow: 'hidden',
   },
   leaderboardTableHead: {
@@ -5891,14 +5929,15 @@ function createWonderJumpStyles(theme: any) {
     paddingVertical: 8,
     paddingHorizontal: 6,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.14)',
+    borderBottomColor: lbBorder,
     marginBottom: 0,
+    backgroundColor: lbCard,
   },
   leaderboardThRank: {
     width: 36,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 11,
-    color: 'rgba(200, 220, 245, 0.75)',
+    color: lbMuted,
     letterSpacing: 0.4,
   },
   leaderboardThPlayer: {
@@ -5906,7 +5945,7 @@ function createWonderJumpStyles(theme: any) {
     minWidth: 0,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 11,
-    color: 'rgba(200, 220, 245, 0.75)',
+    color: lbMuted,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
@@ -5914,7 +5953,7 @@ function createWonderJumpStyles(theme: any) {
     width: 92,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 11,
-    color: 'rgba(200, 220, 245, 0.75)',
+    color: lbMuted,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
@@ -5923,13 +5962,13 @@ function createWonderJumpStyles(theme: any) {
     textAlign: 'right',
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 11,
-    color: 'rgba(200, 220, 245, 0.75)',
+    color: lbMuted,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
   leaderboardScroll: {
     width: '100%',
-    backgroundColor: '#000000',
+    backgroundColor: lbList,
   },
   leaderboardLoadingBox: {
     alignItems: 'center',
@@ -5938,7 +5977,7 @@ function createWonderJumpStyles(theme: any) {
   },
   leaderboardEmptyText: {
     textAlign: 'center',
-    color: 'rgba(190, 214, 236, 0.9)',
+    color: lbMuted,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 13,
     letterSpacing: 0.15,
@@ -5956,7 +5995,8 @@ function createWonderJumpStyles(theme: any) {
     paddingVertical: 10,
     paddingHorizontal: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.12)',
+    borderBottomColor: lbBorder,
+    backgroundColor: lbCard,
   },
   leaderboardRowLast: {
     borderBottomWidth: 0,
@@ -5965,24 +6005,24 @@ function createWonderJumpStyles(theme: any) {
     width: 36,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 14,
-    color: 'rgba(220, 235, 255, 0.95)',
+    color: lbText,
     fontVariant: ['tabular-nums'],
   },
   leaderboardRankGold: {
-    color: '#ffd76a',
+    color: '#b8860b',
   },
   leaderboardRankSilver: {
-    color: '#d8e4f2',
+    color: '#6b7280',
   },
   leaderboardRankBronze: {
-    color: '#e4a574',
+    color: '#a16207',
   },
   leaderboardCellPlayer: {
     flex: 1,
     minWidth: 0,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 13,
-    color: '#eef6ff',
+    color: lbText,
     letterSpacing: 0.12,
     paddingRight: 8,
   },
@@ -5998,7 +6038,7 @@ function createWonderJumpStyles(theme: any) {
     textAlign: 'right',
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 14,
-    color: '#ffffff',
+    color: lbAccent,
     letterSpacing: 0.08,
     fontVariant: ['tabular-nums'],
   },
@@ -6010,6 +6050,12 @@ function createWonderJumpStyles(theme: any) {
     paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  leaderboardModalCloseText: {
+    color: '#ffffff',
+    fontFamily: WONDER_JUMP_UI_BOLD,
+    fontSize: 14,
+    letterSpacing: 0.28,
   },
   wjChestHubCopy: {
     flex: 1,
@@ -6048,7 +6094,7 @@ function createWonderJumpStyles(theme: any) {
     maxWidth: 300,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: S(0.4),
+    borderColor: M(0.4),
     backgroundColor: APP_UI_SURFACE,
     paddingVertical: 22,
     paddingHorizontal: 18,
@@ -6141,7 +6187,7 @@ function createWonderJumpStyles(theme: any) {
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: S(0.4),
+    borderColor: M(0.4),
     paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -6160,7 +6206,6 @@ function createWonderJumpStyles(theme: any) {
     letterSpacing: 0.2,
   },
   panelBiome: {
-    color: A,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 12,
     letterSpacing: 1,
@@ -6187,7 +6232,7 @@ function createWonderJumpStyles(theme: any) {
     paddingHorizontal: 8,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: S(0.2),
+    borderColor: M(0.2),
     backgroundColor: 'rgba(0, 0, 0, 0.35)',
     alignItems: 'center',
   },
@@ -6205,19 +6250,19 @@ function createWonderJumpStyles(theme: any) {
     backgroundColor: 'rgba(8, 10, 18, 0.55)',
   },
   panelBiomeChipGrassActive: {
-    borderColor: A,
+    borderColor: '#2d6a3a',
     backgroundColor: 'rgba(45, 106, 58, 0.22)',
   },
   panelBiomeChipMushroomActive: {
-    borderColor: A,
+    borderColor: '#6b3d55',
     backgroundColor: 'rgba(107, 61, 85, 0.22)',
   },
   panelBiomeChipTropicalActive: {
-    borderColor: A,
+    borderColor: '#1d7f75',
     backgroundColor: 'rgba(29, 127, 117, 0.22)',
   },
   panelBiomeChipSpaceActive: {
-    borderColor: A,
+    borderColor: '#8b9ad4',
     backgroundColor: 'rgba(139, 154, 212, 0.2)',
   },
   panelBiomeChipText: {
@@ -6252,13 +6297,13 @@ function createWonderJumpStyles(theme: any) {
     paddingHorizontal: 8,
     borderRadius: 11,
     borderWidth: 1,
-    borderColor: S(0.4),
+    borderColor: M(0.4),
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     alignItems: 'center',
   },
   settingsOptionChipActive: {
-    borderColor: A,
-    backgroundColor: S(0.12),
+    borderColor: W,
+    backgroundColor: M(0.12),
   },
   settingsOptionText: {
     color: APP_UI_TEXT_MUTED,
@@ -6273,10 +6318,10 @@ function createWonderJumpStyles(theme: any) {
   },
   primaryButton: {
     width: '100%',
-    backgroundColor: A,
+    backgroundColor: W,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: A,
+    borderColor: W,
     paddingVertical: 12,
     alignItems: 'center',
   },
@@ -6291,7 +6336,7 @@ function createWonderJumpStyles(theme: any) {
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     borderRadius: 11,
     borderWidth: 1,
-    borderColor: S(0.4),
+    borderColor: M(0.4),
     paddingVertical: 11,
     alignItems: 'center',
   },

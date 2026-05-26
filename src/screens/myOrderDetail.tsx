@@ -5,11 +5,10 @@ import { WonderportAccentCard } from '../components'
 import { fetchMyOrder } from '../ordersApi'
 import { brandAccentRgba } from '../brandAccent'
 
-const CARD_FILL = '#000000'
-
 export function MyOrderDetail({ route }: any) {
   const { theme } = useContext(ThemeContext)
   const styles = getStyles(theme)
+  const frameFill = theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
   const orderId = route?.params?.orderId as string
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -50,7 +49,7 @@ export function MyOrderDetail({ route }: any) {
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {o ? (
         <>
-          <WonderportAccentCard borderWidth={2} borderRadius={16} innerBackgroundColor={CARD_FILL} style={styles.block}>
+          <WonderportAccentCard borderWidth={2} borderRadius={16} innerBackgroundColor={frameFill} style={styles.block}>
             <View style={styles.innerPad}>
               <Text style={styles.ref}>{o.referenceCode}</Text>
               <Text style={styles.meta}>
@@ -84,7 +83,7 @@ export function MyOrderDetail({ route }: any) {
               key={l.id}
               borderWidth={1}
               borderRadius={12}
-              innerBackgroundColor={CARD_FILL}
+              innerBackgroundColor={frameFill}
               style={{ marginBottom: 10 }}
               contentStyle={styles.lineInner}
             >

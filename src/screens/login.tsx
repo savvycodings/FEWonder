@@ -9,9 +9,7 @@ import { loginUser, registerUser } from '../utils'
 import { AuthPayload } from '../../types'
 import { brandAccentRgba } from '../brandAccent'
 
-/** Align with `home.tsx` — equipped accent, black chips; no gradient cards */
-const HOME_CHIP_FILL = '#000000'
-const HOME_ACCENT_TEXT = '#000000'
+const ACCENT_ON_BADGE_TEXT = '#ffffff'
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
 /** Same as Home category chips (`home.tsx` HOME_CHIP_MONTSERRAT) */
 const HOME_CHIP_MONTSERRAT = 'Montserrat_800ExtraBold' as const
@@ -304,7 +302,7 @@ export function Login({ onAuthSuccess }: Props) {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color={HOME_ACCENT_TEXT} />
+              <ActivityIndicator color={ACCENT_ON_BADGE_TEXT} />
             ) : (
               <Text style={styles.submitText}>
                 {mode === 'signup' ? 'Create account' : 'Sign in'}
@@ -362,10 +360,10 @@ const getStyles = (theme: any) => {
       lineHeight: 21,
       marginBottom: 8,
     },
-    /** Home-style chip strip: black shell, lime active pill */
+    /** Home-style chip strip: framed shell, accent active pill */
     modeSwitchOuter: {
       flexDirection: 'row',
-      backgroundColor: HOME_CHIP_FILL,
+      backgroundColor: theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF',
       borderRadius: 16,
       padding: 4,
       borderWidth: 1,
@@ -390,7 +388,7 @@ const getStyles = (theme: any) => {
       opacity: 0.82,
     },
     modeSegmentTextActive: {
-      color: HOME_ACCENT_TEXT,
+      color: ACCENT_ON_BADGE_TEXT,
       opacity: 1,
       fontFamily: theme.boldFont,
     },
@@ -470,7 +468,7 @@ const getStyles = (theme: any) => {
       opacity: 0.75,
     },
     submitText: {
-      color: HOME_ACCENT_TEXT,
+      color: ACCENT_ON_BADGE_TEXT,
       fontFamily: theme.boldFont,
       fontSize: 16,
     },

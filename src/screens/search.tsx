@@ -12,7 +12,7 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { Feather as FeatherIcon } from '@expo/vector-icons'
-import { ProductTileImageWithHeart } from '../components'
+import { ProductTileImageWithHeart, WonderportAccentCard } from '../components'
 import { ShopifyProduct } from '../../types'
 import { ThemeContext } from '../context'
 import { listDbProducts, listShopifyCollectionsByIds, ShopifyCollectionSummary } from '../utils'
@@ -20,10 +20,8 @@ import { formatMoney } from '../money'
 
 const GRID_GAP = 12
 
-/** Match home.tsx price pills: accent fill + black label */
-const HOME_ACCENT_TEXT = '#000000'
-/** Unselected home category chip fill (`chipPlainOuter`) */
-const HOME_CHIP_FILL = '#000000'
+/** Price pill label on accent-filled badges. */
+const ACCENT_ON_BADGE_TEXT = '#ffffff'
 /** Same Montserrat weight as home category chips (e.g. Popular) — registered in App.tsx */
 const HOME_CHIP_MONTSERRAT = 'Montserrat_800ExtraBold' as const
 
@@ -158,6 +156,7 @@ export function Search({ navigation }: { navigation: any }) {
     () => (showAllCollections ? collectionsForGrid : collectionsForGrid.slice(0, 4)),
     [showAllCollections, collectionsForGrid]
   )
+  const frameFill = theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
   const gridStyles = useMemo(() => getProductGridStyles(theme), [theme])
 
   useEffect(() => {
@@ -236,7 +235,15 @@ export function Search({ navigation }: { navigation: any }) {
         : 'View details'
     const savePayload = productToSavePayload(item)
     return (
-      <View key={item.id || item.handle || item.title} style={[gridStyles.card, { width: cardW }]}>
+      <WonderportAccentCard
+        key={item.id || item.handle || item.title}
+        style={{ width: cardW }}
+        borderVariant="solid"
+        borderWidth={2}
+        borderRadius={18}
+        innerBackgroundColor={frameFill}
+        contentStyle={gridStyles.cardFrameInner}
+      >
         {src ? (
           <ProductTileImageWithHeart
             product={savePayload}
@@ -274,7 +281,7 @@ export function Search({ navigation }: { navigation: any }) {
             </View>
           </Pressable>
         </View>
-      </View>
+      </WonderportAccentCard>
     )
   }
 
@@ -284,34 +291,41 @@ export function Search({ navigation }: { navigation: any }) {
   }
 
   return (
-    <View style={[styles.page, { backgroundColor: theme.appBackgroundColor || '#f7f8fb' }]}>
-      <View style={styles.hero}>
+    <View style={[styles.page, { backgroundColor: theme.appBackgroundColor || theme.backgroundColor }]}>
+      <View style={[styles.hero, { backgroundColor: theme.appBackgroundColor || theme.backgroundColor }]}>
         <View style={styles.searchWrap}>
-          <View style={styles.searchBar}>
-            <FeatherIcon name="search" size={16} color="#8e97ad" />
-            <TextInput
-              ref={searchInputRef}
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search products or series"
-              placeholderTextColor="#a2a9bb"
-              style={styles.searchInput}
-              returnKeyType="search"
-              autoCorrect={false}
-              onSubmitEditing={dismissKeyboard}
-            />
-            {query.length > 0 && (
-              <Pressable
-                onPress={() => {
-                  setQuery('')
-                  setSearchResults([])
-                }}
-                hitSlop={8}
-              >
-                <FeatherIcon name="x" size={16} color="#8e97ad" />
-              </Pressable>
-            )}
-          </View>
+          <WonderportAccentCard
+            borderVariant="solid"
+            borderWidth={2}
+            borderRadius={12}
+            innerBackgroundColor={frameFill}
+          >
+            <View style={styles.searchBar}>
+              <FeatherIcon name="search" size={16} color={theme.mutedForegroundColor} />
+              <TextInput
+                ref={searchInputRef}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search products or series"
+                placeholderTextColor={theme.placeholderTextColor}
+                style={[styles.searchInput, { color: theme.textColor }]}
+                returnKeyType="search"
+                autoCorrect={false}
+                onSubmitEditing={dismissKeyboard}
+              />
+              {query.length > 0 && (
+                <Pressable
+                  onPress={() => {
+                    setQuery('')
+                    setSearchResults([])
+                  }}
+                  hitSlop={8}
+                >
+                  <FeatherIcon name="x" size={16} color={theme.mutedForegroundColor} />
+                </Pressable>
+              )}
+            </View>
+          </WonderportAccentCard>
         </View>
       </View>
 
@@ -438,8 +452,8 @@ export function Search({ navigation }: { navigation: any }) {
                   <Pressable
                     key={collection.id}
                     style={({ pressed }) => [
-                      styles.collectionCard,
-                      { width: collectionCardW, opacity: pressed ? 0.92 : 1, borderColor: theme.brandAccent },
+                      styles.collectionCardPressable,
+                      { width: collectionCardW, opacity: pressed ? 0.92 : 1 },
                     ]}
                     onPress={() =>
                       navigation.navigate('CategoryProducts', {
@@ -449,9 +463,18 @@ export function Search({ navigation }: { navigation: any }) {
                       })
                     }
                   >
-                    <Text style={[styles.collectionTitle, { color: theme.brandAccent }]} numberOfLines={2}>
-                      {collection.title}
-                    </Text>
+                    <WonderportAccentCard
+                      borderVariant="solid"
+                      borderWidth={2}
+                      borderRadius={16}
+                      innerBackgroundColor={frameFill}
+                      style={styles.collectionCardOuter}
+                      contentStyle={styles.collectionCardInner}
+                    >
+                      <Text style={[styles.collectionTitle, { color: theme.brandAccent }]} numberOfLines={2}>
+                        {collection.title}
+                      </Text>
+                    </WonderportAccentCard>
                   </Pressable>
                 ))}
               </View>
@@ -473,17 +496,12 @@ function getProductGridStyles(theme: any) {
       gap: GRID_GAP,
       alignItems: 'stretch',
     },
-    card: {
+    cardFrameInner: {
       flexDirection: 'column',
       alignSelf: 'stretch',
-      backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
-      borderRadius: 18,
       paddingHorizontal: 4,
       paddingTop: 4,
       paddingBottom: 4,
-      borderWidth: 1,
-      borderColor: theme.tileBorderColor || theme.borderColor,
-      overflow: 'hidden',
     },
     media: {
       position: 'relative',
@@ -545,7 +563,7 @@ function getProductGridStyles(theme: any) {
       flexShrink: 0,
     },
     pricePillText: {
-      color: HOME_ACCENT_TEXT,
+      color: ACCENT_ON_BADGE_TEXT,
       fontFamily: theme.boldFont,
       fontSize: 13,
       lineHeight: 16,
@@ -556,7 +574,6 @@ function getProductGridStyles(theme: any) {
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: '#f7f8fb',
   },
   content: {
     paddingBottom: 110,
@@ -565,7 +582,6 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   hero: {
-    backgroundColor: '#000000',
     borderBottomLeftRadius: 28,
     borderBottomRightRadius: 28,
     paddingHorizontal: 16,
@@ -578,8 +594,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   searchBar: {
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -589,7 +603,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     marginLeft: 10,
-    color: '#2a3359',
     fontFamily: 'Geist-Medium',
     fontSize: 14,
   },
@@ -647,17 +660,18 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: GRID_GAP,
   },
-  /** Match home unselected `HomeCategoryChip` (`chipPlainOuter` + `chipText`) */
-  collectionCard: {
-    borderRadius: 16,
-    borderWidth: 2,
-    backgroundColor: HOME_CHIP_FILL,
+  collectionCardPressable: {
+    alignSelf: 'stretch',
+  },
+  collectionCardOuter: {
+    width: '100%',
+  },
+  collectionCardInner: {
     paddingHorizontal: 6,
     paddingVertical: 12,
     minHeight: 56,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
   },
   collectionTitle: {
     fontFamily: HOME_CHIP_MONTSERRAT,

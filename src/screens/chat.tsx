@@ -46,12 +46,7 @@ import { CONTENT_ABOVE_TAB_BAR_GAP, floatingTabBarClearance } from '../tabBarLay
 
 const REF_ITEM_PREFIX = '__REF_ITEM__:'
 
-/** Community chat palette: black canvas, accent-framed incoming bubbles, grey own bubbles + composer */
-const CHAT_BLACK = '#000000'
-const CHAT_TILE_GREY = '#2d2d2d'
-const CHAT_SURFACE = '#111111'
-const CHAT_TEXT_PRIMARY = '#ffffff'
-const CHAT_TEXT_MUTED = 'rgba(255,255,255,0.72)'
+const ACCENT_ON_BADGE_TEXT = '#ffffff'
 
 /** Approximate composer row height for list padding / stacking (attach + field + send). */
 const COMPOSER_BAR_HEIGHT = 58
@@ -81,10 +76,6 @@ const CHAT_LIFT_TIMING = {
  * Composer link menu — same family as the attach chip (`#3a3a3a`). Dark surfaces use light
  * foreground text (contrast + common UI pattern); off-white reads softer than pure #fff.
  */
-const COMPOSER_MENU_BG = '#3a3a3a'
-const COMPOSER_MENU_OUTLINE = 'rgba(255,255,255,0.14)'
-const COMPOSER_MENU_SEPARATOR = 'rgba(255,255,255,0.12)'
-const COMPOSER_MENU_TEXT = 'rgba(255,255,255,0.94)'
 const COMPOSER_MENU_WIDTH = 178
 
 /** Periodic fetch when Chat is focused — light catch-up if SSE misses an event (e.g. background). */
@@ -518,7 +509,8 @@ export function Chat({
     }
   }
 
-  const pageBg = { backgroundColor: CHAT_BLACK }
+  const pageBg = { backgroundColor: theme.appBackgroundColor || theme.backgroundColor }
+  const avatarFallbackBg = theme.sheetRowBackgroundColor || theme.tileBackgroundColor || '#EFEBE6'
   const tabBarHeight = useBottomTabBarHeight()
   const closedComposerBottom = useMemo(() => {
     if (tabBarHeight > 0) return tabBarHeight + CONTENT_ABOVE_TAB_BAR_GAP
@@ -602,7 +594,7 @@ export function Chat({
                         size={34}
                         fit="chat"
                         innerBackgroundColor={
-                          avatarUri ? 'transparent' : CHAT_TILE_GREY
+                          avatarUri ? 'transparent' : avatarFallbackBg
                         }
                       >
                         {avatarUri ? (
@@ -745,7 +737,7 @@ export function Chat({
                       size={34}
                       fit="chat"
                       innerBackgroundColor={
-                        avatarUri ? 'transparent' : CHAT_TILE_GREY
+                        avatarUri ? 'transparent' : avatarFallbackBg
                       }
                     >
                       {avatarUri ? (
@@ -847,7 +839,7 @@ export function Chat({
             onChangeText={setInput}
           />
           <TouchableOpacity style={styles.sendButton} onPress={onSend} disabled={sending}>
-            <FeatherIcon name="send" size={16} color={CHAT_BLACK} style={styles.sendIcon} />
+            <FeatherIcon name="send" size={16} color={ACCENT_ON_BADGE_TEXT} style={styles.sendIcon} />
           </TouchableOpacity>
         </View>
       </View>
@@ -1008,10 +1000,21 @@ export function Chat({
 const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
   const L = (a: number) => brandAccentRgba(theme, a)
   const chatBorder = L(0.3)
+  const pageBg = theme.appBackgroundColor || theme.backgroundColor
+  const cardFill = theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
+  const surfaceBg = theme.sheetBackgroundColor || cardFill
+  const bubbleMeBg = theme.sheetRowBackgroundColor || cardFill
+  const textPrimary = theme.textColor
+  const textMuted = theme.mutedForegroundColor
+  const onAccentText = theme.priceBadgeTextColor || ACCENT_ON_BADGE_TEXT
+  const composerMenuBg = cardFill
+  const composerMenuOutline = theme.tileBorderColor || theme.borderColor
+  const composerMenuSeparator = theme.tileBorderColor || theme.borderColor
+  const composerMenuText = textPrimary
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: CHAT_BLACK,
+      backgroundColor: pageBg,
       position: 'relative',
     },
     chatShell: {
@@ -1078,14 +1081,14 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
     },
     meRow: {
       alignSelf: 'flex-end',
-      backgroundColor: CHAT_TILE_GREY,
-      borderColor: '#404040',
+      backgroundColor: bubbleMeBg,
+      borderColor: theme.tileBorderColor || theme.borderColor,
     },
     otherRow: {
       alignSelf: 'flex-start',
-      backgroundColor: CHAT_BLACK,
+      backgroundColor: cardFill,
       borderColor: theme.brandAccent,
-      borderWidth: 3,
+      borderWidth: 2,
     },
     reportSelectedMessage: {
       borderColor: theme.brandAccent,
@@ -1115,15 +1118,14 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       fontFamily: theme.mediumFont,
     },
     authorLabelMe: {
-      color: 'rgba(255,255,255,.55)',
+      color: textMuted,
     },
-    /** Incoming bubbles sit on black — lime label matches border. */
     authorLabelOtherOnDark: {
       color: theme.brandAccent,
       opacity: 0.85,
     },
     bodyText: {
-      color: CHAT_BLACK,
+      color: textPrimary,
       fontFamily: theme.regularFont,
       fontSize: 14,
     },
@@ -1134,7 +1136,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       overflow: 'hidden',
       marginBottom: 6,
       marginTop: 2,
-      backgroundColor: '#000000',
+      backgroundColor: surfaceBg,
     },
     inlineActionRow: {
       marginTop: 8,
@@ -1157,7 +1159,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       backgroundColor: 'rgba(180,30,30,.18)',
     },
     inlineActionText: {
-      color: '#ffffff',
+      color: textPrimary,
       fontFamily: theme.semiBoldFont,
       fontSize: 11,
     },
@@ -1165,10 +1167,10 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       color: '#ffd5d5',
     },
     meBodyText: {
-      color: '#ffffff',
+      color: textPrimary,
     },
     otherBodyText: {
-      color: 'rgba(255,255,255,.92)',
+      color: textPrimary,
     },
     emptyState: {
       marginTop: 40,
@@ -1194,15 +1196,15 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       paddingVertical: 8,
       gap: 8,
       borderRadius: 16,
-      backgroundColor: CHAT_TILE_GREY,
+      backgroundColor: cardFill,
       borderWidth: 1,
-      borderColor: '#404040',
+      borderColor: theme.tileBorderColor || theme.borderColor,
     },
     attachButton: {
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: '#3a3a3a',
+      backgroundColor: bubbleMeBg,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -1217,10 +1219,10 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       zIndex: 3,
     },
     menuCard: {
-      backgroundColor: COMPOSER_MENU_BG,
+      backgroundColor: composerMenuBg,
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: COMPOSER_MENU_OUTLINE,
+      borderColor: composerMenuOutline,
       overflow: 'hidden',
     },
     menuRow: {
@@ -1228,15 +1230,15 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       paddingHorizontal: 14,
       alignItems: 'flex-start',
       justifyContent: 'center',
-      backgroundColor: COMPOSER_MENU_BG,
+      backgroundColor: composerMenuBg,
       borderBottomWidth: 1,
-      borderBottomColor: COMPOSER_MENU_SEPARATOR,
+      borderBottomColor: composerMenuSeparator,
     },
     menuRowLast: {
       borderBottomWidth: 0,
     },
     menuText: {
-      color: COMPOSER_MENU_TEXT,
+      color: composerMenuText,
       fontFamily: theme.semiBoldFont,
       fontSize: 15,
       lineHeight: 19,
@@ -1244,12 +1246,12 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
     input: {
       flex: 1,
       borderWidth: 1,
-      borderColor: '#4a4a4a',
+      borderColor: theme.tileBorderColor || theme.borderColor,
       borderRadius: 999,
       paddingHorizontal: 14,
       paddingVertical: 10,
-      backgroundColor: '#1a1a1a',
-      color: '#f2f2f2',
+      backgroundColor: bubbleMeBg,
+      color: textPrimary,
       fontFamily: theme.mediumFont,
     },
     sendButton: {
@@ -1277,13 +1279,13 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       paddingHorizontal: 12,
       paddingVertical: 10,
       borderRadius: 14,
-      backgroundColor: CHAT_SURFACE,
+      backgroundColor: surfaceBg,
       borderWidth: 1,
       borderColor: chatBorder,
       zIndex: 4,
     },
     reportBarHint: {
-      color: CHAT_TEXT_MUTED,
+      color: textMuted,
       fontFamily: theme.mediumFont,
       fontSize: 12,
       marginBottom: 8,
@@ -1300,10 +1302,10 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       justifyContent: 'center',
       borderWidth: 1,
       borderColor: chatBorder,
-      backgroundColor: CHAT_BLACK,
+      backgroundColor: cardFill,
     },
     reportCancelButtonText: {
-      color: CHAT_TEXT_PRIMARY,
+      color: textPrimary,
       fontFamily: theme.semiBoldFont,
       fontSize: 13,
     },
@@ -1319,7 +1321,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       backgroundColor: L(0.35),
     },
     reportSubmitButtonText: {
-      color: CHAT_BLACK,
+      color: onAccentText,
       fontFamily: theme.boldFont,
       fontSize: 13,
     },
@@ -1349,14 +1351,14 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       overflow: 'hidden',
       borderWidth: 1,
       borderColor: chatBorder,
-      backgroundColor: CHAT_SURFACE,
+      backgroundColor: surfaceBg,
       paddingBottom: 6,
     },
     pendingReferenceImageFrame: {
       width: '100%',
       height: 68,
       overflow: 'hidden',
-      backgroundColor: CHAT_BLACK,
+      backgroundColor: cardFill,
     },
     pendingReferenceImagePlaceholder: {
       ...StyleSheet.absoluteFillObject,
@@ -1365,13 +1367,13 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       paddingHorizontal: 4,
     },
     pendingReferencePlaceholderLabel: {
-      color: CHAT_TEXT_MUTED,
+      color: textMuted,
       fontFamily: theme.mediumFont,
       fontSize: 9,
       textAlign: 'center',
     },
     pendingReferenceText: {
-      color: CHAT_TEXT_PRIMARY,
+      color: textPrimary,
       fontFamily: theme.semiBoldFont,
       fontSize: 11,
       paddingHorizontal: 6,
@@ -1394,22 +1396,22 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       borderWidth: 1,
       borderColor: chatBorder,
       overflow: 'hidden',
-      backgroundColor: CHAT_SURFACE,
+      backgroundColor: surfaceBg,
       marginBottom: 6,
       marginTop: 2,
     },
     referencedItemCardMe: {
       borderColor: chatBorder,
-      backgroundColor: CHAT_SURFACE,
+      backgroundColor: surfaceBg,
     },
     referencedItemImageWrap: {
       width: '100%',
       height: 130,
       overflow: 'hidden',
-      backgroundColor: CHAT_BLACK,
+      backgroundColor: cardFill,
     },
     referencedItemImageWrapMe: {
-      backgroundColor: CHAT_BLACK,
+      backgroundColor: cardFill,
     },
     referencedItemImagePlaceholder: {
       ...StyleSheet.absoluteFillObject,
@@ -1418,7 +1420,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       paddingHorizontal: 8,
     },
     referencedItemPlaceholderText: {
-      color: CHAT_TEXT_MUTED,
+      color: textMuted,
       fontFamily: theme.mediumFont,
       fontSize: 11,
       textAlign: 'center',
@@ -1427,7 +1429,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       color: 'rgba(255,255,255,.75)',
     },
     referencedItemName: {
-      color: CHAT_TEXT_PRIMARY,
+      color: textPrimary,
       fontFamily: theme.semiBoldFont,
       fontSize: 12,
       paddingHorizontal: 8,
@@ -1435,7 +1437,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       paddingBottom: 2,
     },
     referencedItemNameMe: {
-      color: '#ffffff',
+      color: textPrimary,
     },
     referencedItemPrice: {
       color: theme.brandAccent,
@@ -1452,29 +1454,29 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       borderRadius: 10,
       borderWidth: 1,
       borderColor: chatBorder,
-      backgroundColor: CHAT_SURFACE,
+      backgroundColor: surfaceBg,
       paddingHorizontal: 10,
       paddingVertical: 8,
       marginBottom: 6,
       marginTop: 2,
     },
     referencedItemFallbackMe: {
-      borderColor: '#525252',
-      backgroundColor: '#363636',
+      borderColor: theme.tileBorderColor || theme.borderColor,
+      backgroundColor: bubbleMeBg,
     },
     referencedItemFallbackText: {
-      color: CHAT_TEXT_MUTED,
+      color: textMuted,
       fontFamily: theme.mediumFont,
       fontSize: 12,
     },
     referencedItemFallbackTextMe: {
-      color: 'rgba(255,255,255,.85)',
+      color: textPrimary,
     },
     referencePickerOverlay: {
       ...StyleSheet.absoluteFillObject,
       zIndex: 40,
       elevation: 24,
-      backgroundColor: CHAT_BLACK,
+      backgroundColor: pageBg,
       paddingTop: insets.top + 12,
       paddingHorizontal: 14,
       paddingBottom: insets.bottom + 18,
@@ -1486,7 +1488,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       marginBottom: 12,
     },
     referencePickerTitle: {
-      color: CHAT_TEXT_PRIMARY,
+      color: textPrimary,
       fontFamily: 'Montserrat_700Bold',
       fontSize: 20,
     },
@@ -1498,7 +1500,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       borderWidth: 1,
       borderColor: chatBorder,
       borderRadius: 12,
-      backgroundColor: CHAT_SURFACE,
+      backgroundColor: surfaceBg,
       paddingHorizontal: 12,
       paddingVertical: 10,
       flexDirection: 'row',
@@ -1508,7 +1510,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
     },
     referenceSearchInput: {
       flex: 1,
-      color: CHAT_TEXT_PRIMARY,
+      color: textPrimary,
       fontFamily: theme.mediumFont,
       fontSize: 14,
     },
@@ -1524,7 +1526,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       flex: 1,
       borderRadius: 14,
       overflow: 'hidden',
-      backgroundColor: CHAT_SURFACE,
+      backgroundColor: surfaceBg,
       borderWidth: 1,
       borderColor: chatBorder,
     },
@@ -1532,7 +1534,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       width: '100%',
       height: 160,
       overflow: 'hidden',
-      backgroundColor: CHAT_BLACK,
+      backgroundColor: cardFill,
     },
     referenceProductImagePlaceholder: {
       ...StyleSheet.absoluteFillObject,
@@ -1541,13 +1543,13 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       paddingHorizontal: 8,
     },
     referenceProductImagePlaceholderText: {
-      color: CHAT_TEXT_MUTED,
+      color: textMuted,
       fontFamily: theme.mediumFont,
       fontSize: 11,
       textAlign: 'center',
     },
     referenceProductTitle: {
-      color: CHAT_TEXT_PRIMARY,
+      color: textPrimary,
       fontFamily: theme.semiBoldFont,
       fontSize: 13,
       paddingHorizontal: 10,
@@ -1566,7 +1568,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       paddingTop: 50,
     },
     referenceEmptyText: {
-      color: CHAT_TEXT_MUTED,
+      color: textMuted,
       fontFamily: theme.mediumFont,
       fontSize: 13,
     },
@@ -1632,7 +1634,7 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       opacity: 0.55,
     },
     editPrimaryText: {
-      color: CHAT_BLACK,
+      color: onAccentText,
       fontFamily: theme.semiBoldFont,
       fontSize: 13,
     },

@@ -36,12 +36,7 @@ import { SHOW_YOCO_CHECKOUT } from '../../constants'
 import { brandAccentRgba } from '../brandAccent'
 import { getCartStockError } from '../productStock'
 
-const CHECKOUT_FILL = '#000000'
-const HOME_CHIP_FILL = '#000000'
-const HOME_ACCENT_TEXT = '#000000'
-const PRODUCT_SURFACE_BG = '#111111'
-const PRODUCT_TEXT_PRIMARY = '#ffffff'
-const PRODUCT_TEXT_MUTED = 'rgba(255,255,255,0.72)'
+const ACCENT_ON_BADGE_TEXT = '#ffffff'
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
 
 async function copyLabelValue(label: string, value: string) {
@@ -71,6 +66,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
   const { theme } = useContext(ThemeContext)
   const { cartItems, clearCart } = useContext(AppContext)
   const styles = useMemo(() => getStyles(theme), [theme])
+  const frameFill = theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
 
   const [deliveryModalOpen, setDeliveryModalOpen] = useState(false)
   const [paymentMethodModalOpen, setPaymentMethodModalOpen] = useState(false)
@@ -534,7 +530,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
           <WonderportAccentCard
             borderWidth={3}
             borderRadius={18}
-            innerBackgroundColor={CHECKOUT_FILL}
+            innerBackgroundColor={frameFill}
             style={styles.checkoutShell}
             contentStyle={styles.checkoutInner}
           >
@@ -606,7 +602,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
               disabled={eftUploadBusy}
             >
               {eftUploadBusy ? (
-                <ActivityIndicator color={CHECKOUT_FILL} />
+                <ActivityIndicator color={ACCENT_ON_BADGE_TEXT} />
               ) : (
                 <Text style={styles.checkoutPrimaryBtnText}>Upload proof of payment</Text>
               )}
@@ -647,9 +643,15 @@ export function CartCheckout({ navigation }: { navigation: any }) {
 function getStyles(theme: any) {
   const L = (a: number) => brandAccentRgba(theme, a)
   const surfaceBorder = L(0.3)
+  const pageBg = theme.appBackgroundColor || theme.backgroundColor
+  const surfaceBg = theme.sheetBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
+  const frameFill = theme.frameInnerBackgroundColor || surfaceBg
+  const textPrimary = theme.textColor
+  const textMuted = theme.mutedForegroundColor
+  const modalOverlay = theme.modalOverlayColor || 'rgba(0, 0, 0, 0.38)'
   return StyleSheet.create({
-    page: { flex: 1, backgroundColor: '#000000' },
-    safeTop: { backgroundColor: '#000000' },
+    page: { flex: 1, backgroundColor: pageBg },
+    safeTop: { backgroundColor: pageBg },
     topNavRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -662,20 +664,20 @@ function getStyles(theme: any) {
       borderRadius: 20,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: HOME_CHIP_FILL,
+      backgroundColor: frameFill,
       borderWidth: 1,
       borderColor: surfaceBorder,
     },
     navTitle: {
       fontFamily: HOME_MONTSERRAT_BOLD,
       fontSize: 18,
-      color: PRODUCT_TEXT_PRIMARY,
+      color: textPrimary,
     },
     hintWrap: { paddingHorizontal: 20, paddingTop: 8 },
-    hintText: { fontFamily: theme.regularFont, fontSize: 13, color: PRODUCT_TEXT_MUTED },
+    hintText: { fontFamily: theme.regularFont, fontSize: 13, color: textMuted },
     deliveryBackdrop: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.65)',
+      backgroundColor: modalOverlay,
     },
     deliveryKeyboardWrap: { flex: 1 },
     deliveryBackdropInner: {
@@ -688,14 +690,14 @@ function getStyles(theme: any) {
       borderRadius: 18,
       padding: 16,
       maxHeight: '92%',
-      backgroundColor: PRODUCT_SURFACE_BG,
+      backgroundColor: surfaceBg,
       borderWidth: 1,
       borderColor: surfaceBorder,
     },
     deliveryTitle: {
       fontFamily: HOME_MONTSERRAT_BOLD,
       fontSize: 20,
-      color: PRODUCT_TEXT_PRIMARY,
+      color: textPrimary,
       marginBottom: 12,
     },
     deliveryChipsRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
@@ -704,7 +706,7 @@ function getStyles(theme: any) {
       borderRadius: 999,
       paddingVertical: 11,
       alignItems: 'center',
-      backgroundColor: HOME_CHIP_FILL,
+      backgroundColor: frameFill,
       borderWidth: 1,
       borderColor: L(0.3),
     },
@@ -720,7 +722,7 @@ function getStyles(theme: any) {
     deliveryFieldLabel: {
       fontFamily: theme.mediumFont,
       fontSize: 12,
-      color: PRODUCT_TEXT_MUTED,
+      color: textMuted,
       marginBottom: 6,
       marginTop: 10,
     },
@@ -729,7 +731,7 @@ function getStyles(theme: any) {
       marginBottom: 2,
       fontFamily: theme.semiBoldFont,
       fontSize: 13,
-      color: PRODUCT_TEXT_PRIMARY,
+      color: textPrimary,
     },
     deliveryInput: {
       borderWidth: 1,
@@ -740,8 +742,8 @@ function getStyles(theme: any) {
       marginBottom: 4,
       fontFamily: theme.mediumFont,
       fontSize: 15,
-      color: PRODUCT_TEXT_PRIMARY,
-      backgroundColor: HOME_CHIP_FILL,
+      color: textPrimary,
+      backgroundColor: frameFill,
     },
     deliveryInputMultiline: { minHeight: 72, textAlignVertical: 'top' },
     deliveryError: { color: '#f87171', fontFamily: theme.mediumFont, fontSize: 13, marginBottom: 8 },
@@ -753,12 +755,12 @@ function getStyles(theme: any) {
       alignItems: 'center',
       borderWidth: 1,
       borderColor: surfaceBorder,
-      backgroundColor: HOME_CHIP_FILL,
+      backgroundColor: frameFill,
     },
     deliveryCancelText: {
       fontFamily: theme.semiBoldFont,
       fontSize: 14,
-      color: PRODUCT_TEXT_PRIMARY,
+      color: textPrimary,
     },
     deliveryContinueBtn: {
       flex: 1,
@@ -772,12 +774,12 @@ function getStyles(theme: any) {
     deliveryContinueText: {
       fontFamily: theme.boldFont,
       fontSize: 14,
-      color: HOME_ACCENT_TEXT,
+      color: ACCENT_ON_BADGE_TEXT,
       textAlign: 'center',
     },
     checkoutBackdrop: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.72)',
+      backgroundColor: modalOverlay,
       justifyContent: 'center',
       paddingHorizontal: 14,
       paddingVertical: 24,
@@ -794,7 +796,7 @@ function getStyles(theme: any) {
     checkoutSubtitle: {
       fontFamily: theme.mediumFont,
       fontSize: 13,
-      color: 'rgba(255,255,255,0.72)',
+      color: textMuted,
       lineHeight: 19,
       marginBottom: 16,
     },
@@ -813,11 +815,11 @@ function getStyles(theme: any) {
       letterSpacing: 0.6,
       marginBottom: 4,
     },
-    checkoutValueMono: { fontFamily: theme.boldFont, fontSize: 16, color: '#ffffff' },
+    checkoutValueMono: { fontFamily: theme.boldFont, fontSize: 16, color: textPrimary },
     checkoutHint: {
       fontFamily: theme.regularFont,
       fontSize: 13,
-      color: 'rgba(255,255,255,0.65)',
+      color: textMuted,
       lineHeight: 20,
       marginTop: 12,
     },
@@ -852,7 +854,7 @@ function getStyles(theme: any) {
       alignItems: 'center',
       marginTop: 6,
     },
-    checkoutPrimaryBtnText: { color: CHECKOUT_FILL, fontFamily: theme.boldFont, fontSize: 15 },
+    checkoutPrimaryBtnText: { color: ACCENT_ON_BADGE_TEXT, fontFamily: theme.boldFont, fontSize: 15 },
     checkoutGhostBtn: { paddingVertical: 14, alignItems: 'center' },
     checkoutGhostBtnText: {
       fontFamily: theme.semiBoldFont,

@@ -125,9 +125,8 @@ function productToSavePayload(item: ShopifyProduct) {
 
 const GRID_GAP = 12
 
-/** Category chips: accent border + text on black fill; price pill uses equipped accent + black label */
-const HOME_CHIP_FILL = '#000000'
-const HOME_ACCENT_TEXT = '#000000'
+/** Price pill label on accent-filled badges. */
+const HOME_ACCENT_ON_BADGE_TEXT = '#ffffff'
 
 /** Montserrat — registered in App.tsx `useFonts` */
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
@@ -142,6 +141,7 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
   const cardW = (width - 32 - GRID_GAP) / 2
   const { theme } = useContext(ThemeContext)
   const styles = getStyles(theme)
+  const frameFill = theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
   const heroGreeting = useMemo(() => 'Wonderport', [])
   const [products, setProducts] = useState<ShopifyProduct[]>([])
   const [loadingProducts, setLoadingProducts] = useState(true)
@@ -287,6 +287,7 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
               selected={activeCategory === item}
               onPress={() => setActiveCategory(item)}
               styles={styles}
+              frameFill={frameFill}
             />
           ))}
         </View>
@@ -311,13 +312,15 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
                       navigation.navigate('CategoryProducts', {
                         slug: c.handle,
                         title: c.title,
+                        headerLabel: c.title,
                       })
                     }
                   >
                     <WonderportAccentCard
+                      borderVariant="solid"
                       borderWidth={2}
                       borderRadius={18}
-                      innerBackgroundColor="#0a0a0c"
+                      innerBackgroundColor={frameFill}
                       style={styles.brandAccentOuter}
                       contentStyle={styles.brandAccentInner}
                     >
@@ -395,7 +398,15 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
                     : 'View details'
                 const savePayload = productToSavePayload(item)
                 return (
-                  <View key={item.id || item.handle || item.title} style={[styles.card, { width: cardW }]}>
+                  <WonderportAccentCard
+                    key={item.id || item.handle || item.title}
+                    style={{ width: cardW }}
+                    borderVariant="solid"
+                    borderWidth={2}
+                    borderRadius={18}
+                    innerBackgroundColor={frameFill}
+                    contentStyle={styles.cardFrameInner}
+                  >
                     {src ? (
                       <ProductTileImageWithHeart
                         product={savePayload}
@@ -437,7 +448,7 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
                         </View>
                       </Pressable>
                     </View>
-                  </View>
+                  </WonderportAccentCard>
                 )
               })}
             </View>
@@ -536,7 +547,7 @@ const getStyles = (theme: any) =>
       borderRadius: 16,
       borderWidth: 1,
       borderColor: theme.tileBorderColor || theme.borderColor,
-      backgroundColor: HOME_CHIP_FILL,
+      backgroundColor: theme.frameInnerBackgroundColor || theme.tileBackgroundColor,
       overflow: 'hidden',
     },
     chipCardInner: {
@@ -554,23 +565,27 @@ const getStyles = (theme: any) =>
       textTransform: 'uppercase',
       width: '100%',
     },
+    chipTextInactive: {
+      color: theme.headingColor || theme.textColor,
+      fontFamily: HOME_CHIP_MONTSERRAT,
+      fontSize: 13,
+      lineHeight: 16,
+      textAlign: 'center',
+      textTransform: 'uppercase',
+      width: '100%',
+    },
     grid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: GRID_GAP,
       alignItems: 'stretch',
     },
-    card: {
+    cardFrameInner: {
       flexDirection: 'column',
       alignSelf: 'stretch',
-      backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
-      borderRadius: 18,
       paddingHorizontal: 4,
       paddingTop: 4,
       paddingBottom: 4,
-      borderWidth: 1,
-      borderColor: theme.tileBorderColor || theme.borderColor,
-      overflow: 'hidden',
     },
     media: {
       position: 'relative',
@@ -632,7 +647,7 @@ const getStyles = (theme: any) =>
       flexShrink: 0,
     },
     pricePillText: {
-      color: HOME_ACCENT_TEXT,
+      color: HOME_ACCENT_ON_BADGE_TEXT,
       fontFamily: theme.boldFont,
       fontSize: 13,
       lineHeight: 16,
@@ -727,7 +742,7 @@ const getStyles = (theme: any) =>
       borderRadius: 999,
     },
     brandCountText: {
-      color: HOME_ACCENT_TEXT,
+      color: HOME_ACCENT_ON_BADGE_TEXT,
       fontFamily: theme.boldFont,
       fontSize: 12,
       letterSpacing: 0.2,
@@ -741,11 +756,13 @@ function HomeCategoryChip({
   selected,
   onPress,
   styles,
+  frameFill,
 }: {
   label: string
   selected: boolean
   onPress: () => void
   styles: HomeStyles
+  frameFill: string
 }) {
   const scale = useSharedValue(1)
   const prevSelected = useRef(selected)
@@ -779,7 +796,7 @@ function HomeCategoryChip({
           <WonderportAccentCard
             borderWidth={3}
             borderRadius={16}
-            innerBackgroundColor={HOME_CHIP_FILL}
+            innerBackgroundColor={frameFill}
             animatedBorder
             style={styles.chipCardOuter}
             contentStyle={styles.chipCardInner}
@@ -791,7 +808,7 @@ function HomeCategoryChip({
         ) : (
           <View style={styles.chipPlainOuter}>
             <View style={styles.chipCardInner}>
-              <Text style={styles.chipText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+              <Text style={styles.chipTextInactive} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
                 {label}
               </Text>
             </View>
