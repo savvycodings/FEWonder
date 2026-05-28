@@ -10,13 +10,9 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import { AppContext } from '../context'
+import { isSameSavedProduct, type ProductSavePayload } from '../productSave'
 
-export type ProductSavePayload = {
-  title: string
-  price?: string
-  image?: unknown
-  category?: string
-}
+export type { ProductSavePayload }
 
 type ProductImageSaveHeartProps = {
   product: ProductSavePayload
@@ -39,7 +35,7 @@ export function ProductImageSaveHeart({
   inline = false,
 }: ProductImageSaveHeartProps) {
   const { savedItems, toggleSavedItem } = useContext(AppContext)
-  const saved = savedItems.some((i) => i.title === product.title)
+  const saved = savedItems.some((i) => isSameSavedProduct(i, product))
   const [optimisticSaved, setOptimisticSaved] = useState<boolean | null>(null)
   const displaySaved = optimisticSaved !== null ? optimisticSaved : saved
 
@@ -78,13 +74,13 @@ export function ProductImageSaveHeart({
   )
 
   const handlePressIn = useCallback(() => {
-    const willSave = !savedItems.some((i) => i.title === product.title)
+    const willSave = !savedItems.some((i) => isSameSavedProduct(i, product))
     burstPlayedRef.current = true
     playBurst(willSave)
   }, [playBurst, product.title, savedItems])
 
   const handlePress = useCallback(() => {
-    const willSave = !savedItems.some((i) => i.title === product.title)
+    const willSave = !savedItems.some((i) => isSameSavedProduct(i, product))
     if (!burstPlayedRef.current) {
       playBurst(willSave)
     }

@@ -26,6 +26,7 @@ import { getDbCategoryBySlug, listDbProducts } from '../utils'
 const GRID_GAP = 12
 const IP_GRID_GAP = 10
 const PAGE_SIZE = 20
+const IP_SKELETON_COUNT = 4
 
 export function CategoryProducts({ route, navigation }: { route: any; navigation: any }) {
   const slug = String(route?.params?.slug || '').trim()
@@ -301,53 +302,70 @@ export function CategoryProducts({ route, navigation }: { route: any; navigation
           </Pressable>
         ) : null}
 
-        {ipHubEnabled && !loading ? (
+        {ipHubEnabled ? (
           <View style={styles.ipGrid}>
-            {ipHubTiles.map(({ key, label, count, previewUri }) => {
-              const isSelected = selectedIp === key
-              return (
-                <Pressable
-                  key={key}
-                  style={({ pressed }) => [
-                    styles.ipCardPressable,
-                    { width: ipCardW, opacity: pressed ? 0.92 : 1 },
-                  ]}
-                  onPress={() => {
-                    setSelectedIp((prev) => (prev === key ? null : key))
-                    setQuery('')
-                  }}
-                >
-                  <WonderportAccentCard
-                    borderVariant="solid"
-                    borderWidth={isSelected ? 3 : 2}
-                    borderRadius={16}
-                    innerBackgroundColor={frameFill}
-                    style={styles.ipCardOuter}
-                    contentStyle={styles.ipCardInner}
-                  >
-                    {previewUri ? (
-                      <Image
-                        source={{ uri: previewUri }}
-                        style={styles.ipPreviewImage}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={[styles.ipPreviewPlaceholder, { backgroundColor: frameFill }]}>
-                        <Text style={[styles.ipPreviewInitial, { color: theme.brandAccent }]}>
-                          {label.charAt(0)}
+            {loading
+              ? Array.from({ length: IP_SKELETON_COUNT }).map((_, idx) => (
+                  <View key={`ip-skeleton-${idx}`} style={[styles.ipCardPressable, { width: ipCardW }]}>
+                    <WonderportAccentCard
+                      borderVariant="solid"
+                      borderWidth={2}
+                      borderRadius={16}
+                      innerBackgroundColor={frameFill}
+                      style={styles.ipCardOuter}
+                      contentStyle={styles.ipCardInner}
+                    >
+                      <View style={styles.ipSkeletonImage} />
+                      <View style={styles.ipSkeletonTitle} />
+                      <View style={styles.ipSkeletonCount} />
+                    </WonderportAccentCard>
+                  </View>
+                ))
+              : ipHubTiles.map(({ key, label, count, previewUri }) => {
+                  const isSelected = selectedIp === key
+                  return (
+                    <Pressable
+                      key={key}
+                      style={({ pressed }) => [
+                        styles.ipCardPressable,
+                        { width: ipCardW, opacity: pressed ? 0.92 : 1 },
+                      ]}
+                      onPress={() => {
+                        setSelectedIp((prev) => (prev === key ? null : key))
+                        setQuery('')
+                      }}
+                    >
+                      <WonderportAccentCard
+                        borderVariant="solid"
+                        borderWidth={isSelected ? 3 : 2}
+                        borderRadius={16}
+                        innerBackgroundColor={frameFill}
+                        style={styles.ipCardOuter}
+                        contentStyle={styles.ipCardInner}
+                      >
+                        {previewUri ? (
+                          <Image
+                            source={{ uri: previewUri }}
+                            style={styles.ipPreviewImage}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={[styles.ipPreviewPlaceholder, { backgroundColor: frameFill }]}>
+                            <Text style={[styles.ipPreviewInitial, { color: theme.brandAccent }]}>
+                              {label.charAt(0)}
+                            </Text>
+                          </View>
+                        )}
+                        <Text style={[styles.ipName, { color: theme.textColor }]} numberOfLines={2}>
+                          {label}
                         </Text>
-                      </View>
-                    )}
-                    <Text style={[styles.ipName, { color: theme.textColor }]} numberOfLines={2}>
-                      {label}
-                    </Text>
-                    <Text style={[styles.ipCount, { color: theme.mutedForegroundColor }]}>
-                      {count === 1 ? '1 product' : `${count} products`}
-                    </Text>
-                  </WonderportAccentCard>
-                </Pressable>
-              )
-            })}
+                        <Text style={[styles.ipCount, { color: theme.mutedForegroundColor }]}>
+                          {count === 1 ? '1 product' : `${count} products`}
+                        </Text>
+                      </WonderportAccentCard>
+                    </Pressable>
+                  )
+                })}
           </View>
         ) : null}
 
@@ -440,6 +458,26 @@ function getStyles(theme: any) {
       height: 100,
       borderRadius: 12,
       marginBottom: 8,
+    },
+    ipSkeletonImage: {
+      width: '100%',
+      height: 100,
+      borderRadius: 12,
+      marginBottom: 8,
+      backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    },
+    ipSkeletonTitle: {
+      width: '82%',
+      height: 14,
+      borderRadius: 7,
+      marginBottom: 8,
+      backgroundColor: 'rgba(0, 0, 0, 0.09)',
+    },
+    ipSkeletonCount: {
+      width: '58%',
+      height: 11,
+      borderRadius: 6,
+      backgroundColor: 'rgba(0, 0, 0, 0.07)',
     },
     ipPreviewPlaceholder: {
       width: '100%',

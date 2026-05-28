@@ -43,6 +43,7 @@ import {
   maxPurchasableQuantity,
 } from '../productStock'
 import { productShowsPackagingChoice } from '../productPurchaseMode'
+import { isSameSavedProduct, shopifyProductToSavePayload } from '../productSave'
 
 const ACCENT_ON_BADGE_TEXT = '#ffffff'
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
@@ -85,7 +86,7 @@ export function Product({ route, navigation }: any) {
   const [heroImageLoading, setHeroImageLoading] = useState(false)
   const [packaging, setPackaging] = useState<'single' | 'set'>('single')
   const [quantity, setQuantity] = useState(1)
-  const liked = savedItems.some(item => item.title === product.title)
+  const liked = savedItems.some((item) => isSameSavedProduct(item, product))
   useEffect(() => {
     setProduct((route?.params?.product || {}) as ShopifyProduct)
     setPackaging('single')
@@ -487,7 +488,7 @@ export function Product({ route, navigation }: any) {
             <TouchableOpacity
               style={styles.heartButton}
               activeOpacity={0.85}
-              onPress={() => toggleSavedItem(product)}
+              onPress={() => void toggleSavedItem(shopifyProductToSavePayload(product))}
             >
               <Ionicons
                 name={liked ? 'heart' : 'heart-outline'}

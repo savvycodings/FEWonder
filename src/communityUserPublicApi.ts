@@ -26,7 +26,29 @@ export async function fetchCommunityUserPublicProfile(
     })
     if (!res.ok) return null
     const data = (await res.json()) as CommunityUserPublicDetail
-    return data && typeof data === 'object' ? data : null
+    if (!data || typeof data !== 'object') return null
+    const slots = data.badgeSlots
+    const badgeSlots: [string | null, string | null, string | null] = Array.isArray(slots)
+      ? [
+          typeof slots[0] === 'string' ? slots[0] : null,
+          typeof slots[1] === 'string' ? slots[1] : null,
+          typeof slots[2] === 'string' ? slots[2] : null,
+        ]
+      : [null, null, null]
+    return {
+      ...data,
+      badgeSlots,
+      avatarFrameId:
+        typeof data.avatarFrameId === 'string' ? data.avatarFrameId.trim() : null,
+      profilePicture:
+        typeof data.profilePicture === 'string' && data.profilePicture.trim()
+          ? data.profilePicture.trim()
+          : null,
+      bannerUrl:
+        typeof data.bannerUrl === 'string' && data.bannerUrl.trim()
+          ? data.bannerUrl.trim()
+          : null,
+    }
   } catch {
     return null
   }

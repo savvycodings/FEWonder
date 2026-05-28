@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -40,10 +40,27 @@ import { WonderJumpControllerIcon } from './components'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AuthPayload, User } from '../types'
 import { logoutUser } from './utils'
+import { AppSessionBridge } from './AppSessionBridge'
 import { FLOATING_TAB_BAR_BOTTOM, FLOATING_TAB_BAR_HEIGHT } from './tabBarLayout'
 
 /** Tab shell padding below status bar; Search hero bleed should match. */
 const TAB_SHELL_TOP_EXTRA = 6
+
+/** Profile stack routes that use the native header (tab shell top pad would double the inset). */
+const PROFILE_STACK_HEADER_ROUTE_NAMES = new Set([
+  'ProfileHeroEdit',
+  'ProfileMyOrders',
+  'ProfileMyOrderDetail',
+  'ProfileAccountSettings',
+  'Shipping',
+  'Payment',
+  'RedeemCode',
+  'AdminOrdersLogin',
+  'AdminOrdersHub',
+  'AdminOrderDetail',
+  'AdminUserOrders',
+  'AdminReportedMessages',
+])
 
 /** Matches `tabBarStyle.borderRadius` — clips blur + tint to the floating pill. */
 const TAB_BAR_RADIUS = 18
@@ -204,12 +221,28 @@ function ProfileStackScreen({
   sessionToken: string
 }) {
   const { theme } = useContext(ThemeContext)
+  const insets = useSafeAreaInsets()
+  const [stackRouteName, setStackRouteName] = useState('ProfileHome')
+  const liftStackPastTabShellPad = PROFILE_STACK_HEADER_ROUTE_NAMES.has(stackRouteName)
+  const stackLiftStyle =
+    liftStackPastTabShellPad
+      ? { marginTop: -(insets.top + TAB_SHELL_TOP_EXTRA) }
+      : null
+
   return (
+    <View style={[{ flex: 1 }, stackLiftStyle]}>
     <ProfileStack.Navigator
       screenOptions={{
         headerShown: false,
         contentStyle: {
           backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
+        },
+      }}
+      screenListeners={{
+        state: (event) => {
+          const state = event.data.state as { index: number; routes: { name: string }[] } | undefined
+          const name = state?.routes?.[state.index]?.name
+          if (name) setStackRouteName(name)
         },
       }}
     >
@@ -229,11 +262,8 @@ function ProfileStackScreen({
         options={{
           headerShown: true,
           headerTitle: 'Edit profile',
-          headerBackTitle: '',
-          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
-          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
-          headerTintColor: theme.textColor,
-          headerShadowVisible: false,
+          ...profileStackNativeHeaderOptions(theme),
+          contentStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
         }}
       >
         {({ navigation }) => (
@@ -429,6 +459,7 @@ function ProfileStackScreen({
         }}
       />
     </ProfileStack.Navigator>
+    </View>
   )
 }
 
@@ -452,13 +483,17 @@ function Tabs({
     Math.max(TAB_BAR_SIDE_INSET_MIN, Math.round(windowWidth * TAB_BAR_SIDE_INSET_RATIO)),
   )
 
+  /** Keep latest user in a ref so Chat tab identity stays stable (avoids remount + loading loop). */
+  const chatUserRef = useRef(user)
+  chatUserRef.current = user
+
   /** Stable component identity so Chat does not remount every Tabs render (would cancel hero timer). */
   const ChatTabScreen = useMemo(
     () =>
       function ChatTabScreen() {
-        return <Chat user={user} sessionToken={sessionToken} />
+        return <Chat user={chatUserRef.current} sessionToken={sessionToken} />
       },
-    [user, sessionToken]
+    [sessionToken]
   )
 
   const WonderJumpTabScreen = useMemo(
@@ -471,6 +506,8 @@ function Tabs({
 
   return (
     <View style={styles.container}>
+      <AppSessionBridge sessionToken={sessionToken} />
+      <View pointerEvents="none" style={styles.bottomSafeFill} />
       <Tab.Navigator
         screenOptions={{
           tabBarActiveTintColor: theme.tabBarActiveTintColor,
@@ -495,7 +532,7 @@ function Tabs({
             /** `start`/`end` override the library’s full-width `styles.bottom` (not `left`/`right`). */
             start: tabBarSideInset,
             end: tabBarSideInset,
-            bottom: FLOATING_TAB_BAR_BOTTOM,
+            bottom: insets.bottom + FLOATING_TAB_BAR_BOTTOM,
             height: FLOATING_TAB_BAR_HEIGHT,
             borderRadius: TAB_BAR_RADIUS,
             overflow: 'hidden',
@@ -608,6 +645,20 @@ function themedNativeHeaderOptions(theme: {
   } as const
 }
 
+/** Native stack header inside the Profile tab (offset tab-shell top pad via stack lift). */
+function profileStackNativeHeaderOptions(theme: {
+  appBackgroundColor?: string
+  backgroundColor?: string
+  textColor?: string
+  boldFont?: string
+}) {
+  return {
+    ...themedNativeHeaderOptions(theme),
+    headerTopInsetEnabled: true,
+    statusBarTranslucent: false,
+  } as const
+}
+
 export function Main() {
   const { theme } = useContext(ThemeContext)
   const [user, setUser] = useState<User | null>(null)
@@ -707,13 +758,26 @@ export function Main() {
   )
 }
 
-const getStyles = ({ theme, insets } : { theme: any, insets: any}) => StyleSheet.create({
+const getStyles = ({ theme, insets }: { theme: any; insets: any }) =>
+  StyleSheet.create({
   container: {
     backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
     flex: 1,
     paddingTop: insets.top + TAB_SHELL_TOP_EXTRA,
-    paddingBottom: insets.bottom + 8,
+    paddingBottom: 0,
     paddingLeft: insets.left,
     paddingRight: insets.right,
+  },
+  /**
+   * Fills the home-indicator/system-bar strip under the floating tab pill.
+   * Prevents translucent iOS production composition from showing a bright seam.
+   */
+  bottomSafeFill: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: insets.bottom + FLOATING_TAB_BAR_BOTTOM + 2,
+    backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
   },
 })

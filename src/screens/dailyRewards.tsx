@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import {
+  Alert,
   Image,
   Platform,
   Pressable,
@@ -13,7 +14,7 @@ import FeatherIcon from '@expo/vector-icons/Feather'
 import { SvgUri } from 'react-native-svg'
 import { useFocusEffect } from '@react-navigation/native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { DailyRewardItem, DailyRewardStatus, User } from '../../types'
+import { AuthPayload, DailyRewardItem, DailyRewardStatus, User } from '../../types'
 import {
   claimDailyReward,
   getDailyRewardStatus,
@@ -209,6 +210,9 @@ function wonderBadgeCardMeta(
 const weekDays = ['1', '2', '3', '4', '5', '6', '7']
 const weekRewards = [1, 2, 3, 4, 5, 6, 7]
 const ACCENT_ON_BADGE_TEXT = '#ffffff'
+
+const DAILY_STREAK_HELP_TEXT =
+  'Open this screen once a day to grow your streak. After day 7, rewards repeat every week (day 8, 9, and so on).'
 const THEME_STORE_OWNED_KEY = 'wonderport-theme-store-owned-ids'
 const THEME_STORE_ITEMS = [
   { id: 'midnight', name: 'Midnight', cost: 5, image: require('../../assets/dailyrewards/midnight.png') },
@@ -606,7 +610,9 @@ export function DailyRewards({ navigation, route }: any) {
         ? 'Default lime'
         : THEME_STORE_ITEMS.find((t) => t.id === id)?.name ?? 'Theme'
     setBrandAccentId(id === 'default' ? 'default' : normalizeBrandAccentId(id))
-    setStoreMessage(`${label} accent equipped.`)
+    setStoreMessage(
+      id === 'default' ? 'Default lime accent restored.' : `${label} accent equipped.`,
+    )
   }
 
   async function handleBuyTheme(themeId: string, cost: number) {
@@ -672,6 +678,9 @@ export function DailyRewards({ navigation, route }: any) {
   async function handleEquipAvatarFrame(id: AvatarFrameId, freshStatus?: DailyRewardStatus) {
     const prev = equippedAvatarFrame
     setStoreMessage('')
+    if (id !== 'none' && id === prev) {
+      id = 'none'
+    }
     if (id !== 'none') {
       const itemId = avatarFrameStoreItemId(id)
       if (getAvatarFrameStorePrice(id) != null && !isStoreItemOwned(itemId, freshStatus ?? null)) {
@@ -685,7 +694,23 @@ export function DailyRewards({ navigation, route }: any) {
       setStoreMessage(id === 'none' ? 'Plain avatar on.' : 'Frame saved. See your profile.')
       if (sessionToken) {
         try {
-          await syncEquippedAvatarFrame(sessionToken, id)
+          const syncedUser = await syncEquippedAvatarFrame(sessionToken, id)
+          if (syncedUser) {
+            try {
+              const rawAuth = await AsyncStorage.getItem('wonderport-auth')
+              if (rawAuth) {
+                const parsed = JSON.parse(rawAuth) as AuthPayload
+                const nextAuth: AuthPayload = {
+                  ...parsed,
+                  user: { ...parsed.user, avatarFrameId: syncedUser.avatarFrameId },
+                }
+                await AsyncStorage.setItem('wonderport-auth', JSON.stringify(nextAuth))
+                await AsyncStorage.setItem('wonderport-user', JSON.stringify(nextAuth.user))
+              }
+            } catch {
+              /* ignore auth cache patch */
+            }
+          }
         } catch (error: any) {
           await saveEquippedAvatarFrame(prev)
           setEquippedAvatarFrame(prev)
@@ -701,6 +726,16 @@ export function DailyRewards({ navigation, route }: any) {
     style: WonderJumpCharacterStyle,
     freshStatus?: DailyRewardStatus,
   ) {
+    if (style === equippedWonderJumpCharacter) {
+      if (style === 'classic') {
+        setStoreMessage('')
+        return
+      }
+      await saveWonderJumpCharacterStyle('classic')
+      setEquippedWonderJumpCharacter('classic')
+      setStoreMessage('Character unequipped. Using Classic for WonderJump.')
+      return
+    }
     const storeConfig = WONDER_JUMP_CHARACTER_STORE_CONFIG[style]
     if (storeConfig && !isStoreItemOwned(storeConfig.itemId, freshStatus ?? null)) {
       setStoreMessage(`Purchase the ${storeConfig.purchaseLabel} character first.`)
@@ -711,12 +746,21 @@ export function DailyRewards({ navigation, route }: any) {
     setStoreMessage(`${style[0].toUpperCase()}${style.slice(1)} character equipped for WonderJump.`)
   }
 
-  async function equipWonderBadge(badgeId: WonderBadgeId) {
+  async function toggleWonderBadge(badgeId: WonderBadgeId) {
     try {
       const prefs = await loadProfileHeroPreferences()
       const slots: ProfileHeroBadgeSlots = [...prefs.badgeSlots]
-      if (slots.some((s) => (migrateWonderBadgeSlotId(s) ?? s) === badgeId)) {
-        setStoreMessage('This badge is already on your profile showcase.')
+      const equippedIdx = slots.findIndex(
+        (s) => (migrateWonderBadgeSlotId(s) ?? s) === badgeId,
+      )
+      if (equippedIdx !== -1) {
+        slots[equippedIdx] = null
+        if (sessionToken) {
+          await updateProfileHero(sessionToken, { badgeSlots: slots })
+        }
+        await saveProfileHeroPreferences({ ...prefs, badgeSlots: slots })
+        setHeroBadgeSlots(slots)
+        setStoreMessage('Badge removed from your profile showcase.')
         return
       }
       const emptyIdx = slots.findIndex((s) => isProfileBadgeSlotFreeForWonderEquip(s))
@@ -761,10 +805,16 @@ export function DailyRewards({ navigation, route }: any) {
       <View style={styles.bannerCard}>
           <View style={styles.bannerTopRow}>
             <Text style={styles.bannerTitle}>Keep your streak alive</Text>
+            <Pressable
+              style={styles.bannerHelpButton}
+              onPress={() => Alert.alert('Daily streak', DAILY_STREAK_HELP_TEXT)}
+              accessibilityRole="button"
+              accessibilityLabel="How daily streaks work"
+              hitSlop={8}
+            >
+              <FeatherIcon name="help-circle" size={20} color={theme.mutedForegroundColor} />
+            </Pressable>
           </View>
-          <Text style={styles.bannerSubtitle}>
-            Open this screen once a day to grow your streak. After day 7, rewards repeat every week (day 8, 9, and so on).
-          </Text>
 
           <View style={styles.daysRow}>
             {rewards.map((reward) => {
@@ -965,16 +1015,16 @@ export function DailyRewards({ navigation, route }: any) {
                     style={[
                       styles.badgeEquipButton,
                       equipped ? styles.badgeEquipButtonEquipped : null,
-                      !meta.earned || equipped ? styles.badgeEquipButtonDisabled : null,
+                      !meta.earned ? styles.badgeEquipButtonDisabled : null,
                     ]}
-                    disabled={!meta.earned || equipped}
-                    onPress={() => void equipWonderBadge(id)}
+                    disabled={!meta.earned}
+                    onPress={() => void toggleWonderBadge(id)}
                   >
                     <Text
                       style={[
                         styles.badgeEquipButtonText,
                         equipped ? styles.badgeEquipButtonTextEquipped : null,
-                        !meta.earned || equipped ? styles.badgeEquipButtonTextDisabled : null,
+                        !meta.earned ? styles.badgeEquipButtonTextDisabled : null,
                       ]}
                     >
                       {equipped ? 'Equipped' : !meta.earned ? 'Locked' : 'Equip'}
@@ -1020,10 +1070,13 @@ export function DailyRewards({ navigation, route }: any) {
                           : styles.themeBuyButtonOwned
                         : null,
                     ]}
-                    disabled={isOwned ? accentEquipped : !canBuy}
+                    disabled={!isOwned && !canBuy}
                     onPress={() => {
-                      if (isOwned) void handleEquipAccentTheme(themeItem.id)
-                      else void handleBuyTheme(themeItem.id, themeItem.cost)
+                      if (isOwned) {
+                        void handleEquipAccentTheme(accentEquipped ? 'default' : themeItem.id)
+                      } else {
+                        void handleBuyTheme(themeItem.id, themeItem.cost)
+                      }
                     }}
                   >
                     <Text
@@ -1078,9 +1131,7 @@ export function DailyRewards({ navigation, route }: any) {
                           ? styles.characterEquipButtonDisabled
                           : null,
                       ]}
-                      disabled={
-                        equipped || (Boolean(purchaseConfig) && !owned && (busy || !canAfford))
-                      }
+                      disabled={Boolean(purchaseConfig) && !owned && (busy || !canAfford)}
                       onPress={() => {
                         if (purchaseConfig && !owned) {
                           void purchaseStoreItem(purchaseConfig.itemId, async (status) => {
@@ -1249,18 +1300,20 @@ function buildDailyRewardStyles(theme: any) {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 10,
   },
   bannerTitle: {
+    flex: 1,
     color: textPrimary,
     fontFamily: 'Geist-SemiBold',
     fontSize: 16,
   },
-  bannerSubtitle: {
-    color: textMuted,
-    fontFamily: 'Geist-Regular',
-    fontSize: 11,
-    marginBottom: 10,
+  bannerHelpButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
   },
   daysRow: {
     flexDirection: 'row',

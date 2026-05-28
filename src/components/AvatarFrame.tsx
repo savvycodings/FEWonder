@@ -87,6 +87,17 @@ export function coerceAvatarFrameId(raw: string | null | undefined): AvatarFrame
   return 'none'
 }
 
+/** Prefer the first non-`none` frame among device storage, session user, and message payload. */
+export function resolveEquippedAvatarFrameForDisplay(
+  ...sources: (string | null | undefined)[]
+): AvatarFrameId {
+  for (const raw of sources) {
+    const id = coerceAvatarFrameId(raw)
+    if (id !== 'none') return id
+  }
+  return 'none'
+}
+
 export async function loadEquippedAvatarFrame(): Promise<AvatarFrameId> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY)
@@ -807,7 +818,7 @@ export function AvatarFramePreviewTile({
   const onAccentText = theme.priceBadgeTextColor || '#ffffff'
   const meta = AVATAR_FRAME_SHOP.find((f) => f.id === frameId)
   const uri = previewUri?.trim() ? previewUri : null
-  const primaryDisabled = busy || equipped || (!owned && !canAfford)
+  const primaryDisabled = busy || (!owned && !canAfford)
   const primaryLabel = busy ? 'Buying...' : equipped ? 'Equipped' : !owned ? 'Buy' : 'Equip'
 
   const previewChild = uri ? (

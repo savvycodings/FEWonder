@@ -23,8 +23,11 @@ const AppContext = createContext<IAppContext>({
   removeFromCart: () => null,
   clearCart: () => null,
   savedItems: [],
-  toggleSavedItem: () => null,
-  removeSavedItem: () => null,
+  sessionToken: '',
+  setSessionToken: () => null,
+  refreshSavedItems: async () => {},
+  toggleSavedItem: async () => {},
+  removeSavedItem: async () => {},
 })
 
 export {

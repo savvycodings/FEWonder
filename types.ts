@@ -1,4 +1,5 @@
 import { SetStateAction, Dispatch } from 'react'
+import type { ProductSavePayload } from './src/productSave'
 
 export interface IIconProps {
   type: string
@@ -154,7 +155,10 @@ export interface IAppContext {
   updateCartItemQuantity: (title: string, quantity: number) => void,
   removeFromCart: (title: string) => void,
   clearCart: () => void,
-  savedItems: any[],
-  toggleSavedItem: (item: any) => void,
-  removeSavedItem: (title: string) => void,
+  savedItems: ProductSavePayload[],
+  sessionToken: string,
+  setSessionToken: (token: string) => void,
+  refreshSavedItems: (token?: string) => Promise<void>,
+  toggleSavedItem: (item: ProductSavePayload) => Promise<void>,
+  removeSavedItem: (productIdOrTitle: string) => Promise<void>,
 }

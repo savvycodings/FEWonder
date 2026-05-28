@@ -17,6 +17,7 @@ import { ShopifyProduct } from '../../types'
 import { ThemeContext } from '../context'
 import { listDbProducts, listShopifyCollectionsByIds, ShopifyCollectionSummary } from '../utils'
 import { formatMoney } from '../money'
+import { shopifyProductToSavePayload } from '../productSave'
 
 const GRID_GAP = 12
 
@@ -30,16 +31,6 @@ function getImageSource(item: ShopifyProduct): ImageSourcePropType | undefined {
   return (item as { image?: ImageSourcePropType }).image
 }
 
-function productToSavePayload(item: ShopifyProduct) {
-  const priceLabel =
-    item.price?.amount != null && item.price.amount !== '' ? formatMoney(item.price) : undefined
-  return {
-    title: item.title,
-    price: priceLabel,
-    image: getImageSource(item),
-    category: item.productType || undefined,
-  }
-}
 
 /** Hide storefront utility collections from the Search collections grid. */
 function isExcludedSearchCollection(c: ShopifyCollectionSummary): boolean {
@@ -233,7 +224,7 @@ export function Search({ navigation }: { navigation: any }) {
       item.price?.amount != null && item.price.amount !== ''
         ? formatMoney(item.price)
         : 'View details'
-    const savePayload = productToSavePayload(item)
+    const savePayload = shopifyProductToSavePayload(item)
     return (
       <WonderportAccentCard
         key={item.id || item.handle || item.title}

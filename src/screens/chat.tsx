@@ -40,7 +40,12 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 import * as ImagePicker from 'expo-image-picker'
-import { AvatarFrameWrapper, coerceAvatarFrameId, useEquippedAvatarFrame } from '../components'
+import {
+  AvatarFrameWrapper,
+  coerceAvatarFrameId,
+  resolveEquippedAvatarFrameForDisplay,
+  useEquippedAvatarFrame,
+} from '../components'
 import { brandAccentRgba } from '../brandAccent'
 import { CONTENT_ABOVE_TAB_BAR_GAP, floatingTabBarClearance } from '../tabBarLayout'
 
@@ -51,17 +56,23 @@ const ACCENT_ON_BADGE_TEXT = '#ffffff'
 /** Approximate composer row height for list padding / stacking (attach + field + send). */
 const COMPOSER_BAR_HEIGHT = 58
 
-/** Extra px between the visible keyboard top and the composer bottom (0 = hug the adjusted frame). */
-const KEYBOARD_GAP = 0
+/** Keep composer slightly above keyboard on all devices. */
+const KEYBOARD_GAP = 6
 
 /** Small cushion above the composer row inside the scroll area (list + composer lift together). */
 const LIST_SCROLL_TAIL = 8
+
+/** Chat-only gap above floating tab bar (smaller than global for tighter composer docking). */
+const CHAT_TAB_CLEARANCE_GAP = 7
+
+/** Small guaranteed breathing room above the floating tab pill. */
+const COMPOSER_TAB_CLEARANCE_GUARD = 0
 
 /**
  * Pulls composer toward the visible keyboard (more negative = tighter).
  * Halved keyboard–dock gap vs prior -16/-10 step.
  */
-const KEYBOARD_FRAME_NUDGE = Platform.select({ ios: -24, android: -15, default: -15 })!
+const KEYBOARD_FRAME_NUDGE = 0
 
 /**
  * Keyboard lift: timing + easing keeps motion fluid and in-family with OS keyboard (~280ms),
@@ -218,6 +229,7 @@ export function Chat({
           console.log('Community messages poll failed', error)
         }
       }
+      void poll()
       const interval = setInterval(poll, COMMUNITY_POLL_MS)
       return () => {
         cancelled = true
@@ -285,6 +297,10 @@ export function Chat({
   }, [dbPickerProducts])
 
   async function loadInitialMessages() {
+    if (!sessionToken) {
+      setLoading(false)
+      return
+    }
     try {
       const history = await getCommunityMessages(sessionToken)
       setMessages(history)
@@ -513,8 +529,10 @@ export function Chat({
   const avatarFallbackBg = theme.sheetRowBackgroundColor || theme.tileBackgroundColor || '#EFEBE6'
   const tabBarHeight = useBottomTabBarHeight()
   const closedComposerBottom = useMemo(() => {
-    if (tabBarHeight > 0) return tabBarHeight + CONTENT_ABOVE_TAB_BAR_GAP
-    return floatingTabBarClearance(insets.bottom)
+    const measured = tabBarHeight > 0 ? tabBarHeight + CHAT_TAB_CLEARANCE_GAP : 0
+    const fallback =
+      floatingTabBarClearance(insets.bottom) - (CONTENT_ABOVE_TAB_BAR_GAP - CHAT_TAB_CLEARANCE_GAP)
+    return Math.max(measured, fallback) + COMPOSER_TAB_CLEARANCE_GUARD
   }, [tabBarHeight, insets.bottom])
 
   const keyboard = useAnimatedKeyboard()
@@ -576,7 +594,11 @@ export function Chat({
             const avatarUri = getAvatarUri(item, isMe)
             const initial = (item.user.fullName || 'U').slice(0, 1).toUpperCase()
             const bubbleFrameId = isMe
-              ? coerceAvatarFrameId(user.avatarFrameId ?? avatarFrameId)
+              ? resolveEquippedAvatarFrameForDisplay(
+                  avatarFrameId,
+                  user.avatarFrameId,
+                  item.user.avatarFrameId,
+                )
               : coerceAvatarFrameId(item.user.avatarFrameId)
             return (
               <View style={[styles.messageShell, isMe ? styles.meShell : styles.otherShell]}>

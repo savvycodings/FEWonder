@@ -1,5 +1,5 @@
 import 'react-native-gesture-handler'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { NavigationContainer } from '@react-navigation/native'
 import { Main } from './src/main'
 import { useFonts } from 'expo-font'
@@ -24,6 +24,17 @@ import {
   BottomSheetView,
 } from '@gorhom/bottom-sheet'
 import { Alert, StyleSheet, LogBox } from 'react-native'
+import {
+  isSameSavedProduct,
+  shopifyProductToSavePayload,
+  type ProductSavePayload,
+} from './src/productSave'
+import {
+  fetchSavedProducts,
+  saveProductToAccount,
+  unsaveProductFromAccount,
+} from './src/savedProductsApi'
+import type { ShopifyProduct } from './types'
 import { getCartStockError, isProductInStock, maxPurchasableQuantity } from './src/productStock'
 import { Platform } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -44,7 +55,8 @@ export default function App() {
   const [chatType, setChatType] = useState<Model>(MODELS.claudeOpus)
   const [imageModel, setImageModel] = useState<string>(IMAGE_MODELS.nanoBanana.label)
   const [cartItems, setCartItems] = useState<any[]>([])
-  const [savedItems, setSavedItems] = useState<any[]>([])
+  const [savedItems, setSavedItems] = useState<ProductSavePayload[]>([])
+  const [sessionToken, setSessionToken] = useState('')
   const [modalVisible, setModalVisible] = useState<boolean>(false)
   const [fontsLoaded] = useFonts({
     'Geist-Regular': require('./assets/fonts/Geist-Regular.otf'),
@@ -176,19 +188,78 @@ export default function App() {
     setCartItems([])
   }
 
-  function toggleSavedItem(item: any) {
-    setSavedItems(prev => {
-      const exists = prev.some(v => v.title === item.title)
-      if (exists) {
-        return prev.filter(v => v.title !== item.title)
-      }
-      return [...prev, item]
-    })
-  }
+  const refreshSavedItems = useCallback(async (token?: string) => {
+    const activeToken = token ?? sessionToken
+    if (!activeToken) {
+      setSavedItems([])
+      return
+    }
+    try {
+      const products = await fetchSavedProducts(activeToken)
+      setSavedItems(products.map((p) => shopifyProductToSavePayload(p as ShopifyProduct)))
+    } catch (error) {
+      console.log('Failed to load saved products', error)
+    }
+  }, [sessionToken])
 
-  function removeSavedItem(title: string) {
-    setSavedItems(prev => prev.filter(item => item.title !== title))
-  }
+  const toggleSavedItem = useCallback(
+    async (item: ProductSavePayload) => {
+      const productId = String(item.id || '').trim()
+      if (!productId) return
+
+      if (!sessionToken) {
+        Alert.alert('Sign in required', 'Log in to save items to your profile.')
+        return
+      }
+
+      const exists = savedItems.some((v) => isSameSavedProduct(v, item))
+      const previous = savedItems
+
+      setSavedItems((prev) => {
+        if (exists) return prev.filter((v) => !isSameSavedProduct(v, item))
+        return [...prev, item]
+      })
+
+      try {
+        const products = exists
+          ? await unsaveProductFromAccount(sessionToken, productId)
+          : await saveProductToAccount(sessionToken, productId)
+        setSavedItems(products.map((p) => shopifyProductToSavePayload(p as ShopifyProduct)))
+      } catch (error) {
+        console.log('Failed to update saved product', error)
+        setSavedItems(previous)
+        Alert.alert('Could not update saved items', 'Please try again.')
+      }
+    },
+    [savedItems, sessionToken],
+  )
+
+  const removeSavedItem = useCallback(
+    async (productIdOrTitle: string) => {
+      const target = savedItems.find(
+        (item) => item.id === productIdOrTitle || item.title === productIdOrTitle,
+      )
+      if (!target?.id) {
+        setSavedItems((prev) => prev.filter((item) => item.title !== productIdOrTitle))
+        return
+      }
+      if (!sessionToken) {
+        setSavedItems((prev) => prev.filter((item) => !isSameSavedProduct(item, target)))
+        return
+      }
+      const previous = savedItems
+      setSavedItems((prev) => prev.filter((item) => !isSameSavedProduct(item, target)))
+      try {
+        const products = await unsaveProductFromAccount(sessionToken, target.id)
+        setSavedItems(products.map((p) => shopifyProductToSavePayload(p as ShopifyProduct)))
+      } catch (error) {
+        console.log('Failed to remove saved product', error)
+        setSavedItems(previous)
+        Alert.alert('Could not remove item', 'Please try again.')
+      }
+    },
+    [savedItems, sessionToken],
+  )
 
   const resolvedTheme = mergeBrandAccentIntoTheme(getTheme(theme), brandAccentId)
   const bottomSheetStyles = getBottomsheetStyles(resolvedTheme)
@@ -212,6 +283,9 @@ export default function App() {
               removeFromCart,
               clearCart,
               savedItems,
+              sessionToken,
+              setSessionToken,
+              refreshSavedItems,
               toggleSavedItem,
               removeSavedItem,
             }}

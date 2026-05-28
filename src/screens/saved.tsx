@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppContext, ThemeContext } from '../context'
 import { formatMoney } from '../money'
 import { brandAccentRgba } from '../brandAccent'
+import { savedProductListKey } from '../productSave'
 
 /** Montserrat — registered in App.tsx `useFonts` */
 const HEADING_FONT = 'Montserrat_700Bold' as const
@@ -76,7 +77,7 @@ export function Saved({ navigation }: any) {
           const thumb = thumbSource(item)
           return (
             <Pressable
-              key={item.title}
+              key={savedProductListKey(item)}
               style={styles.itemCard}
               onPress={() => navigation.navigate('Product', { product: item })}
             >
@@ -96,7 +97,10 @@ export function Saved({ navigation }: any) {
                   {item.price && typeof item.price === 'object' ? formatMoney(item.price) : String(item.price || '')}
                 </Text>
               </View>
-              <Pressable style={styles.removeButton} onPress={() => removeSavedItem(item.title)}>
+              <Pressable
+                style={styles.removeButton}
+                onPress={() => void removeSavedItem(item.id || item.title)}
+              >
                 <FeatherIcon name="x" size={14} color={theme.mutedForegroundColor || '#a8a8a8'} />
               </Pressable>
             </Pressable>

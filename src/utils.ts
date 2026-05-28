@@ -44,11 +44,46 @@ export function normalizeDailyRewardStatus(status: DailyRewardStatus): void {
   if (typeof status.currentStreakDays !== 'number' || !Number.isFinite(status.currentStreakDays)) {
     status.currentStreakDays = 0
   }
-  if (typeof status.wonderJumpRank !== 'number' || !Number.isFinite(status.wonderJumpRank) || status.wonderJumpRank <= 0) {
+  const rankRaw = status.wonderJumpRank as unknown
+  if (rankRaw == null || rankRaw === '') {
     status.wonderJumpRank = null
   } else {
-    status.wonderJumpRank = Math.floor(status.wonderJumpRank)
+    const n = typeof rankRaw === 'number' ? rankRaw : Number(rankRaw)
+    status.wonderJumpRank = Number.isFinite(n) && n > 0 ? Math.floor(n) : null
   }
+}
+
+/** 1-based rank from a fetched leaderboard list (same order as WonderJump UI). */
+export function wonderJumpRankFromLeaderboardEntries(
+  userId: string,
+  entries: WonderJumpLeaderboardEntry[],
+): number | null {
+  const needle = String(userId || '').trim().toLowerCase()
+  if (!needle) return null
+  const idx = entries.findIndex((e) => String(e.userId || '').trim().toLowerCase() === needle)
+  return idx >= 0 ? idx + 1 : null
+}
+
+/** When API rank is missing, derive rank from the public leaderboard (matches WonderJump UI). */
+async function enrichWonderJumpRankFromLeaderboard(status: DailyRewardStatus): Promise<void> {
+  if (status.wonderJumpRank != null) return
+  try {
+    const rawAuth = await AsyncStorage.getItem('wonderport-auth')
+    if (!rawAuth) return
+    const userId = (JSON.parse(rawAuth) as AuthPayload)?.user?.id
+    if (!userId) return
+    const entries = await fetchWonderJumpLeaderboard()
+    const rank = wonderJumpRankFromLeaderboardEntries(userId, entries)
+    if (rank != null) status.wonderJumpRank = rank
+  } catch {
+    /* optional */
+  }
+}
+
+async function persistDailyRewardStatus(status: DailyRewardStatus): Promise<void> {
+  normalizeDailyRewardStatus(status)
+  await enrichWonderJumpRankFromLeaderboard(status)
+  await writeDailyRewardsCache(status)
 }
 
 export async function readDailyRewardsCache(): Promise<DailyRewardStatus | null> {
@@ -473,8 +508,7 @@ export async function getDailyRewardStatus(sessionToken: string): Promise<DailyR
   }
 
   const status = data as DailyRewardStatus
-  normalizeDailyRewardStatus(status)
-  await writeDailyRewardsCache(status)
+  await persistDailyRewardStatus(status)
   return status
 }
 
@@ -494,8 +528,7 @@ export async function claimDailyReward(sessionToken: string): Promise<DailyRewar
 
   if (response.status === 409 && data?.rewards?.length) {
     const status = data as DailyRewardStatus
-    normalizeDailyRewardStatus(status)
-    await writeDailyRewardsCache(status)
+    await persistDailyRewardStatus(status)
     return status
   }
 
@@ -504,8 +537,7 @@ export async function claimDailyReward(sessionToken: string): Promise<DailyRewar
   }
 
   const status = data as DailyRewardStatus
-  normalizeDailyRewardStatus(status)
-  await writeDailyRewardsCache(status)
+  await persistDailyRewardStatus(status)
   return status
 }
 
@@ -753,15 +785,13 @@ export async function purchaseWonderStoreItem(
   if (response.status === 409 && data?.rewards?.length) {
     // "Already purchased" is a valid owned state; return fresh status so UI can switch to Equip.
     const status = data as DailyRewardStatus
-    normalizeDailyRewardStatus(status)
-    await writeDailyRewardsCache(status)
+    await persistDailyRewardStatus(status)
     return status
   }
 
   if (response.status === 402 && data?.rewards?.length) {
     const status = data as DailyRewardStatus
-    normalizeDailyRewardStatus(status)
-    await writeDailyRewardsCache(status)
+    await persistDailyRewardStatus(status)
     throw new Error(String(data?.error || 'Not enough coins'))
   }
 
@@ -770,8 +800,7 @@ export async function purchaseWonderStoreItem(
   }
 
   const status = data as DailyRewardStatus
-  normalizeDailyRewardStatus(status)
-  await writeDailyRewardsCache(status)
+  await persistDailyRewardStatus(status)
   return status
 }
 
@@ -809,7 +838,7 @@ export async function redeemWonderCode(
 export async function syncEquippedAvatarFrame(
   sessionToken: string,
   avatarFrameId: string
-): Promise<void> {
+): Promise<User | null> {
   if (!DOMAIN) {
     throw new Error('API domain is not configured. Set EXPO_PUBLIC_DEV_API_URL.')
   }
@@ -831,6 +860,7 @@ export async function syncEquippedAvatarFrame(
   if (!response.ok) {
     throw new Error(data?.error || 'Unable to sync avatar frame')
   }
+  return (data?.user as User) ?? null
 }
 
 export async function getCommunityMessages(sessionToken: string): Promise<CommunityMessage[]> {

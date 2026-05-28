@@ -15,6 +15,13 @@ import FeatherIcon from '@expo/vector-icons/Feather'
 import { ThemeContext } from '../context'
 import { User } from '../../types'
 import { changePassword, updateProfileDetails } from '../utils'
+import {
+  clampProfileDisplayNameInput,
+  isProfileDisplayNameValid,
+  MAX_PROFILE_DISPLAY_NAME_LENGTH,
+  normalizeProfileDisplayName,
+  PROFILE_DISPLAY_NAME_LENGTH_HINT,
+} from '../profileDisplayName'
 import { brandAccentRgba } from '../brandAccent'
 
 type Props = {
@@ -105,13 +112,21 @@ export function ProfileAccountSettings({ user, sessionToken, onUserUpdated }: Pr
 
   async function onSave() {
     if (!canSave || saving) return
+    if (!isProfileDisplayNameValid(fullName)) {
+      setError(
+        fullName.trim().length === 0
+          ? 'Please enter your name.'
+          : `Name must be ${MAX_PROFILE_DISPLAY_NAME_LENGTH} characters or fewer.`,
+      )
+      return
+    }
     setError('')
     setSuccess('')
     setSaving(true)
     try {
       const nextUser = await updateProfileDetails({
         sessionToken,
-        fullName: fullName.trim(),
+        fullName: normalizeProfileDisplayName(fullName),
         email: email.trim().toLowerCase(),
       })
       await onUserUpdated(nextUser)
@@ -133,11 +148,13 @@ export function ProfileAccountSettings({ user, sessionToken, onUserUpdated }: Pr
           <Text style={styles.label}>Full name</Text>
           <TextInput
             value={fullName}
-            onChangeText={setFullName}
+            onChangeText={(text) => setFullName(clampProfileDisplayNameInput(text))}
             placeholder="Full name"
             placeholderTextColor={theme.mutedForegroundColor}
             style={styles.input}
+            maxLength={MAX_PROFILE_DISPLAY_NAME_LENGTH}
           />
+          <Text style={styles.fieldHint}>{PROFILE_DISPLAY_NAME_LENGTH_HINT}</Text>
           <Text style={styles.label}>Email</Text>
           <TextInput
             value={email}
@@ -327,8 +344,14 @@ const getStyles = (theme: any) => {
       paddingVertical: 10,
       color: theme.textColor,
       fontFamily: theme.mediumFont,
-      marginBottom: 10,
+      marginBottom: 4,
       backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
+    },
+    fieldHint: {
+      marginBottom: 10,
+      color: theme.mutedForegroundColor,
+      fontFamily: theme.regularFont,
+      fontSize: 12,
     },
     saveButton: {
       minHeight: 42,

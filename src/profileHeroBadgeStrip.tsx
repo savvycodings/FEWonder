@@ -7,6 +7,8 @@ import { isWonderBadgeId, migrateWonderBadgeSlotId, type WonderBadgeId } from '.
 import { ThemeContext } from './context'
 import { brandAccentRgba } from './brandAccent'
 
+import { wonderBadgeVisualScale } from './wonderBadgeVisualScale'
+
 const BADGE_SLOT = 38
 const BADGE_RADIUS = 10
 const BADGE_ICON = 18
@@ -17,6 +19,8 @@ export function ProfileHeroBadgeStrip({
   slots,
   mode,
   variant = 'standalone',
+  slotSize = BADGE_SLOT,
+  badgeGap,
   onEmptySlot,
   onFilledSlot,
 }: {
@@ -24,13 +28,25 @@ export function ProfileHeroBadgeStrip({
   mode: Mode
   /** `inline`: no outer padding — sits in hero row beside name. */
   variant?: 'standalone' | 'inline'
+  /** Profile home: may shrink when the name needs horizontal room. */
+  slotSize?: number
+  badgeGap?: number
   onEmptySlot?: (index: 0 | 1 | 2) => void
   onFilledSlot?: (index: 0 | 1 | 2) => void
 }) {
   const { theme } = useContext(ThemeContext)
   const styles = useMemo(() => getStripStyles(theme), [theme])
   const accent = theme.brandAccent
-  const rowStyle = [styles.row, variant === 'inline' ? styles.rowInline : null, styles.rowMinSize]
+  const safeSlot = Math.max(20, Math.round(slotSize))
+  const imageSize = Math.max(14, safeSlot - 8)
+  const iconSize = Math.max(12, Math.round(safeSlot * 0.47))
+  const rowGap = badgeGap ?? (variant === 'inline' ? 6 : 8)
+  const rowStyle = [
+    styles.row,
+    variant === 'inline' ? styles.rowInline : null,
+    styles.rowMinSize,
+    { gap: rowGap },
+  ]
 
   if (mode === 'home') {
     const filledIndices = ([0, 1, 2] as const).filter((i) => Boolean(slots[i]))
@@ -42,21 +58,27 @@ export function ProfileHeroBadgeStrip({
           const raw = slots[i]!
           const id = migrateWonderBadgeSlotId(raw) ?? raw
           const showWonder = Boolean(isWonderBadgeId(id))
+          const wonderId = showWonder ? (id as WonderBadgeId) : null
           return (
             <View
               key={i}
-              style={[styles.slot, styles.slotProfileHome]}
+              style={[
+                styles.slot,
+                styles.slotProfileHome,
+                { width: safeSlot, height: safeSlot },
+              ]}
               accessibilityRole="image"
               accessibilityLabel="Showcase badge"
             >
-              {showWonder ? (
+              {showWonder && wonderId ? (
                 <WonderBadgeImage
-                  badgeId={id as WonderBadgeId}
-                  size={BADGE_SLOT - 8}
+                  badgeId={wonderId}
+                  size={imageSize}
+                  visualScale={wonderBadgeVisualScale(wonderId)}
                   fallbackColor={accent}
                 />
               ) : (
-                <FeatherIcon name="award" size={BADGE_ICON} color={accent} />
+                <FeatherIcon name="award" size={iconSize} color={accent} />
               )}
             </View>
           )
@@ -74,20 +96,19 @@ export function ProfileHeroBadgeStrip({
         const showWonder = Boolean(id && isWonderBadgeId(id))
         const slotStyle = [
           styles.slot,
-          empty ? styles.slotEmpty : styles.slotFilled,
-          !empty && showWonder ? styles.slotWonderPlate : null,
+          { width: safeSlot, height: safeSlot },
+          empty ? styles.slotEmptyLight : styles.slotFilledLight,
         ]
-        const inner = empty ? (
-          <FeatherIcon name="plus" size={BADGE_ICON} color="rgba(255,255,255,0.55)" />
-        ) : showWonder ? (
+        const inner = showWonder ? (
           <WonderBadgeImage
             badgeId={id as WonderBadgeId}
-            size={BADGE_SLOT - 8}
+            size={imageSize}
+            visualScale={wonderBadgeVisualScale(id as WonderBadgeId)}
             fallbackColor={accent}
           />
-        ) : (
-          <FeatherIcon name="award" size={BADGE_ICON} color={accent} />
-        )
+        ) : !empty ? (
+          <FeatherIcon name="award" size={iconSize} color={accent} />
+        ) : null
 
         return (
           <Pressable
@@ -101,6 +122,13 @@ export function ProfileHeroBadgeStrip({
             accessibilityLabel={empty ? 'Add badge from Wonder Store' : 'Remove badge from showcase'}
           >
             {inner}
+            <View pointerEvents="none" style={styles.slotEditOverlay}>
+              <FeatherIcon
+                name={empty ? 'plus' : 'minus'}
+                size={Math.max(14, Math.round(safeSlot * 0.38))}
+                color="#ffffff"
+              />
+            </View>
           </Pressable>
         )
       })}
@@ -125,6 +153,8 @@ function getStripStyles(theme: any) {
     paddingBottom: 0,
     gap: 6,
     alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+    alignSelf: 'flex-start',
   },
   /** Keeps three badge slots from shrinking when the name row wraps on small widths. */
   rowMinSize: {
@@ -151,10 +181,31 @@ function getStripStyles(theme: any) {
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderColor: L(0.28),
   },
+  /** Edit profile on light hero card — matches profile home showcase look. */
+  slotEmptyLight: {
+    backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || theme.borderColor,
+    borderStyle: 'dashed',
+  },
+  slotFilledLight: {
+    backgroundColor: L(0.08),
+    borderWidth: 1,
+    borderColor: L(0.32),
+    overflow: 'hidden',
+  },
+  slotEditOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: BADGE_RADIUS,
+    backgroundColor: 'rgba(0,0,0,0.32)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   /** Profile home: badges only, no slot plate behind them. */
   slotProfileHome: {
     backgroundColor: 'transparent',
     borderWidth: 0,
+    overflow: 'visible',
   },
 })
 }

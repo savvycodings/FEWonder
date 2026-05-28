@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import {
   ScrollView,
   StyleSheet,
@@ -18,18 +18,28 @@ import {
   WonderSpinningCoin,
   useEquippedAvatarFrame,
 } from '../components'
+import { ProfileHeroBannerBackground } from '../components/ProfileHeroBannerBackground'
 import { AppContext, ThemeContext } from '../context'
 import { User } from '../../types'
 import { getDailyRewardStatus, getProfileHero } from '../utils'
 import { fetchMyOrders } from '../ordersApi'
 import { ProfileHeroBadgeStrip } from '../profileHeroBadgeStrip'
 import {
+  PROFILE_HERO_BADGE_GAP,
+  countEquippedProfileHeroBadges,
+  profileHeroBadgeSlotSize,
+} from '../profileHeroBadgeLayout'
+import {
   PROFILE_HERO_BANNER_H,
   PROFILE_HERO_PROFILE_AVATAR,
   PROFILE_HERO_PROFILE_NAME_ROW_MARGIN_TOP,
   profileHeroProfileOverlapMarginTop,
 } from '../profileHeroLayout'
-import { loadProfileHeroPreferences, type ProfileHeroPreferences } from '../profileHeroPreferences'
+import {
+  loadProfileHeroPreferences,
+  saveProfileHeroPreferences,
+  type ProfileHeroPreferences,
+} from '../profileHeroPreferences'
 import { brandAccentRgba } from '../brandAccent'
 
 const ACCENT_ON_BADGE_TEXT = '#ffffff'
@@ -67,6 +77,24 @@ export function Profile({
   const [heroPrefs, setHeroPrefs] = useState<ProfileHeroPreferences | null>(null)
   const { frameId: avatarFrameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
   const avatarInitial = (user.fullName?.trim() || user.email?.split('@')[0] || '?').charAt(0).toUpperCase()
+  const displayName = user.fullName?.trim() || user.email?.split('@')[0] || 'Member'
+  const heroBadgeSlots = heroPrefs?.badgeSlots ?? [null, null, null]
+  const equippedBadgeCount = countEquippedProfileHeroBadges(heroBadgeSlots)
+  const [nameBadgesClusterWidth, setNameBadgesClusterWidth] = useState(0)
+  const [nameNaturalWidth, setNameNaturalWidth] = useState(0)
+  const profileBadgeSlotSize = useMemo(
+    () =>
+      profileHeroBadgeSlotSize({
+        clusterWidth: nameBadgesClusterWidth,
+        nameNaturalWidth,
+        badgeCount: equippedBadgeCount,
+      }),
+    [nameBadgesClusterWidth, nameNaturalWidth, equippedBadgeCount],
+  )
+
+  useEffect(() => {
+    setNameNaturalWidth(0)
+  }, [displayName])
 
   const loadWalletBalance = useCallback(async () => {
     if (!sessionToken) return
@@ -94,12 +122,15 @@ export function Profile({
   const refreshHeroPrefs = useCallback(async () => {
     try {
       const remote = await getProfileHero(sessionToken)
-      setHeroPrefs({
+      const merged = {
         bannerUri: remote.bannerUrl,
         badgeSlots: remote.badgeSlots,
-      })
+      }
+      setHeroPrefs(merged)
+      await saveProfileHeroPreferences(merged)
     } catch {
-      loadProfileHeroPreferences().then(setHeroPrefs)
+      const local = await loadProfileHeroPreferences()
+      setHeroPrefs(local)
     }
   }, [sessionToken])
 
@@ -141,13 +172,10 @@ export function Profile({
     >
       <View style={styles.profileHeroCard}>
         <View style={[styles.profileHeroBanner, { height: PROFILE_HERO_BANNER_H }]}>
-          {heroPrefs?.bannerUri ? (
-            <Image
-              source={{ uri: heroPrefs.bannerUri }}
-              style={StyleSheet.absoluteFillObject}
-              resizeMode="cover"
-            />
-          ) : null}
+          <ProfileHeroBannerBackground
+            bannerUri={heroPrefs?.bannerUri}
+            defaultBackgroundColor={theme.brandAccent}
+          />
         </View>
 
         <View
@@ -189,17 +217,37 @@ export function Profile({
               </View>
             </View>
             <View style={styles.profileHeroNameWalletRow}>
-              <View style={styles.profileHeroNameBadgesCluster}>
+              <View
+                style={styles.profileHeroNameBadgesCluster}
+                onLayout={(event) => {
+                  const w = event.nativeEvent.layout.width
+                  if (w > 0) setNameBadgesClusterWidth(w)
+                }}
+              >
+                <Text
+                  style={styles.profileHeroNameMeasure}
+                  numberOfLines={1}
+                  onTextLayout={(event) => {
+                    const w = event.nativeEvent.lines[0]?.width ?? 0
+                    if (w > 0) setNameNaturalWidth(w)
+                  }}
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                >
+                  {displayName}
+                </Text>
                 <View style={styles.profileHeroNameBand}>
-                  <Text style={styles.profileHeroName} numberOfLines={2}>
-                    {user.fullName}
+                  <Text style={styles.profileHeroName} numberOfLines={1} ellipsizeMode="tail">
+                    {displayName}
                   </Text>
                 </View>
                 <View style={styles.profileHeroBadgesWrap}>
                   <ProfileHeroBadgeStrip
-                    slots={heroPrefs?.badgeSlots ?? [null, null, null]}
+                    slots={heroBadgeSlots}
                     mode="home"
                     variant="inline"
+                    slotSize={profileBadgeSlotSize}
+                    badgeGap={PROFILE_HERO_BADGE_GAP}
                   />
                 </View>
               </View>
@@ -425,7 +473,6 @@ const getStyles = (theme: any) => {
     alignItems: 'center',
     flexShrink: 1,
     minWidth: 0,
-    flexWrap: 'wrap',
     gap: 10,
   },
   profileHeroNameWalletRowSpacer: {
@@ -460,8 +507,18 @@ const getStyles = (theme: any) => {
     alignItems: 'center',
     marginLeft: 8,
   },
+  profileHeroNameMeasure: {
+    position: 'absolute',
+    opacity: 0,
+    left: 0,
+    top: 0,
+    fontFamily: 'Montserrat_700Bold',
+    fontSize: 22,
+    lineHeight: 28,
+    maxWidth: 10000,
+  },
   profileHeroNameBand: {
-    flexGrow: 0,
+    flexGrow: 1,
     flexShrink: 1,
     minWidth: 0,
     justifyContent: 'center',
@@ -496,7 +553,7 @@ const getStyles = (theme: any) => {
     textAlign: 'center',
   },
   profileHeroName: {
-    color: '#ffffff',
+    color: textPrimary,
     fontFamily: 'Montserrat_700Bold',
     fontSize: 22,
     lineHeight: 28,

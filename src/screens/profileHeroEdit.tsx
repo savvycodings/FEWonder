@@ -3,7 +3,14 @@ import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useFocusEffect } from '@react-navigation/native'
 import * as ImagePicker from 'expo-image-picker'
-import { AvatarFrameWrapper, avatarPhotoDiscDiameterPoints, useEquippedAvatarFrame } from '../components'
+import {
+  AvatarFrameWrapper,
+  avatarPhotoDiscDiameterPoints,
+  useEquippedAvatarFrame,
+  WonderSpinningCoin,
+} from '../components'
+import { ProfileHeroBannerBackground } from '../components/ProfileHeroBannerBackground'
+import { ProfileHeroBannerPickerModal } from '../components/ProfileHeroBannerPickerModal'
 import { ThemeContext } from '../context'
 import { User } from '../../types'
 import { ProfileHeroBadgeStrip } from '../profileHeroBadgeStrip'
@@ -13,17 +20,23 @@ import {
   type ProfileHeroBadgeSlots,
   type ProfileHeroPreferences,
 } from '../profileHeroPreferences'
-import { getProfileHero, updateProfileHero, uploadProfileBanner, uploadProfilePicture } from '../utils'
+import {
+  getDailyRewardStatus,
+  getProfileHero,
+  updateProfileHero,
+  uploadProfileBanner,
+  uploadProfilePicture,
+} from '../utils'
 import { brandAccentRgba } from '../brandAccent'
+import { PROFILE_HERO_BADGE_GAP } from '../profileHeroBadgeLayout'
 import {
   PROFILE_HERO_BANNER_H,
   PROFILE_HERO_PROFILE_AVATAR,
   PROFILE_HERO_PROFILE_NAME_ROW_MARGIN_TOP,
   profileHeroProfileOverlapMarginTop,
 } from '../profileHeroLayout'
+import { encodeProfileBannerColor } from '../profileHeroBanner'
 
-const PROFILE_FILL = '#000000'
-const PROFILE_HERO_TILE_BG = '#262626'
 const PROFILE_PHOTO_OVERLAY_SIZE = avatarPhotoDiscDiameterPoints(PROFILE_HERO_PROFILE_AVATAR, 'default')
 
 export function ProfileHeroEdit({
@@ -44,7 +57,20 @@ export function ProfileHeroEdit({
   const [busy, setBusy] = useState(false)
   const [photoBusy, setPhotoBusy] = useState(false)
   const [photoError, setPhotoError] = useState('')
-  const avatarInitial = (user.fullName?.trim() || user.email?.split('@')[0] || '?').charAt(0).toUpperCase()
+  const [walletBalance, setWalletBalance] = useState(0)
+  const [showBannerPicker, setShowBannerPicker] = useState(false)
+  const displayName = user.fullName?.trim() || user.email?.split('@')[0] || 'Member'
+  const avatarInitial = displayName.charAt(0).toUpperCase()
+
+  const loadWalletBalance = useCallback(async () => {
+    if (!sessionToken) return
+    try {
+      const rewards = await getDailyRewardStatus(sessionToken)
+      setWalletBalance(rewards.walletBalance || 0)
+    } catch (error) {
+      console.log('Failed to load wallet balance', error)
+    }
+  }, [sessionToken])
 
   const reload = useCallback(async () => {
     const local = await loadProfileHeroPreferences()
@@ -69,10 +95,30 @@ export function ProfileHeroEdit({
     useCallback(() => {
       reload()
       refreshAvatarFrame()
-    }, [reload, refreshAvatarFrame])
+      loadWalletBalance()
+    }, [reload, refreshAvatarFrame, loadWalletBalance])
   )
 
-  async function pickBanner() {
+  async function applyBannerUri(uri: string | null) {
+    try {
+      setBusy(true)
+      const base = prefs ?? (await loadProfileHeroPreferences())
+      let savedUri = uri
+      if (sessionToken) {
+        const remote = await updateProfileHero(sessionToken, { bannerUrl: uri })
+        savedUri = remote.bannerUrl
+      }
+      const next: ProfileHeroPreferences = { ...base, bannerUri: savedUri }
+      await saveProfileHeroPreferences(next)
+      setPrefs(next)
+    } catch (error) {
+      console.log('Failed to save profile banner', error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function pickBannerFromGallery() {
     if (busy) return
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!permission.granted) return
@@ -86,25 +132,29 @@ export function ProfileHeroEdit({
     if (picked.canceled || !picked.assets?.[0]?.base64) return
     try {
       setBusy(true)
-      const uri = sessionToken
-        ? (
-            await uploadProfileBanner({
-              sessionToken,
-              imageBase64: String(picked.assets[0].base64 || ''),
-              mimeType: picked.assets[0].mimeType || 'image/jpeg',
-            })
-          ).bannerUrl
-        : null
+      let uri: string | null = null
+      if (sessionToken) {
+        const uploaded = await uploadProfileBanner({
+          sessionToken,
+          imageBase64: String(picked.assets[0].base64 || ''),
+          mimeType: picked.assets[0].mimeType || 'image/jpeg',
+        })
+        uri = uploaded.bannerUrl
+      }
       const base = prefs ?? (await loadProfileHeroPreferences())
       const next: ProfileHeroPreferences = { ...base, bannerUri: uri }
-      if (sessionToken) {
-        await updateProfileHero(sessionToken, { bannerUrl: uri })
-      }
       await saveProfileHeroPreferences(next)
       setPrefs(next)
+    } catch (error) {
+      console.log('Failed to upload profile banner', error)
     } finally {
       setBusy(false)
     }
+  }
+
+  async function applyBannerColor(hex: string) {
+    setShowBannerPicker(false)
+    await applyBannerUri(encodeProfileBannerColor(hex))
   }
 
   async function pickProfilePhoto() {
@@ -137,13 +187,8 @@ export function ProfileHeroEdit({
   }
 
   async function clearBanner() {
-    const base = prefs ?? (await loadProfileHeroPreferences())
-    const next: ProfileHeroPreferences = { ...base, bannerUri: null }
-    if (sessionToken) {
-      await updateProfileHero(sessionToken, { bannerUrl: null })
-    }
-    await saveProfileHeroPreferences(next)
-    setPrefs(next)
+    setShowBannerPicker(false)
+    await applyBannerUri(null)
   }
 
   async function persistBadgeSlots(slots: ProfileHeroBadgeSlots) {
@@ -176,28 +221,28 @@ export function ProfileHeroEdit({
   }
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+    <ScrollView
+      style={styles.page}
+      contentContainerStyle={styles.scroll}
+      contentInsetAdjustmentBehavior="never"
+      automaticallyAdjustContentInsets={false}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
       <View style={styles.heroCard}>
-        <Pressable onPress={pickBanner} disabled={busy} style={styles.bannerPress}>
+        <Pressable
+          onPress={() => setShowBannerPicker(true)}
+          disabled={busy}
+          style={styles.bannerPress}
+        >
           <View style={[styles.banner, { height: PROFILE_HERO_BANNER_H }]}>
-            {prefs.bannerUri ? (
-              <Image source={{ uri: prefs.bannerUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
-            ) : null}
+            <ProfileHeroBannerBackground
+              bannerUri={prefs.bannerUri}
+              defaultBackgroundColor={theme.brandAccent}
+            />
             <View style={[StyleSheet.absoluteFillObject, styles.bannerTint]} />
-            <View style={styles.bannerHintWrap} pointerEvents="none">
-              <View style={styles.bannerHintRow}>
-                <FeatherIcon name="image" size={16} color="#ffffff" />
-                <Text style={styles.bannerHint}>Tap to change banner</Text>
-              </View>
-            </View>
           </View>
         </Pressable>
-
-        {prefs.bannerUri ? (
-          <Pressable style={styles.resetBanner} onPress={clearBanner}>
-            <Text style={styles.resetBannerText}>Use default banner</Text>
-          </Pressable>
-        ) : null}
 
         <View
           style={[
@@ -205,9 +250,9 @@ export function ProfileHeroEdit({
             { marginTop: profileHeroProfileOverlapMarginTop() },
           ]}
         >
-          <View style={styles.heroInnerRow}>
-            <View style={styles.heroAvatarRow}>
-              <View style={styles.heroAvatarCol}>
+          <View style={styles.heroRow}>
+            <View style={styles.heroAvatarOnlyRow}>
+              <View style={styles.heroAvatarColumn}>
                 <Pressable
                   onPress={() => void pickProfilePhoto()}
                   disabled={photoBusy || !sessionToken}
@@ -254,20 +299,31 @@ export function ProfileHeroEdit({
                 </Pressable>
               </View>
             </View>
-            <View style={styles.heroNameBadgesRow}>
-              <View style={styles.heroNameBand}>
-                <Text style={styles.displayName} numberOfLines={2}>
-                  {user.fullName}
-                </Text>
+
+            <View style={styles.heroNameWalletRow}>
+              <View style={styles.heroNameBadgesCluster}>
+                <View style={styles.heroNameBand}>
+                  <Text style={styles.displayName} numberOfLines={1} ellipsizeMode="tail">
+                    {displayName}
+                  </Text>
+                </View>
+                <View style={styles.heroBadgesWrap}>
+                  <ProfileHeroBadgeStrip
+                    slots={prefs.badgeSlots}
+                    mode="edit"
+                    variant="inline"
+                    badgeGap={PROFILE_HERO_BADGE_GAP}
+                    onEmptySlot={() => goWonderStore()}
+                    onFilledSlot={(i) => void removeBadgeAt(i)}
+                  />
+                </View>
               </View>
-              <View style={styles.heroBadgesWrap}>
-                <ProfileHeroBadgeStrip
-                  slots={prefs.badgeSlots}
-                  mode="edit"
-                  variant="inline"
-                  onEmptySlot={() => goWonderStore()}
-                  onFilledSlot={(i) => void removeBadgeAt(i)}
-                />
+              <View style={styles.heroNameWalletRowSpacer} />
+              <View style={styles.heroWalletCluster} pointerEvents="box-none">
+                <Pressable style={styles.heroWallet} onPress={goWonderStore}>
+                  <WonderSpinningCoin size={18} fallbackColor={theme.brandAccent} />
+                  <Text style={styles.heroWalletValue}>{walletBalance}</Text>
+                </Pressable>
               </View>
             </View>
           </View>
@@ -277,25 +333,38 @@ export function ProfileHeroEdit({
       {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
 
       <Pressable
-        style={styles.secondaryRow}
+        style={styles.actionRow}
         onPress={() => navigation.navigate('ProfileAccountSettings')}
       >
         <FeatherIcon name="user" size={18} color={theme.brandAccent} />
-        <Text style={styles.secondaryRowText}>Edit name & email</Text>
-        <FeatherIcon name="chevron-right" size={18} color="rgba(255,255,255,0.45)" />
+        <Text style={styles.actionRowText}>Edit name & email</Text>
+        <FeatherIcon name="chevron-right" size={18} color={theme.mutedForegroundColor} />
       </Pressable>
 
-      <Pressable style={styles.storeRow} onPress={goWonderStore}>
+      <Pressable style={styles.actionRow} onPress={goWonderStore}>
         <FeatherIcon name="shopping-bag" size={18} color={theme.brandAccent} />
-        <Text style={styles.storeRowText}>Wonder Store</Text>
-        <FeatherIcon name="chevron-right" size={18} color="rgba(255,255,255,0.45)" />
+        <Text style={styles.actionRowText}>Wonder Store</Text>
+        <FeatherIcon name="chevron-right" size={18} color={theme.mutedForegroundColor} />
       </Pressable>
+
+      <ProfileHeroBannerPickerModal
+        visible={showBannerPicker}
+        selectedBannerUri={prefs.bannerUri}
+        onClose={() => setShowBannerPicker(false)}
+        onPickGallery={() => void pickBannerFromGallery()}
+        onPickColor={(hex) => void applyBannerColor(hex)}
+        onUseDefault={() => void clearBanner()}
+      />
     </ScrollView>
   )
 }
 
 function getStyles(theme: any) {
   const L = (a: number) => brandAccentRgba(theme, a)
+  const cardFill = theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
+  const textPrimary = theme.textColor
+  const textMuted = theme.mutedForegroundColor
+
   return StyleSheet.create({
     page: {
       flex: 1,
@@ -303,7 +372,7 @@ function getStyles(theme: any) {
     },
     scroll: {
       paddingHorizontal: 16,
-      paddingTop: 12,
+      paddingTop: 0,
       paddingBottom: 120,
     },
     centered: {
@@ -313,10 +382,10 @@ function getStyles(theme: any) {
     heroCard: {
       borderRadius: 14,
       overflow: 'visible',
-      backgroundColor: PROFILE_HERO_TILE_BG,
+      backgroundColor: cardFill,
       marginBottom: 14,
       borderWidth: 1,
-      borderColor: 'rgba(255,255,255,0.08)',
+      borderColor: theme.tileBorderColor || theme.borderColor,
     },
     bannerPress: {},
     banner: {
@@ -330,47 +399,23 @@ function getStyles(theme: any) {
     bannerTint: {
       backgroundColor: 'rgba(0,0,0,0.12)',
     },
-    bannerHintWrap: {
-      position: 'absolute',
-      right: 12,
-      bottom: 10,
-    },
-    bannerHintRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-    },
-    bannerHint: {
-      color: '#ffffff',
-      fontFamily: 'Geist-SemiBold',
-      fontSize: 13,
-    },
-    resetBanner: {
-      paddingVertical: 8,
-      alignItems: 'center',
-    },
-    resetBannerText: {
-      color: theme.brandAccent,
-      fontFamily: theme.mediumFont,
-      fontSize: 12,
-    },
     heroOverlapBlock: {
       width: '100%',
       paddingHorizontal: 10,
       paddingTop: 0,
       paddingBottom: 10,
     },
-    heroInnerRow: {
+    heroRow: {
       flexDirection: 'column',
       alignItems: 'stretch',
       width: '100%',
     },
-    heroAvatarRow: {
+    heroAvatarOnlyRow: {
       flexDirection: 'row',
       alignItems: 'flex-start',
       alignSelf: 'stretch',
     },
-    heroAvatarCol: {
+    heroAvatarColumn: {
       width: PROFILE_HERO_PROFILE_AVATAR,
       alignItems: 'center',
       marginLeft: 8,
@@ -415,19 +460,51 @@ function getStyles(theme: any) {
       lineHeight: Math.round(PROFILE_HERO_PROFILE_AVATAR * 0.42),
       textAlign: 'center',
     },
-    heroNameBadgesRow: {
+    heroNameWalletRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      alignSelf: 'flex-start',
-      flexWrap: 'wrap',
-      maxWidth: '100%',
+      alignSelf: 'stretch',
       marginLeft: 8,
       marginTop: PROFILE_HERO_PROFILE_NAME_ROW_MARGIN_TOP,
       paddingRight: 8,
+    },
+    heroNameBadgesCluster: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexShrink: 1,
+      minWidth: 0,
       gap: 10,
     },
+    heroNameWalletRowSpacer: {
+      flex: 1,
+      minWidth: 8,
+    },
+    heroWalletCluster: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
+      flexShrink: 0,
+      gap: 10,
+    },
+    heroWallet: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      borderRadius: 999,
+      backgroundColor: L(0.08),
+      borderWidth: 1,
+      borderColor: L(0.35),
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+    },
+    heroWalletValue: {
+      color: theme.brandAccent,
+      fontFamily: 'Geist-SemiBold',
+      fontSize: 15,
+    },
     heroNameBand: {
-      flexGrow: 0,
+      flexGrow: 1,
       flexShrink: 1,
       minWidth: 0,
       justifyContent: 'center',
@@ -438,45 +515,28 @@ function getStyles(theme: any) {
       justifyContent: 'center',
     },
     displayName: {
-      color: '#ffffff',
+      color: textPrimary,
       fontFamily: 'Montserrat_700Bold',
       fontSize: 22,
       lineHeight: 28,
       textAlign: 'left',
       alignSelf: 'flex-start',
     },
-    secondaryRow: {
+    actionRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
       paddingVertical: 14,
       paddingHorizontal: 14,
       borderRadius: 14,
-      backgroundColor: theme.tileBackgroundColor || 'rgba(255,255,255,0.06)',
+      backgroundColor: cardFill,
       borderWidth: 1,
-      borderColor: L(0.22),
+      borderColor: theme.tileBorderColor || theme.borderColor,
       marginBottom: 10,
     },
-    secondaryRowText: {
+    actionRowText: {
       flex: 1,
-      color: '#ffffff',
-      fontFamily: 'Geist-SemiBold',
-      fontSize: 14,
-    },
-    storeRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
-      paddingVertical: 14,
-      paddingHorizontal: 14,
-      borderRadius: 14,
-      backgroundColor: theme.tileBackgroundColor || 'rgba(255,255,255,0.06)',
-      borderWidth: 1,
-      borderColor: L(0.22),
-    },
-    storeRowText: {
-      flex: 1,
-      color: '#ffffff',
+      color: textPrimary,
       fontFamily: 'Geist-SemiBold',
       fontSize: 14,
     },

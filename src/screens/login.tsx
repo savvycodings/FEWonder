@@ -6,6 +6,13 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemeContext } from '../context'
 import { loginUser, registerUser } from '../utils'
+import {
+  isProfileDisplayNameValid,
+  normalizeProfileDisplayName,
+  clampProfileDisplayNameInput,
+  PROFILE_DISPLAY_NAME_LENGTH_HINT,
+  MAX_PROFILE_DISPLAY_NAME_LENGTH,
+} from '../profileDisplayName'
 import { AuthPayload } from '../../types'
 import { brandAccentRgba } from '../brandAccent'
 
@@ -52,12 +59,16 @@ export function Login({ onAuthSuccess }: Props) {
     if (loading) return
     setError('')
 
-    const normalizedFullName = fullName.trim()
+    const normalizedFullName = normalizeProfileDisplayName(fullName)
     const normalizedEmail = email.trim().toLowerCase()
     const normalizedPhone = phone.trim()
 
-    if (mode === 'signup' && !normalizedFullName) {
-      setError('Please enter your full name.')
+    if (mode === 'signup' && !isProfileDisplayNameValid(fullName)) {
+      setError(
+        normalizedFullName.length === 0
+          ? 'Please enter your full name.'
+          : `Name must be ${MAX_PROFILE_DISPLAY_NAME_LENGTH} characters or fewer.`,
+      )
       return
     }
 
@@ -156,14 +167,18 @@ export function Login({ onAuthSuccess }: Props) {
           </View>
 
           {mode === 'signup' ? (
-            <TextInput
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="Full name"
-              placeholderTextColor={theme.mutedForegroundColor}
-              style={styles.input}
-              autoCapitalize="words"
-            />
+            <>
+              <TextInput
+                value={fullName}
+                onChangeText={(text) => setFullName(clampProfileDisplayNameInput(text))}
+                placeholder="Full name"
+                placeholderTextColor={theme.mutedForegroundColor}
+                style={styles.input}
+                autoCapitalize="words"
+                maxLength={MAX_PROFILE_DISPLAY_NAME_LENGTH}
+              />
+              <Text style={styles.fieldHint}>{PROFILE_DISPLAY_NAME_LENGTH_HINT}</Text>
+            </>
           ) : null}
           {mode === 'signup' ? (
             <TextInput
@@ -402,6 +417,13 @@ const getStyles = (theme: any) => {
       color: theme.textColor,
       fontFamily: theme.mediumFont,
       fontSize: 15,
+    },
+    fieldHint: {
+      marginTop: -6,
+      marginBottom: 10,
+      color: theme.mutedForegroundColor,
+      fontFamily: theme.regularFont,
+      fontSize: 12,
     },
     forgotPasswordLink: {
       alignSelf: 'flex-end',

@@ -31,6 +31,7 @@ import {
 import { shouldShowDailyRewardsHomeAlert } from '../wonderBadgeNotifications'
 import { ShopifyProduct } from '../../types'
 import { formatMoney } from '../money'
+import { shopifyProductToSavePayload } from '../productSave'
 
 /** Home row chips — each maps to DB-backed lists (see load effect). */
 const HOME_CHIPS = ['New', 'Pops', 'Plushie', 'Brands'] as const
@@ -112,16 +113,6 @@ function getImageSource(item: ShopifyProduct): ImageSourcePropType | undefined {
   return (item as { image?: ImageSourcePropType }).image
 }
 
-function productToSavePayload(item: ShopifyProduct) {
-  const priceLabel =
-    item.price?.amount != null && item.price.amount !== '' ? formatMoney(item.price) : undefined
-  return {
-    title: item.title,
-    price: priceLabel,
-    image: getImageSource(item),
-    category: item.productType || undefined,
-  }
-}
 
 const GRID_GAP = 12
 
@@ -396,7 +387,7 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
                   item.price?.amount != null && item.price.amount !== ''
                     ? formatMoney(item.price)
                     : 'View details'
-                const savePayload = productToSavePayload(item)
+                const savePayload = shopifyProductToSavePayload(item)
                 return (
                   <WonderportAccentCard
                     key={item.id || item.handle || item.title}
