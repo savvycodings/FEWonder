@@ -54,6 +54,27 @@ async function copyLabelValue(label: string, value: string) {
   Alert.alert('Copied', `${label} copied to clipboard.`)
 }
 
+function collectProductGalleryUrls(product: ShopifyProduct): string[] {
+  const seen = new Set<string>()
+  const urls: string[] = []
+  const add = (raw: unknown) => {
+    const url =
+      typeof raw === 'string'
+        ? raw.trim()
+        : raw && typeof raw === 'object' && 'url' in raw
+          ? String((raw as { url?: string }).url || '').trim()
+          : ''
+    if (!url || seen.has(url)) return
+    seen.add(url)
+    urls.push(url)
+  }
+  if (Array.isArray(product.images)) {
+    for (const img of product.images) add(img)
+  }
+  add(product.featuredImageUrl)
+  return urls
+}
+
 function plainTextFromHtml(html: string | null | undefined, maxLen: number) {
   if (!html?.trim()) return ''
   const t = html
@@ -84,6 +105,7 @@ export function Product({ route, navigation }: any) {
   const loadedHeroUrisRef = useRef<Set<string>>(new Set())
   const heroImageUriRef = useRef('')
   const [heroImageLoading, setHeroImageLoading] = useState(false)
+  const [selectedGalleryUri, setSelectedGalleryUri] = useState('')
   const [packaging, setPackaging] = useState<'single' | 'set'>('single')
   const [quantity, setQuantity] = useState(1)
   const liked = savedItems.some((item) => isSameSavedProduct(item, product))
@@ -120,15 +142,24 @@ export function Product({ route, navigation }: any) {
     return product?.packagePrices?.single ?? product?.price ?? null
   }, [packaging, product, showPackaging])
 
-  const heroImageUri = useMemo(
-    () => String(product?.featuredImageUrl || '').trim(),
-    [product?.featuredImageUrl],
-  )
+  const galleryUrls = useMemo(() => collectProductGalleryUrls(product), [product])
+
+  useEffect(() => {
+    setSelectedGalleryUri(galleryUrls[0] || '')
+  }, [product.id, product.handle, galleryUrls.join('|')])
+
+  const heroImageUri = useMemo(() => {
+    const selected = String(selectedGalleryUri || '').trim()
+    if (selected) return selected
+    return galleryUrls[0] || ''
+  }, [selectedGalleryUri, galleryUrls])
 
   const heroImageSource = useMemo(() => {
     if (heroImageUri) return { uri: heroImageUri }
     return product?.image
   }, [heroImageUri, product?.image])
+
+  const showGalleryThumbs = galleryUrls.length > 1
 
   const heroShowsLoadingOverlay = Boolean(heroImageUri && heroImageLoading)
 
@@ -475,6 +506,32 @@ export function Product({ route, navigation }: any) {
             </View>
           ) : null}
         </View>
+
+        {showGalleryThumbs ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.galleryThumbsRow}
+            contentContainerStyle={styles.galleryThumbsContent}
+          >
+            {galleryUrls.map((uri) => {
+              const active = uri === heroImageUri
+              return (
+                <TouchableOpacity
+                  key={uri}
+                  activeOpacity={0.85}
+                  onPress={() => setSelectedGalleryUri(uri)}
+                  style={[styles.galleryThumbWrap, active && styles.galleryThumbWrapActive]}
+                  accessibilityRole="button"
+                  accessibilityLabel="View product image"
+                  accessibilityState={{ selected: active }}
+                >
+                  <Image source={{ uri }} style={styles.galleryThumbImage} resizeMode="cover" />
+                </TouchableOpacity>
+              )
+            })}
+          </ScrollView>
+        ) : null}
 
         <WonderportAccentCard
           borderWidth={2}
@@ -945,6 +1002,30 @@ const getStyles = (theme: any) => {
     backgroundColor: modalOverlay,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  galleryThumbsRow: {
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  galleryThumbsContent: {
+    gap: 8,
+    paddingRight: 4,
+  },
+  galleryThumbWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'transparent',
+    backgroundColor: surfaceBg,
+  },
+  galleryThumbWrapActive: {
+    borderColor: theme.brandAccent,
+  },
+  galleryThumbImage: {
+    width: '100%',
+    height: '100%',
   },
   heroPlaceholder: {
     ...StyleSheet.absoluteFillObject,
