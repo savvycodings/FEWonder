@@ -23,8 +23,16 @@ type Props = {
   onNavigationStateChange?: (navState: { url?: string }) => void
 }
 
+/** One top inset for full-screen modals — avoid SafeAreaView + statusBar both padding on Android. */
+function modalTopPadding(insetTop: number): number {
+  if (Platform.OS === 'android') {
+    return Math.max(insetTop, StatusBar.currentHeight ?? 24)
+  }
+  return insetTop
+}
+
 /**
- * Full-screen Yoco hosted checkout. Modals ignore parent SafeAreaView — apply insets explicitly.
+ * Full-screen Yoco hosted checkout. Modals sit outside the app SafeAreaView tree — pad once here.
  */
 export function YocoPaymentModal({
   visible,
@@ -48,17 +56,18 @@ export function YocoPaymentModal({
       animationType="slide"
       presentationStyle="fullScreen"
       statusBarTranslucent={Platform.OS === 'android'}
+      onRequestClose={syncing ? undefined : onClose}
     >
       <View
         style={[
           styles.root,
           {
-            paddingTop: insets.top,
+            paddingTop: modalTopPadding(insets.top),
             paddingBottom: insets.bottom,
           },
         ]}
       >
-        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <StatusBar barStyle="light-content" backgroundColor="#000000" translucent={Platform.OS === 'android'} />
         <View style={[styles.headerBar, { borderBottomColor: accentColor }]}>
           <Text style={styles.title}>Card payment</Text>
           <TouchableOpacity onPress={onClose} hitSlop={12} accessibilityRole="button" disabled={syncing}>
@@ -76,9 +85,6 @@ export function YocoPaymentModal({
               onError={() => setWebViewLoading(false)}
               style={styles.web}
               {...YOCO_WEBVIEW_PROPS}
-              {...(Platform.OS === 'ios'
-                ? { contentInsetAdjustmentBehavior: 'automatic' as const }
-                : {})}
             />
             {showLoading ? (
               <View style={styles.loadingOverlay} pointerEvents="none">
@@ -105,7 +111,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderBottomWidth: 2,
     backgroundColor: '#000000',
   },

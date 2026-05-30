@@ -48,7 +48,9 @@ export function AdminUserOrders({ navigation, route }: any) {
             <Text style={styles.name}>{user.name || '—'}</Text>
             <Text style={styles.email}>{user.email}</Text>
             <Text style={styles.sub} numberOfLines={2}>
-              {user.shippingAddress1 || 'No address on file'}
+              {user.pudoLockerName
+                ? `Pudo: ${user.pudoLockerName}${user.pudoLockerAddress ? ` · ${user.pudoLockerAddress}` : ''}`
+                : user.shippingAddress1 || 'No address on file'}
             </Text>
           </View>
         </View>
@@ -72,6 +74,9 @@ export function AdminUserOrders({ navigation, route }: any) {
             <Text style={styles.row}>
               {item.paymentMethod} · {item.status}
             </Text>
+            {item.pudoLockerTierLabel ? (
+              <Text style={styles.pudoHint}>Pudo · {item.pudoLockerTierLabel}</Text>
+            ) : null}
             <Text style={styles.amount}>{centsLabel(item.totalCents, item.currencyCode)}</Text>
             <Text style={styles.date}>{String(item.createdAt).slice(0, 19)}</Text>
           </Pressable>
@@ -122,6 +127,7 @@ const getStyles = (theme: any) =>
     },
     ref: { fontFamily: theme.boldFont, color: theme.textColor, fontSize: 15 },
     row: { fontFamily: theme.mediumFont, color: theme.mutedForegroundColor, fontSize: 12, marginTop: 4 },
+    pudoHint: { fontFamily: theme.mediumFont, fontSize: 11, color: theme.brandAccent, marginTop: 2 },
     amount: { fontFamily: theme.semiBoldFont, color: theme.textColor, marginTop: 4 },
     date: { fontFamily: theme.mediumFont, fontSize: 11, color: theme.mutedForegroundColor, marginTop: 4 },
   })

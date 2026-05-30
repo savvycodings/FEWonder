@@ -90,6 +90,13 @@ export function AdminOrdersHub({ navigation }: any) {
               <Text style={styles.amount}>{centsLabel(item.totalCents, item.currencyCode)}</Text>
             </View>
             <Text style={styles.status}>{item.status}</Text>
+            {item.pudoLockerTierLabel || item.pudoLockerName ? (
+              <Text style={styles.pudoHint} numberOfLines={1}>
+                Pudo
+                {item.pudoLockerTierLabel ? ` · ${item.pudoLockerTierLabel}` : ''}
+                {item.pudoLockerName ? ` · ${item.pudoLockerName}` : ''}
+              </Text>
+            ) : null}
             <Text style={styles.email} numberOfLines={1}>
               {item.userEmail || '—'}
             </Text>
@@ -170,6 +177,7 @@ const getStyles = (theme: any) =>
     ref: { fontFamily: theme.boldFont, fontSize: 15, color: theme.textColor },
     amount: { fontFamily: theme.semiBoldFont, fontSize: 15, color: theme.textColor },
     status: { fontFamily: theme.mediumFont, fontSize: 12, color: theme.mutedForegroundColor, marginBottom: 4 },
+    pudoHint: { fontFamily: theme.mediumFont, fontSize: 11, color: theme.brandAccent, marginBottom: 4 },
     email: { fontFamily: theme.mediumFont, fontSize: 13, color: theme.textColor, marginBottom: 8 },
     userLink: { fontFamily: theme.boldFont, fontSize: 13, color: theme.brandAccent },
   })

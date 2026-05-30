@@ -8,8 +8,6 @@ import { formatMoney, parseMoneyToNumber } from '../money'
 import { brandAccentRgba } from '../brandAccent'
 import { getCartStockError, maxPurchasableQuantity } from '../productStock'
 
-const SHIPPING_SINGLE_ZAR = 150
-const SHIPPING_WHOLE_SET_ZAR = 200
 const CART_CURRENCY = 'ZAR'
 
 const ACCENT_ON_BADGE_TEXT = '#ffffff'
@@ -33,16 +31,8 @@ export function Cart({ navigation }: any) {
     }, 0)
   }, [cartItems])
 
-  const shippingTotal = useMemo(() => {
-    return cartItems.reduce((sum, item) => {
-      const isWholeSet =
-        item?.selectedPackaging === 'set' || String(item?.title || '').includes('(Whole set)')
-      const rate = isWholeSet ? SHIPPING_WHOLE_SET_ZAR : SHIPPING_SINGLE_ZAR
-      return sum + rate * (item.quantity || 1)
-    }, 0)
-  }, [cartItems])
-
-  const orderTotal = subtotal + shippingTotal
+  const shippingNote = 'Pudo locker (from R60 at checkout)'
+  const orderTotal = subtotal
   const cartStockErr = useMemo(() => getCartStockError(cartItems), [cartItems])
 
   const formatZar = (amount: number) =>
@@ -200,7 +190,7 @@ export function Cart({ navigation }: any) {
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Shipping</Text>
-            <Text style={styles.summaryValue}>{formatZar(shippingTotal)}</Text>
+            <Text style={styles.summaryValue}>{shippingNote}</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>

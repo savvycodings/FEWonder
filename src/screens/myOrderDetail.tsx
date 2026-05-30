@@ -61,7 +61,7 @@ export function MyOrderDetail({ route }: any) {
               {typeof o.subtotalCents === 'number' ? (
                 <Text style={styles.subMeta}>
                   Incl. shipping {(o.shippingCents / 100).toFixed(2)} {o.currencyCode} (
-                  {o.deliveryMethod === 'pudo' ? 'Pudo' : 'Courier'})
+                  Pudo{o.pudoLockerTier ? ` · ${String(o.pudoLockerTier).toUpperCase()}` : ''})
                 </Text>
               ) : null}
             </View>

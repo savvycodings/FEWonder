@@ -100,11 +100,10 @@ export async function fetchEftInstructions() {
 export type CreateOrderPayload = {
   paymentMethod: 'yoco' | 'eft'
   items: { productId: string; quantity: number; packaging?: 'single' | 'set' }[]
-  deliveryMethod: 'pudo' | 'standard'
+  deliveryMethod?: 'pudo'
+  pudoLockerTier: 'xs' | 's' | 'm' | 'l' | 'xl'
   contactPhone: string
   contactEmail?: string
-  shippingAddressFull?: string
-  shippingAddressLine2?: string
   pudoLockerName?: string
   pudoLockerAddress?: string
   customerEftAccountName?: string

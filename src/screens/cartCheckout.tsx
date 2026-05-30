@@ -22,7 +22,7 @@ import * as Clipboard from 'expo-clipboard'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ThemeContext, AppContext } from '../context'
-import { PaymentMethodModal, WonderportAccentCard, YocoPaymentModal } from '../components'
+import { PaymentMethodModal, PudoCheckoutSection, WonderportAccentCard, YocoPaymentModal } from '../components'
 import {
   createOrder,
   fetchEftInstructions,
@@ -35,6 +35,13 @@ import { fetchSessionUser } from '../utils'
 import { SHOW_YOCO_CHECKOUT } from '../../constants'
 import { brandAccentRgba } from '../brandAccent'
 import { getCartStockError } from '../productStock'
+import {
+  cartHasWholeSet,
+  defaultTierForCart,
+  linePackagingFromItem,
+  tierAllowedForCart,
+  type PudoLockerTier,
+} from '../pudoLockerSizes'
 
 const ACCENT_ON_BADGE_TEXT = '#ffffff'
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
@@ -46,9 +53,7 @@ async function copyLabelValue(label: string, value: string) {
 }
 
 function linePackaging(item: any): 'single' | 'set' {
-  if (item?.selectedPackaging === 'set') return 'set'
-  if (String(item?.title || '').includes('(Whole set)')) return 'set'
-  return 'single'
+  return linePackagingFromItem(item)
 }
 
 function cartItemsAllZar(items: any[]): boolean {
@@ -72,11 +77,12 @@ export function CartCheckout({ navigation }: { navigation: any }) {
   const [paymentMethodModalOpen, setPaymentMethodModalOpen] = useState(false)
   const [checkoutBusy, setCheckoutBusy] = useState(false)
   const [checkoutFormError, setCheckoutFormError] = useState('')
-  const [deliveryMethod, setDeliveryMethod] = useState<'standard' | 'pudo'>('standard')
+  const hasWholeSet = useMemo(() => cartHasWholeSet(cartItems), [cartItems])
+  const [pudoLockerTier, setPudoLockerTier] = useState<PudoLockerTier>(() =>
+    defaultTierForCart(cartHasWholeSet(cartItems)),
+  )
   const [contactPhone, setContactPhone] = useState('')
   const [contactEmail, setContactEmail] = useState('')
-  const [shippingFull, setShippingFull] = useState('')
-  const [shippingLine2, setShippingLine2] = useState('')
   const [pudoName, setPudoName] = useState('')
   const [pudoAddr, setPudoAddr] = useState('')
   const [customerEftName, setCustomerEftName] = useState('')
@@ -119,8 +125,6 @@ export function CartCheckout({ navigation }: { navigation: any }) {
         if (cancelled) return
         setContactEmail((e) => e || u.email || '')
         setContactPhone((p) => p || u.phone || '')
-        setShippingFull((s) => s || u.shippingAddress || '')
-        setShippingLine2((s) => s || u.shippingAddressLine2 || '')
         setPudoName((n) => n || u.pudoLockerName || '')
         setPudoAddr((a) => a || u.pudoLockerAddress || '')
         setCustomerEftName((n) => n || u.eftBankAccountName || '')
@@ -134,6 +138,12 @@ export function CartCheckout({ navigation }: { navigation: any }) {
       cancelled = true
     }
   }, [])
+
+  useEffect(() => {
+    if (hasWholeSet && !tierAllowedForCart(pudoLockerTier, true)) {
+      setPudoLockerTier('l')
+    }
+  }, [hasWholeSet, pudoLockerTier])
 
   useEffect(() => {
     if (!cartItems?.length) return
@@ -157,11 +167,11 @@ export function CartCheckout({ navigation }: { navigation: any }) {
     if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
       return 'Enter a valid email address for order updates.'
     }
-    if (deliveryMethod === 'standard' && !shippingFull.trim()) {
-      return 'Enter your full shipping address for courier delivery.'
+    if (!pudoName.trim() || !pudoAddr.trim()) {
+      return 'Enter your Pudo locker name and address.'
     }
-    if (deliveryMethod === 'pudo' && (!pudoName.trim() || !pudoAddr.trim())) {
-      return 'Enter Pudo locker name and address.'
+    if (hasWholeSet && !tierAllowedForCart(pudoLockerTier, true)) {
+      return 'Whole set orders require a Large or Extra large locker.'
     }
     return null
   }
@@ -190,13 +200,12 @@ export function CartCheckout({ navigation }: { navigation: any }) {
       const created = await createOrder({
         paymentMethod: method,
         items,
-        deliveryMethod,
+        deliveryMethod: 'pudo',
+        pudoLockerTier,
         contactPhone: contactPhone.trim(),
         contactEmail: contactEmail.trim().toLowerCase(),
-        shippingAddressFull: deliveryMethod === 'standard' ? shippingFull.trim() : undefined,
-        shippingAddressLine2: deliveryMethod === 'standard' ? shippingLine2.trim() : undefined,
-        pudoLockerName: deliveryMethod === 'pudo' ? pudoName.trim() : undefined,
-        pudoLockerAddress: deliveryMethod === 'pudo' ? pudoAddr.trim() : undefined,
+        pudoLockerName: pudoName.trim(),
+        pudoLockerAddress: pudoAddr.trim(),
         customerEftAccountName: customerEftName.trim() || undefined,
         customerEftBankName: customerEftBank.trim() || undefined,
         customerEftAccountNumber: customerEftAcct.trim() || undefined,
@@ -356,40 +365,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
             <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
               <View style={styles.deliveryBackdropInner}>
                   <View style={styles.deliveryCard}>
-            <Text style={styles.deliveryTitle}>Delivery & contact</Text>
-            <View style={styles.deliveryChipsRow}>
-              <TouchableOpacity
-                style={[styles.deliveryChip, deliveryMethod === 'standard' ? styles.deliveryChipActive : null]}
-                onPress={() => {
-                  Keyboard.dismiss()
-                  setDeliveryMethod('standard')
-                }}
-                activeOpacity={0.9}
-              >
-                <Text
-                  style={[
-                    styles.deliveryChipText,
-                    deliveryMethod === 'standard' ? styles.deliveryChipTextActive : null,
-                  ]}
-                >
-                  Courier
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.deliveryChip, deliveryMethod === 'pudo' ? styles.deliveryChipActive : null]}
-                onPress={() => {
-                  Keyboard.dismiss()
-                  setDeliveryMethod('pudo')
-                }}
-                activeOpacity={0.9}
-              >
-                <Text
-                  style={[styles.deliveryChipText, deliveryMethod === 'pudo' ? styles.deliveryChipTextActive : null]}
-                >
-                  Pudo (R70)
-                </Text>
-              </TouchableOpacity>
-            </View>
+            <Text style={styles.deliveryTitle}>Pudo delivery & contact</Text>
             <ScrollView
               keyboardShouldPersistTaps="never"
               keyboardDismissMode="on-drag"
@@ -415,47 +391,16 @@ export function CartCheckout({ navigation }: { navigation: any }) {
                 style={styles.deliveryInput}
                 keyboardType="phone-pad"
               />
-              {deliveryMethod === 'standard' ? (
-                <>
-                  <Text style={styles.deliveryFieldLabel}>Full shipping address</Text>
-                  <TextInput
-                    value={shippingFull}
-                    onChangeText={setShippingFull}
-                    placeholder="Street, building, unit"
-                    placeholderTextColor={theme.mutedForegroundColor}
-                    style={[styles.deliveryInput, styles.deliveryInputMultiline]}
-                    multiline
-                  />
-                  <Text style={styles.deliveryFieldLabel}>Suburb, city, postal (optional)</Text>
-                  <TextInput
-                    value={shippingLine2}
-                    onChangeText={setShippingLine2}
-                    placeholder="Line 2"
-                    placeholderTextColor={theme.mutedForegroundColor}
-                    style={styles.deliveryInput}
-                  />
-                </>
-              ) : (
-                <>
-                  <Text style={styles.deliveryFieldLabel}>Pudo locker name / code</Text>
-                  <TextInput
-                    value={pudoName}
-                    onChangeText={setPudoName}
-                    placeholder="Locker name"
-                    placeholderTextColor={theme.mutedForegroundColor}
-                    style={styles.deliveryInput}
-                  />
-                  <Text style={styles.deliveryFieldLabel}>Pudo locker address</Text>
-                  <TextInput
-                    value={pudoAddr}
-                    onChangeText={setPudoAddr}
-                    placeholder="Mall / location"
-                    placeholderTextColor={theme.mutedForegroundColor}
-                    style={[styles.deliveryInput, styles.deliveryInputMultiline]}
-                    multiline
-                  />
-                </>
-              )}
+              <PudoCheckoutSection
+                theme={theme}
+                pudoLockerTier={pudoLockerTier}
+                onPudoLockerTierChange={setPudoLockerTier}
+                pudoName={pudoName}
+                onPudoNameChange={setPudoName}
+                pudoAddr={pudoAddr}
+                onPudoAddrChange={setPudoAddr}
+                hasWholeSet={hasWholeSet}
+              />
               <Text style={[styles.deliveryFieldLabel, styles.deliveryBankHeading]}>
                 Your bank (optional)
               </Text>

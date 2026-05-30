@@ -16,6 +16,7 @@ import * as Clipboard from 'expo-clipboard'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { ThemeContext } from '../context'
 import { acceptAdminEftPayment, adminBookCourier, fetchAdminOrderDetail } from '../ordersApi'
+import { lockerTierDisplay, packagingLabel } from '../pudoLockerSizes'
 
 function centsLabel(cents: number, code: string) {
   return `${(cents / 100).toFixed(2)} ${code}`
@@ -219,8 +220,16 @@ export function AdminOrderDetail({ route }: any) {
           ) : null}
           <Text style={styles.label}>Delivery</Text>
           <Text style={styles.body}>
-            {o.deliveryMethod === 'pudo' ? 'Pudo locker' : 'Standard courier'}
+            Pudo locker
+            {o.pudoLockerTierLabel || o.pudoLockerTier
+              ? ` · ${o.pudoLockerTierLabel || lockerTierDisplay(o.pudoLockerTier)}`
+              : ''}
           </Text>
+          {o.shippingCents != null ? (
+            <Text style={styles.bodyMuted}>
+              Customer-selected shipping: {centsLabel(o.shippingCents, o.currencyCode)}
+            </Text>
+          ) : null}
           <Text style={styles.label}>Delivery address</Text>
           <Text style={styles.body}>{o.shippingSnapshot?.name}</Text>
           <View style={styles.copyRow}>
@@ -439,16 +448,32 @@ export function AdminOrderDetail({ route }: any) {
                 <Text style={styles.bodyMuted}>Last sync: {String(o.tcgLastSyncAt).slice(0, 19)}</Text>
               ) : null}
               {o.tcgLastError ? <Text style={styles.warn}>{String(o.tcgLastError)}</Text> : null}
+              {o.tcgBookedLockerTier || o.tcgParcelLengthCm ? (
+                <Text style={styles.bodyMuted}>
+                  Booked parcel
+                  {o.tcgBookedLockerTierLabel || o.tcgBookedLockerTier
+                    ? ` · ${o.tcgBookedLockerTierLabel || lockerTierDisplay(o.tcgBookedLockerTier)}`
+                    : ''}
+                  {o.tcgParcelLengthCm
+                    ? ` · ${o.tcgParcelLengthCm}×${o.tcgParcelWidthCm}×${o.tcgParcelHeightCm} cm`
+                    : ''}
+                  {o.tcgParcelWeightKg ? ` · ${o.tcgParcelWeightKg} kg` : ''}
+                </Text>
+              ) : null}
             </>
           ) : null}
           <Text style={styles.label}>Line items</Text>
           {lines.map((l) => (
             <View key={l.id} style={styles.lineCard}>
               <Text style={styles.lineTitle}>{l.title}</Text>
+              {l.packaging ? (
+                <Text style={styles.linePackaging}>{packagingLabel(l.packaging)}</Text>
+              ) : null}
               <Text style={styles.lineSub}>
                 ×{l.quantity} @ {centsLabel(l.unitPriceCents, l.currencyCode)} →{' '}
                 {centsLabel(l.lineTotalCents, l.currencyCode)}
               </Text>
+              {l.productId ? <Text style={styles.lineMeta}>Product id: {l.productId}</Text> : null}
             </View>
           ))}
           <Text style={styles.label}>Payment events</Text>
@@ -581,7 +606,14 @@ const getStyles = (theme: any) =>
       marginBottom: 8,
     },
     lineTitle: { fontFamily: theme.semiBoldFont, color: theme.textColor },
+    linePackaging: {
+      fontFamily: theme.mediumFont,
+      fontSize: 12,
+      color: theme.brandAccent,
+      marginTop: 4,
+    },
     lineSub: { fontFamily: theme.mediumFont, fontSize: 12, color: theme.mutedForegroundColor, marginTop: 4 },
+    lineMeta: { fontFamily: theme.regularFont, fontSize: 11, color: theme.mutedForegroundColor, marginTop: 2 },
     eventCard: {
       padding: 10,
       borderRadius: 8,
