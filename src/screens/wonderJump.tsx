@@ -4537,10 +4537,20 @@ export function WonderJump({
   const panelAccent = BIOME_UI_ACCENTS[activePanelBiome]
   const primaryButtonTone = useMemo(
     () => ({
-      backgroundColor: WONDER_JUMP_MENU_ACCENT,
-      borderColor: WONDER_JUMP_MENU_ACCENT,
+      backgroundColor: wonderportTheme?.tintColor ?? '#E32828',
+      borderColor: wonderportTheme?.tintColor ?? '#E32828',
     }),
-    [],
+    [wonderportTheme?.tintColor],
+  )
+  const hubPanelGlow = useMemo(
+    () => ({
+      borderColor: brandAccentRgba(wonderportTheme, 0.35),
+      shadowColor: wonderportTheme?.tintColor ?? '#E32828',
+      shadowOpacity: 0.12,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 4 },
+    }),
+    [wonderportTheme],
   )
   const panelAccentGlow = useMemo(
     () => ({
@@ -5098,7 +5108,7 @@ export function WonderJump({
               <Text style={styles.leaderboardHeroTileText}>Leaderboard</Text>
             </Pressable>
             <Pressable onPress={resumeGame} style={[styles.primaryButton, primaryButtonTone]}>
-              <Text style={[styles.primaryButtonText, styles.gameOverMontserratButton]}>Resume</Text>
+              <Text style={[styles.primaryButtonText, styles.primaryButtonTextOnAccent, styles.gameOverMontserratButton]}>Resume</Text>
             </Pressable>
             <Pressable onPress={restartRun} style={styles.secondaryButton}>
               <Text style={styles.secondaryButtonText}>Restart Run</Text>
@@ -5117,8 +5127,8 @@ export function WonderJump({
           <Animated.View
             style={[
               styles.panel,
-              styles.panelDarkGlass,
-              panelAccentGlow,
+              styles.panelLightHub,
+              hubPanelGlow,
               panelEntryStyle,
               styles.gameOverPanelDock,
               hubPanelCardStyle,
@@ -5144,9 +5154,12 @@ export function WonderJump({
                 style={[
                   styles.gameOverDeadBiome,
                   {
-                    color: GAME_OVER_DEAD_BIOME_TEXT[
-                      gameState.mode === 'gameOver' ? gameOverBiomeAccent : MENU_START_BIOME
-                    ],
+                    color:
+                      gameState.mode === 'menu'
+                        ? wonderportTheme?.tintColor ?? '#E32828'
+                        : GAME_OVER_DEAD_BIOME_TEXT[
+                            gameState.mode === 'gameOver' ? gameOverBiomeAccent : MENU_START_BIOME
+                          ],
                   },
                 ]}
               >
@@ -5246,6 +5259,7 @@ export function WonderJump({
                 <Text
                   style={[
                     styles.primaryButtonText,
+                    styles.primaryButtonTextOnAccent,
                     styles.gameOverMontserratButton,
                     gameState.mode === 'menu' ? styles.hubPanelPrimaryRunText : null,
                   ]}
@@ -5262,9 +5276,6 @@ export function WonderJump({
                 ) : null}
                 <Pressable onPress={() => setSettingsOpen(true)} style={styles.gameOverFooterButton}>
                   <Text style={styles.gameOverFooterButtonText}>Settings</Text>
-                </Pressable>
-                <Pressable onPress={goHome} style={styles.gameOverFooterButton}>
-                  <Text style={styles.gameOverFooterButtonText}>Home</Text>
                 </Pressable>
               </View>
             </View>
@@ -5512,6 +5523,8 @@ function createWonderJumpStyles(theme: any) {
   const lbBorder = theme?.tileBorderColor ?? theme?.borderColor ?? 'rgba(0, 0, 0, 0.1)'
   const lbOverlay = theme?.modalOverlayColor ?? 'rgba(0, 0, 0, 0.38)'
   const lbAccent = theme?.tintColor ?? theme?.brandAccent ?? '#E32828'
+  const hubBg = lbCard
+  const hubSurface = lbList
   return StyleSheet.create({
   screen: {
     flex: 1,
@@ -5569,17 +5582,22 @@ function createWonderJumpStyles(theme: any) {
     position: 'absolute',
     left: 12,
     top: 12,
-    backgroundColor: 'rgba(0, 0, 0, 0.88)',
+    backgroundColor: hubBg,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: S(0.4),
+    borderColor: lbBorder,
     paddingHorizontal: 10,
     paddingVertical: 8,
     gap: 2,
     maxWidth: '72%',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
   },
   hudScoreLabel: {
-    color: APP_UI_TEXT_MUTED,
+    color: lbText,
     fontSize: 10,
     fontFamily: CLASSIC_GAME_FONT_BOLD,
     letterSpacing: 1.1,
@@ -5587,14 +5605,14 @@ function createWonderJumpStyles(theme: any) {
     lineHeight: 12,
   },
   hudScoreValue: {
-    color: A,
+    color: lbAccent,
     fontSize: 22,
     fontFamily: CLASSIC_GAME_FONT_BOLD,
     letterSpacing: 0.15,
     lineHeight: 24,
   },
   hudBiomeHint: {
-    color: APP_UI_TEXT_DIM,
+    color: lbMuted,
     fontSize: 11,
     fontFamily: CLASSIC_GAME_FONT,
     letterSpacing: 0.45,
@@ -5641,6 +5659,15 @@ function createWonderJumpStyles(theme: any) {
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
   },
+  panelLightHub: {
+    backgroundColor: hubBg,
+    borderColor: S(0.35),
+    shadowColor: '#000000',
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
   gameOverPanelDock: {
     gap: 0,
     paddingVertical: 14,
@@ -5663,12 +5690,12 @@ function createWonderJumpStyles(theme: any) {
   gameOverTitle: {
     width: '100%',
     textAlign: 'center',
-    color: APP_UI_TEXT,
+    color: lbText,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 24,
     letterSpacing: 0.2,
   },
-  /** Leaderboard CTA — hollow black fill, white outline + label (menu + game over). */
+  /** Leaderboard CTA — white fill, red outline + label (menu + game over). */
   leaderboardHeroTile: {
     alignSelf: 'stretch',
     width: '100%',
@@ -5677,20 +5704,20 @@ function createWonderJumpStyles(theme: any) {
     paddingHorizontal: 12,
     borderRadius: 11,
     borderWidth: 1.5,
-    borderColor: W,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    borderColor: lbAccent,
+    backgroundColor: hubBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   leaderboardHeroTileText: {
-    color: W,
+    color: lbAccent,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 12,
     letterSpacing: 1.15,
     textTransform: 'uppercase',
   },
   gameOverDeathBlurb: {
-    color: APP_UI_TEXT_MUTED,
+    color: lbMuted,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 13,
     lineHeight: 18,
@@ -5712,20 +5739,20 @@ function createWonderJumpStyles(theme: any) {
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderWidth: 1,
-    borderColor: M(0.4),
+    backgroundColor: hubSurface,
+    borderWidth: 1.5,
+    borderColor: lbAccent,
     alignItems: 'center',
   },
   gameOverHeroLabel: {
-    color: APP_UI_TEXT_MUTED,
+    color: lbText,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 15,
     letterSpacing: 0.35,
     marginBottom: 4,
   },
   gameOverHeroValue: {
-    color: W,
+    color: lbAccent,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 52,
     letterSpacing: -1,
@@ -5747,7 +5774,7 @@ function createWonderJumpStyles(theme: any) {
   gameOverSubLabel: {
     flex: 1,
     flexShrink: 1,
-    color: APP_UI_TEXT_MUTED,
+    color: lbMuted,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 15,
     letterSpacing: 0.15,
@@ -5755,7 +5782,7 @@ function createWonderJumpStyles(theme: any) {
   },
   gameOverSubValue: {
     minWidth: 52,
-    color: APP_UI_TEXT,
+    color: lbText,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 15,
     letterSpacing: 0.15,
@@ -5765,7 +5792,7 @@ function createWonderJumpStyles(theme: any) {
   },
   gameOverNewBest: {
     marginTop: 6,
-    color: W,
+    color: lbAccent,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 15,
     letterSpacing: 0.25,
@@ -5786,24 +5813,24 @@ function createWonderJumpStyles(theme: any) {
     gap: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: M(0.22),
+    borderTopColor: lbBorder,
   },
   wjChestHubCard: {
     width: '100%',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: M(0.4),
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    borderColor: lbBorder,
+    backgroundColor: hubSurface,
     paddingTop: 8,
     paddingBottom: 9,
     paddingHorizontal: 11,
     marginBottom: 6,
     overflow: 'visible',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.22,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   wjChestHubRow: {
     flexDirection: 'row',
@@ -5815,21 +5842,21 @@ function createWonderJumpStyles(theme: any) {
     minHeight: 90,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: M(0.28),
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderColor: lbBorder,
+    backgroundColor: hubBg,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 4,
     overflow: 'visible',
   },
   wjChestDockTileReady: {
-    borderColor: W,
-    backgroundColor: M(0.12),
-    shadowColor: W,
+    borderColor: lbAccent,
+    backgroundColor: S(0.08),
+    shadowColor: lbAccent,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 8,
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    elevation: 6,
   },
   /** Empty dock: “open slot” — black panel + white shell. */
   wjChestDockTileEmptySlot: {
@@ -6063,21 +6090,21 @@ function createWonderJumpStyles(theme: any) {
     gap: 4,
   },
   wjChestHubTitle: {
-    color: APP_UI_TEXT,
+    color: lbText,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 14,
     letterSpacing: 0.12,
     marginBottom: 2,
   },
   wjChestHubMeta: {
-    color: APP_UI_TEXT_DIM,
+    color: lbMuted,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 11,
     letterSpacing: 0.08,
     lineHeight: 14,
   },
   wjChestHubCountdown: {
-    color: '#ffffff',
+    color: lbAccent,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 11,
     letterSpacing: 0.2,
@@ -6160,7 +6187,7 @@ function createWonderJumpStyles(theme: any) {
     minWidth: 140,
   },
   wjChestModalButtonText: {
-    color: '#000000',
+    color: '#ffffff',
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 14,
     letterSpacing: 0.28,
@@ -6184,16 +6211,16 @@ function createWonderJumpStyles(theme: any) {
   },
   gameOverFooterButton: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: hubSurface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: M(0.4),
+    borderColor: lbBorder,
     paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   gameOverFooterButtonText: {
-    color: APP_UI_TEXT,
+    color: lbText,
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 12,
     letterSpacing: 0.2,
@@ -6330,6 +6357,9 @@ function createWonderJumpStyles(theme: any) {
     fontFamily: WONDER_JUMP_UI_BOLD,
     fontSize: 14,
     letterSpacing: 0.28,
+  },
+  primaryButtonTextOnAccent: {
+    color: '#ffffff',
   },
   secondaryButton: {
     width: '100%',
