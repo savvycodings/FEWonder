@@ -436,7 +436,7 @@ const DISPLAY_SCORE_EARLY_RAW_MAX = 1200
 const DISPLAY_SCORE_EARLY_DIVISOR = 58
 /** Displayed score at tropical threshold — keeps numbers human-sized, not millions. */
 const DISPLAY_SCORE_AT_TROPICAL = 300
-/** HUD score where space biome begins to appear (matches displayRunScore past tropical). */
+/** HUD score where space scenery begins (legacy display band; gameplay uses `DISPLAY_SCORE_AT_SPACE_GAMEPLAY`). */
 const SPACE_BIOME_DISPLAY_START = 700
 /** Raw height where space scenery starts (display 700 after tropical display 300). */
 const SPACE_BIOME_HEIGHT_START =
@@ -445,6 +445,9 @@ const SPACE_BIOME_HEIGHT_START =
 const SPACE_BIOME_BLEND_RANGE = 820
 /** When space blend ≥ this, space gameplay tuning applies (sparser than tropical). */
 const SPACE_GAMEPLAY_BLEND = 0.5
+/** Raw height when deep-space gameplay begins (blend crosses `SPACE_GAMEPLAY_BLEND`). */
+const SPACE_BIOME_HEIGHT_AT_GAMEPLAY =
+  SPACE_BIOME_HEIGHT_START + SPACE_BIOME_BLEND_RANGE * SPACE_GAMEPLAY_BLEND
 
 /** UI score from internal height metric (same input as biome blends). */
 function displayRunScore(rawHeightScore: number): number {
@@ -459,6 +462,9 @@ function displayRunScore(rawHeightScore: number): number {
   const past = rawHeightScore - TROPICAL_BIOME_HEIGHT_START
   return DISPLAY_SCORE_AT_TROPICAL + Math.floor(past / 45)
 }
+
+/** Display score when `getSpaceBlend` reaches gameplay threshold — used for leaderboard + saves. */
+const DISPLAY_SCORE_AT_SPACE_GAMEPLAY = displayRunScore(SPACE_BIOME_HEIGHT_AT_GAMEPLAY)
 
 function deathBlurb(cause: WonderJumpDeathCause | null): string {
   switch (cause) {
@@ -703,13 +709,11 @@ function biomeHudLabel(
   spaceBlend: number,
   startBiome: WonderJumpStartBiome,
 ): string {
-  if (startBiome === 'space') return 'Deep Space'
-  if (startBiome === 'tropical') return spaceBlend > 0.88 ? 'Deep Space' : 'Sunset Keys'
+  if (startBiome === 'space' || spaceBlend >= SPACE_GAMEPLAY_BLEND) return 'Deep Space'
+  if (startBiome === 'tropical') return 'Sunset Keys'
   if (startBiome === 'mushroom') {
-    if (spaceBlend > 0.88) return 'Deep Space'
     return tropicalBlend > 0.88 ? 'Sunset Keys' : 'Mushroom Isles'
   }
-  if (spaceBlend > 0.9) return 'Deep Space'
   if (tropicalBlend > 0.9) return 'Sunset Keys'
   if (mushroomBlend > 0.9) return 'Mushroom Isles'
   if (spaceBlend > 0.08) return 'Space frontier'
@@ -735,20 +739,16 @@ function biomesUnlockedForHeight(heightScore: number, startBiome: WonderJumpStar
 }
 
 function accentBiomeAtHeight(heightScore: number, startBiome: WonderJumpStartBiome): WonderJumpStartBiome {
-  return hudBiomeLabelToAccentBiome(
-    biomeHudLabel(
-      getMushroomBlend(heightScore, startBiome),
-      getTropicalBlend(heightScore, startBiome),
-      getSpaceBlend(heightScore, startBiome),
-      startBiome
-    )
-  )
+  if (getSpaceBlend(heightScore, startBiome) >= SPACE_GAMEPLAY_BLEND) return 'space'
+  if (getTropicalBlend(heightScore, startBiome) >= TROPICAL_GAMEPLAY_BLEND) return 'tropical'
+  if (getMushroomBlend(heightScore, startBiome) >= MUSHROOM_GAMEPLAY_BLEND) return 'mushroom'
+  return 'grassland'
 }
 
 /** Leaderboard high scores are display points — map them to biome accents. */
 function accentBiomeFromDisplayScore(displayScore: number): WonderJumpStartBiome {
   const s = Math.floor(displayScore)
-  if (s >= SPACE_BIOME_DISPLAY_START) return 'space'
+  if (s >= DISPLAY_SCORE_AT_SPACE_GAMEPLAY) return 'space'
   if (s >= DISPLAY_SCORE_AT_TROPICAL) return 'tropical'
   if (s >= 130) return 'mushroom'
   return 'grassland'
@@ -3459,6 +3459,7 @@ export function WonderJump({
   const menuWorldCacheRef = useRef<
     Partial<Record<WonderJumpStartBiome, ReturnType<typeof createInitialWorld>>>
   >({})
+  const spaceBiomeSyncedRef = useRef(false)
   const getMenuPreviewWorld = (biome: WonderJumpStartBiome) => {
     const cached = menuWorldCacheRef.current[biome]
     if (cached) return cached
@@ -3648,6 +3649,32 @@ export function WonderJump({
         setServerChestUnlocksAt(p.chestUnlocksAt ?? null)
       })
       .catch(() => {})
+  }, [gameState.mode, gameState.heightScore, gameState.startBiome, sessionToken, unlockedBiomes])
+
+  /** Persist deep-space biome as soon as the player enters space gameplay (leaderboard + profile). */
+  useEffect(() => {
+    if (gameState.mode !== 'playing' || !sessionToken) return
+    if (spaceBiomeSyncedRef.current) return
+    if (getSpaceBlend(gameState.heightScore, gameState.startBiome) < SPACE_GAMEPLAY_BLEND) return
+    spaceBiomeSyncedRef.current = true
+    const runScore = displayRunScore(gameState.heightScore)
+    const fromRun = biomesUnlockedForHeight(gameState.heightScore, gameState.startBiome)
+    const merged = Array.from(new Set<WonderJumpStartBiome>([...unlockedBiomes, ...fromRun]))
+    void saveWonderJumpProgress(sessionToken, {
+      highScore: runScore,
+      unlockedBiomes: merged,
+      bestBiomeReached: 'space',
+    })
+      .then((p) => {
+        setBestScore((b) => Math.max(b, p.highScore))
+        const next = p.unlockedBiomes.filter((x): x is WonderJumpStartBiome =>
+          x === 'grassland' || x === 'mushroom' || x === 'tropical' || x === 'space'
+        )
+        if (next.length > 0) setUnlockedBiomes(next)
+      })
+      .catch(() => {
+        spaceBiomeSyncedRef.current = false
+      })
   }, [gameState.mode, gameState.heightScore, gameState.startBiome, sessionToken, unlockedBiomes])
 
   /** After a run ends, re-sync chest dock from the server in case pickup finished after the progress save. */
@@ -4639,6 +4666,7 @@ export function WonderJump({
 
   const startGame = () => {
     setSettingsOpen(false)
+    spaceBiomeSyncedRef.current = false
     inputRef.current.leftPressed = false
     inputRef.current.rightPressed = false
     playingSimSnapRef.current = null
@@ -4650,6 +4678,7 @@ export function WonderJump({
   }
   const restartRun = () => {
     setSettingsOpen(false)
+    spaceBiomeSyncedRef.current = false
     inputRef.current.leftPressed = false
     inputRef.current.rightPressed = false
     playingSimSnapRef.current = null

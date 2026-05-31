@@ -1,6 +1,7 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useFocusEffect } from '@react-navigation/native'
 import {
+  ActivityIndicator,
   Image,
   ImageSourcePropType,
   Pressable,
@@ -115,6 +116,8 @@ function getImageSource(item: ShopifyProduct): ImageSourcePropType | undefined {
 
 
 const GRID_GAP = 12
+const HOME_PRODUCTS_INITIAL = 12
+const HOME_PRODUCTS_PAGE_SIZE = 20
 
 /** Price pill label on accent-filled badges. */
 const HOME_ACCENT_ON_BADGE_TEXT = '#ffffff'
@@ -136,6 +139,8 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
   const heroGreeting = useMemo(() => 'Wonderport', [])
   const [products, setProducts] = useState<ShopifyProduct[]>([])
   const [loadingProducts, setLoadingProducts] = useState(true)
+  const [loadingMoreProducts, setLoadingMoreProducts] = useState(false)
+  const [hasMoreProducts, setHasMoreProducts] = useState(false)
   const [activeCategory, setActiveCategory] = useState<string>(HOME_CHIPS[0])
   const [dbCategories, setDbCategories] = useState<DbCategorySummary[]>([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
@@ -171,33 +176,47 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
       })
   }, [dbCategories])
 
+  const fetchProductsPage = useCallback(
+    async (offset: number, pageSize: number): Promise<ShopifyProduct[]> => {
+      if (activeCategory === 'New') {
+        return listDbProducts({ first: pageSize, offset, sort: 'new' })
+      }
+      const slug = matchCollectionHandle(activeCategory, dbCategories)
+      if (slug) {
+        const rows = await listDbProducts({ first: pageSize, offset, collection: slug })
+        if (rows.length) return rows
+      }
+      const q = CHIP_SEARCH_FALLBACK[activeCategory]
+      if (q) return listDbProducts({ first: pageSize, offset, query: q })
+      return []
+    },
+    [activeCategory, dbCategories],
+  )
+
   useEffect(() => {
     if (activeCategory === 'Brands') {
       setLoadingProducts(false)
+      setLoadingMoreProducts(false)
+      setHasMoreProducts(false)
       setProducts([])
       return
     }
     let cancelled = false
     ;(async () => {
       setLoadingProducts(true)
+      setHasMoreProducts(false)
       try {
-        let fetched: ShopifyProduct[] = []
-        if (activeCategory === 'New') {
-          fetched = await listDbProducts({ first: 12, sort: 'new' })
-        } else {
-          const slug = matchCollectionHandle(activeCategory, dbCategories)
-          if (slug) {
-            fetched = await listDbProducts({ first: 12, collection: slug })
-          }
-          if (!fetched.length) {
-            const q = CHIP_SEARCH_FALLBACK[activeCategory]
-            if (q) fetched = await listDbProducts({ first: 12, query: q })
-          }
+        const fetched = await fetchProductsPage(0, HOME_PRODUCTS_INITIAL)
+        if (!cancelled) {
+          setProducts(fetched)
+          setHasMoreProducts(fetched.length >= HOME_PRODUCTS_INITIAL)
         }
-        if (!cancelled) setProducts(fetched)
       } catch (e) {
         if (!cancelled) console.log('[Home] DB products load failed', e)
-        if (!cancelled) setProducts([])
+        if (!cancelled) {
+          setProducts([])
+          setHasMoreProducts(false)
+        }
       } finally {
         if (!cancelled) setLoadingProducts(false)
       }
@@ -205,7 +224,38 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
     return () => {
       cancelled = true
     }
-  }, [activeCategory, dbCategories])
+  }, [activeCategory, dbCategories, fetchProductsPage])
+
+  const loadMoreProducts = useCallback(async () => {
+    if (loadingProducts || loadingMoreProducts || !hasMoreProducts) return
+    setLoadingMoreProducts(true)
+    try {
+      const offset = products.length
+      const fetched = await fetchProductsPage(offset, HOME_PRODUCTS_PAGE_SIZE)
+      setProducts(prev => {
+        const seen = new Set(prev.map(p => String(p.id || p.handle || '')))
+        const merged = [...prev]
+        for (const item of fetched) {
+          const key = String(item.id || item.handle || '')
+          if (!key || seen.has(key)) continue
+          seen.add(key)
+          merged.push(item)
+        }
+        return merged
+      })
+      setHasMoreProducts(fetched.length >= HOME_PRODUCTS_PAGE_SIZE)
+    } catch (e) {
+      console.log('[Home] load more products failed', e)
+    } finally {
+      setLoadingMoreProducts(false)
+    }
+  }, [
+    fetchProductsPage,
+    hasMoreProducts,
+    loadingMoreProducts,
+    loadingProducts,
+    products.length,
+  ])
 
   const refreshDailyRewardsAlert = useCallback(async () => {
     if (!sessionToken) {
@@ -443,6 +493,21 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
                 )
               })}
             </View>
+
+            {hasMoreProducts && products.length > 0 ? (
+              <TouchableOpacity
+                style={[styles.seeMoreButton, loadingMoreProducts && styles.seeMoreButtonDisabled]}
+                onPress={() => void loadMoreProducts()}
+                disabled={loadingMoreProducts || loadingProducts}
+                activeOpacity={0.88}
+              >
+                {loadingMoreProducts ? (
+                  <ActivityIndicator color={theme.brandAccent} />
+                ) : (
+                  <Text style={styles.seeMoreText}>See more</Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -570,6 +635,28 @@ const getStyles = (theme: any) =>
       flexWrap: 'wrap',
       gap: GRID_GAP,
       alignItems: 'stretch',
+    },
+    seeMoreButton: {
+      alignSelf: 'center',
+      marginTop: 20,
+      marginBottom: 8,
+      minWidth: 160,
+      minHeight: 44,
+      paddingHorizontal: 28,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: theme.brandAccent,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+    },
+    seeMoreButtonDisabled: {
+      opacity: 0.65,
+    },
+    seeMoreText: {
+      color: theme.brandAccent,
+      fontFamily: theme.boldFont,
+      fontSize: 15,
     },
     cardFrameInner: {
       flexDirection: 'column',

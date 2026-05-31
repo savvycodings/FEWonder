@@ -1222,6 +1222,7 @@ export async function listDbCategories(): Promise<DbCategorySummary[]> {
 
 export async function listDbProducts(params?: {
   first?: number
+  offset?: number
   query?: string
   /** `new` = newest `created_at`; omit/`updated` style = `updated_at` (fresh catalogue edits). */
   sort?: 'new'
@@ -1232,10 +1233,12 @@ export async function listDbProducts(params?: {
     throw new Error('API domain is not configured. Set EXPO_PUBLIC_DEV_API_URL.')
   }
   const first = params?.first ?? 20
+  const offset = Math.max(0, params?.offset ?? 0)
   const query = params?.query?.trim() ?? ''
   const collection = params?.collection?.trim() ?? ''
   const url = new URL(`${DOMAIN}/products`)
   url.searchParams.set('first', String(first))
+  if (offset > 0) url.searchParams.set('offset', String(offset))
   if (query) url.searchParams.set('q', query)
   if (params?.sort === 'new') url.searchParams.set('sort', 'new')
   if (collection) url.searchParams.set('collection', collection)
