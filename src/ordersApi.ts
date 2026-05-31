@@ -101,7 +101,7 @@ export type CreateOrderPayload = {
   paymentMethod: 'yoco' | 'eft'
   items: { productId: string; quantity: number; packaging?: 'single' | 'set' }[]
   deliveryMethod?: 'pudo'
-  pudoLockerTier: 'xs' | 's' | 'm' | 'l' | 'xl'
+  pudoLockerTier: 'locker' | 'door'
   contactPhone: string
   contactEmail?: string
   pudoLockerName?: string

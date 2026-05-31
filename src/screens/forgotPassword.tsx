@@ -18,6 +18,7 @@ import {
   verifyForgotPasswordOtp,
 } from '../utils'
 import { brandAccentRgba } from '../brandAccent'
+import { OtpCodeInput } from '../components/OtpCodeInput'
 
 type Step = 'email' | 'otp' | 'password'
 
@@ -48,11 +49,7 @@ export function ForgotPassword() {
     try {
       const res = await requestForgotPasswordOtp(normalized)
       setStep('otp')
-      setInfo(
-        res.devHint
-          ? 'Check your email for a code. In development, the code is also printed in the API server console.'
-          : 'If an account exists for this email, we sent a 6-digit code. It expires in 15 minutes.',
-      )
+      setInfo('')
     } catch (e: any) {
       setError(e?.message || 'Could not send code.')
     } finally {
@@ -70,7 +67,7 @@ export function ForgotPassword() {
     try {
       await verifyForgotPasswordOtp(email, otp)
       setStep('password')
-      setInfo('Code verified. Choose a new password.')
+      setInfo('')
     } catch (e: any) {
       setError(e?.message || 'Invalid code.')
     } finally {
@@ -135,17 +132,11 @@ export function ForgotPassword() {
           editable={step === 'email' && !busy}
         />
 
-        {step !== 'email' ? (
-          <TextInput
-            value={otp}
-            onChangeText={setOtp}
-            placeholder="6-digit code"
-            placeholderTextColor={theme.mutedForegroundColor}
-            style={styles.input}
-            keyboardType="number-pad"
-            maxLength={6}
-            editable={step === 'otp' && !busy}
-          />
+        {step === 'otp' ? (
+          <>
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            <OtpCodeInput value={otp} onChange={setOtp} disabled={busy} autoFocus />
+          </>
         ) : null}
 
         {step === 'password' ? (
@@ -169,8 +160,8 @@ export function ForgotPassword() {
           </>
         ) : null}
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        {info ? <Text style={styles.infoText}>{info}</Text> : null}
+        {step !== 'otp' && error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {step !== 'otp' && info ? <Text style={styles.infoText}>{info}</Text> : null}
 
         <TouchableOpacity
           style={[styles.primaryButton, busy && styles.primaryButtonDisabled]}

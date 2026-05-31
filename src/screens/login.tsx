@@ -5,7 +5,8 @@ import FeatherIcon from '@expo/vector-icons/Feather'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemeContext } from '../context'
-import { loginUser, registerUser } from '../utils'
+import { loginUser } from '../utils'
+import type { SignupDraft } from './signupVerifyEmail'
 import {
   isProfileDisplayNameValid,
   normalizeProfileDisplayName,
@@ -15,7 +16,6 @@ import {
 } from '../profileDisplayName'
 import { AuthPayload } from '../../types'
 import { brandAccentRgba } from '../brandAccent'
-
 const ACCENT_ON_BADGE_TEXT = '#ffffff'
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
 /** Same as Home category chips (`home.tsx` HOME_CHIP_MONTSERRAT) */
@@ -50,7 +50,6 @@ export function Login({ onAuthSuccess }: Props) {
   const [eftBankBranch, setEftBankBranch] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
   /** Space between focused field and keyboard; safe area for home indicator */
   const keyboardAwareBottomOffset = insets.bottom + 20
   const contentBottomPad = 28 + insets.bottom
@@ -87,31 +86,34 @@ export function Login({ onAuthSuccess }: Props) {
       return
     }
 
+    if (mode === 'signup') {
+      const draft: SignupDraft = {
+        fullName: normalizedFullName,
+        email: normalizedEmail,
+        password,
+        phone: normalizedPhone,
+        shippingAddress: shippingAddress.trim(),
+        shippingAddressLine2: shippingAddressLine2.trim(),
+        pudoLockerName: pudoLockerName.trim(),
+        pudoLockerAddress: pudoLockerAddress.trim(),
+        eftBankAccountName: eftBankAccountName.trim(),
+        eftBankName: eftBankName.trim(),
+        eftBankAccountNumber: eftBankAccountNumber.trim(),
+        eftBankBranch: eftBankBranch.trim(),
+      }
+      navigation.navigate('SignupVerifyEmail', { draft })
+      return
+    }
+
     try {
       setLoading(true)
-      const authPayload =
-        mode === 'signup'
-          ? await registerUser({
-              fullName: normalizedFullName,
-              email: normalizedEmail,
-              password,
-              phone: normalizedPhone,
-              shippingAddress: shippingAddress.trim(),
-              shippingAddressLine2: shippingAddressLine2.trim(),
-              pudoLockerName: pudoLockerName.trim(),
-              pudoLockerAddress: pudoLockerAddress.trim(),
-              eftBankAccountName: eftBankAccountName.trim(),
-              eftBankName: eftBankName.trim(),
-              eftBankAccountNumber: eftBankAccountNumber.trim(),
-              eftBankBranch: eftBankBranch.trim(),
-            })
-          : await loginUser({
-              email: normalizedEmail,
-              password,
-            })
+      const authPayload = await loginUser({
+        email: normalizedEmail,
+        password,
+      })
       await onAuthSuccess(authPayload)
     } catch (registerError: any) {
-      setError(registerError?.message || 'Failed to create account.')
+      setError(registerError?.message || 'Failed to sign in.')
     } finally {
       setLoading(false)
     }

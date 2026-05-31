@@ -490,6 +490,53 @@ export async function resetPasswordWithOtp(payload: {
   }
 }
 
+export async function requestAuthEmailCode(
+  email: string,
+  purpose: 'signin' | 'signup',
+): Promise<{ devHint?: string; emailWarning?: string; emailSent?: boolean }> {
+  const response = await fetch(`${DOMAIN}/auth/email-code/request`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim().toLowerCase(), purpose }),
+  })
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to send verification code')
+  }
+  return {
+    devHint: typeof data.devHint === 'string' ? data.devHint : undefined,
+    emailWarning: typeof data.emailWarning === 'string' ? data.emailWarning : undefined,
+    emailSent: data.emailSent === true,
+  }
+}
+
+export async function verifyAuthEmailCode(payload: {
+  email: string
+  otp: string
+  purpose: 'signin' | 'signup'
+}): Promise<AuthPayload | { emailVerified: true }> {
+  const response = await fetch(`${DOMAIN}/auth/email-code/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: payload.email.trim().toLowerCase(),
+      otp: payload.otp.trim(),
+      purpose: payload.purpose,
+    }),
+  })
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data?.error || 'Invalid verification code')
+  }
+  if (payload.purpose === 'signup') {
+    return { emailVerified: true }
+  }
+  return {
+    user: data.user,
+    sessionToken: data.sessionToken,
+  } as AuthPayload
+}
+
 export async function getDailyRewardStatus(sessionToken: string): Promise<DailyRewardStatus> {
   const response = await fetch(`${DOMAIN}/auth/daily-rewards`, {
     headers: dailyRewardsAuthHeaders(sessionToken),

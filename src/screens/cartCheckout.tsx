@@ -141,7 +141,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
 
   useEffect(() => {
     if (hasWholeSet && !tierAllowedForCart(pudoLockerTier, true)) {
-      setPudoLockerTier('l')
+      setPudoLockerTier('door')
     }
   }, [hasWholeSet, pudoLockerTier])
 
@@ -171,7 +171,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
       return 'Enter your Pudo locker name and address.'
     }
     if (hasWholeSet && !tierAllowedForCart(pudoLockerTier, true)) {
-      return 'Whole set orders require a Large or Extra large locker.'
+      return 'Whole set orders require door delivery (R110).'
     }
     return null
   }

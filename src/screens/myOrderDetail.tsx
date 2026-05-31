@@ -4,6 +4,7 @@ import { ThemeContext } from '../context'
 import { WonderportAccentCard } from '../components'
 import { fetchMyOrder } from '../ordersApi'
 import { brandAccentRgba } from '../brandAccent'
+import { lockerTierDisplay } from '../pudoLockerSizes'
 
 export function MyOrderDetail({ route }: any) {
   const { theme } = useContext(ThemeContext)
@@ -61,7 +62,7 @@ export function MyOrderDetail({ route }: any) {
               {typeof o.subtotalCents === 'number' ? (
                 <Text style={styles.subMeta}>
                   Incl. shipping {(o.shippingCents / 100).toFixed(2)} {o.currencyCode} (
-                  Pudo{o.pudoLockerTier ? ` · ${String(o.pudoLockerTier).toUpperCase()}` : ''})
+                  Pudo{o.pudoLockerTier ? ` · ${lockerTierDisplay(o.pudoLockerTier)}` : ''}
                 </Text>
               ) : null}
             </View>

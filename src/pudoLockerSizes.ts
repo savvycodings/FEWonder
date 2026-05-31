@@ -1,15 +1,21 @@
-export const PUDO_LOCKER_TIERS = ['xs', 's', 'm', 'l', 'xl'] as const
+export const PUDO_LOCKER_TIERS = ['locker', 'door'] as const
 export type PudoLockerTier = (typeof PUDO_LOCKER_TIERS)[number]
 
 export const PUDO_LOCKER_PRICES_ZAR: Record<PudoLockerTier, number> = {
-  xs: 60,
-  s: 70,
-  m: 120,
-  l: 160,
-  xl: 220,
+  locker: 90,
+  door: 110,
 }
 
 export const PUDO_LOCKER_LABELS: Record<PudoLockerTier, string> = {
+  locker: 'Locker',
+  door: 'Door',
+}
+
+export const PUDO_DELIVERY_HINT =
+  'Choose locker collection (R90) or door delivery (R110). Enter your Pudo point details below.'
+
+/** @deprecated Legacy size tiers — display only for older orders. */
+const LEGACY_TIER_LABELS: Record<string, string> = {
   xs: 'Extra small',
   s: 'Small',
   m: 'Medium',
@@ -17,19 +23,16 @@ export const PUDO_LOCKER_LABELS: Record<PudoLockerTier, string> = {
   xl: 'Extra large',
 }
 
-export const PUDO_SIZE_DISCLAIMER =
-  'Choose the locker size you think fits your order. If anything looks wrong or will not fit, we will contact you and adjust the sizing before dispatch.'
-
 export function tierAllowedForCart(
   tier: PudoLockerTier,
   hasWholeSet: boolean,
 ): boolean {
   if (!hasWholeSet) return true
-  return tier === 'l' || tier === 'xl'
+  return tier === 'door'
 }
 
 export function defaultTierForCart(hasWholeSet: boolean): PudoLockerTier {
-  return hasWholeSet ? 'l' : 'xs'
+  return hasWholeSet ? 'door' : 'locker'
 }
 
 export function formatTierPrice(tier: PudoLockerTier): string {
@@ -39,7 +42,11 @@ export function formatTierPrice(tier: PudoLockerTier): string {
 export function lockerTierDisplay(tier: string | null | undefined): string {
   const t = String(tier || '').trim().toLowerCase()
   if ((PUDO_LOCKER_TIERS as readonly string[]).includes(t)) {
-    return `${PUDO_LOCKER_LABELS[t as PudoLockerTier]} (${t.toUpperCase()})`
+    const key = t as PudoLockerTier
+    return `${PUDO_LOCKER_LABELS[key]} (${formatTierPrice(key)})`
+  }
+  if (LEGACY_TIER_LABELS[t]) {
+    return `${LEGACY_TIER_LABELS[t]} (${t.toUpperCase()})`
   }
   return tier ? String(tier).toUpperCase() : '—'
 }

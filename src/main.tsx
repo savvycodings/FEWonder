@@ -21,6 +21,7 @@ import {
   RedeemCode,
   Login,
   ForgotPassword,
+  SignupVerifyEmail,
   DailyRewards,
   AdminOrdersLogin,
   AdminOrdersHub,
@@ -720,6 +721,9 @@ export function Main() {
             {() => <Login onAuthSuccess={onRegisterSuccess} />}
           </Stack.Screen>
           <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
+          <Stack.Screen name="SignupVerifyEmail">
+            {() => <SignupVerifyEmail onAuthSuccess={onRegisterSuccess} />}
+          </Stack.Screen>
         </>
       ) : (
         <Stack.Screen name="Tabs">

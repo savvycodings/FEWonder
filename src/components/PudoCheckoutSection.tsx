@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import {
+  PUDO_DELIVERY_HINT,
   PUDO_LOCKER_LABELS,
   PUDO_LOCKER_TIERS,
-  PUDO_SIZE_DISCLAIMER,
   formatTierPrice,
   tierAllowedForCart,
   type PudoLockerTier,
@@ -34,13 +34,13 @@ export function PudoCheckoutSection({
 
   return (
     <>
-      <Text style={styles.sectionHeading}>Pudo locker delivery</Text>
+      <Text style={styles.sectionHeading}>Pudo delivery</Text>
       <Text style={styles.sectionHint}>
         {hasWholeSet
-          ? 'Whole set orders — choose Large or Extra large.'
-          : 'Choose the locker size that best fits your order.'}
+          ? 'Whole set orders use door delivery (R110).'
+          : PUDO_DELIVERY_HINT}
       </Text>
-      <View style={styles.sizeGrid}>
+      <View style={styles.optionRow}>
         {PUDO_LOCKER_TIERS.map((tier) => {
           const allowed = tierAllowedForCart(tier, hasWholeSet)
           const active = pudoLockerTier === tier
@@ -48,38 +48,37 @@ export function PudoCheckoutSection({
             <TouchableOpacity
               key={tier}
               style={[
-                styles.sizeChip,
-                active ? styles.sizeChipActive : null,
-                !allowed ? styles.sizeChipDisabled : null,
+                styles.optionChip,
+                active ? styles.optionChipActive : null,
+                !allowed ? styles.optionChipDisabled : null,
               ]}
               onPress={() => allowed && onPudoLockerTierChange(tier)}
               activeOpacity={allowed ? 0.85 : 1}
               disabled={!allowed}
             >
-              <Text style={[styles.sizeChipLabel, active ? styles.sizeChipLabelActive : null]}>
+              <Text style={[styles.optionChipLabel, active ? styles.optionChipLabelActive : null]}>
                 {PUDO_LOCKER_LABELS[tier]}
               </Text>
-              <Text style={[styles.sizeChipPrice, active ? styles.sizeChipLabelActive : null]}>
+              <Text style={[styles.optionChipPrice, active ? styles.optionChipLabelActive : null]}>
                 {formatTierPrice(tier)}
               </Text>
             </TouchableOpacity>
           )
         })}
       </View>
-      <Text style={styles.disclaimer}>{PUDO_SIZE_DISCLAIMER}</Text>
-      <Text style={styles.fieldLabel}>Pudo locker name / code</Text>
+      <Text style={styles.fieldLabel}>Locker name or code</Text>
       <TextInput
         value={pudoName}
         onChangeText={onPudoNameChange}
-        placeholder="Locker name"
+        placeholder="e.g. Mall locker name"
         placeholderTextColor={theme.mutedForegroundColor}
         style={styles.input}
       />
-      <Text style={styles.fieldLabel}>Pudo locker address</Text>
+      <Text style={styles.fieldLabel}>Locker address</Text>
       <TextInput
         value={pudoAddr}
         onChangeText={onPudoAddrChange}
-        placeholder="Mall / location"
+        placeholder="Mall or Pudo point"
         placeholderTextColor={theme.mutedForegroundColor}
         style={[styles.input, styles.inputMultiline]}
         multiline
@@ -106,49 +105,41 @@ function getStyles(theme: any) {
       lineHeight: 17,
       marginBottom: 10,
     },
-    sizeGrid: {
+    optionRow: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 8,
+      gap: 10,
       marginBottom: 10,
     },
-    sizeChip: {
-      width: '48%',
-      flexGrow: 1,
+    optionChip: {
+      flex: 1,
       borderRadius: 12,
-      paddingVertical: 10,
+      paddingVertical: 12,
       paddingHorizontal: 10,
       borderWidth: 1,
       borderColor: border,
       backgroundColor: surface,
+      alignItems: 'center',
     },
-    sizeChipActive: {
+    optionChipActive: {
       borderWidth: 2,
       borderColor: theme.brandAccent,
     },
-    sizeChipDisabled: {
+    optionChipDisabled: {
       opacity: 0.35,
     },
-    sizeChipLabel: {
+    optionChipLabel: {
       fontFamily: theme.semiBoldFont,
-      fontSize: 12,
+      fontSize: 14,
       color: theme.textColor,
     },
-    sizeChipLabelActive: {
+    optionChipLabelActive: {
       color: theme.brandAccent,
     },
-    sizeChipPrice: {
+    optionChipPrice: {
       fontFamily: theme.boldFont,
-      fontSize: 13,
+      fontSize: 15,
       color: theme.mutedForegroundColor,
-      marginTop: 2,
-    },
-    disclaimer: {
-      fontFamily: theme.regularFont,
-      fontSize: 11,
-      color: theme.mutedForegroundColor,
-      lineHeight: 16,
-      marginBottom: 8,
+      marginTop: 4,
     },
     fieldLabel: {
       fontFamily: theme.mediumFont,
