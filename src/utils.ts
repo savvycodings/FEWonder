@@ -235,6 +235,19 @@ export async function registerUser(payload: {
   }
 }
 
+/** Cached sign-in payload (updated when profile shipping/payment details are saved). */
+export async function readStoredAuthPayload(): Promise<AuthPayload | null> {
+  try {
+    const raw = await AsyncStorage.getItem('wonderport-auth')
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as AuthPayload
+    if (!parsed?.user?.id || !parsed?.sessionToken) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
 /** Refreshes the current user from the server (includes phone, delivery fields, etc.). */
 export async function fetchSessionUser(sessionToken: string): Promise<User> {
   if (!DOMAIN) {

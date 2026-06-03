@@ -40,7 +40,7 @@ import {
 import type { AvatarFrameId } from '../components/AvatarFrame'
 import { ThemeContext } from '../context'
 import { brandAccentRgba, normalizeBrandAccentId } from '../brandAccent'
-import { WonderBadgeImage, WonderSpinningCoin, WonderStaticCoin } from '../components'
+import { WonderBadgeImage, WonderSpinningCoin, WonderStaticCoin, WonderWalletModal } from '../components'
 import {
   isProfileBadgeSlotFreeForWonderEquip,
   loadProfileHeroPreferences,
@@ -265,6 +265,7 @@ export function DailyRewards({ navigation, route }: any) {
   const [claimingReward, setClaimingReward] = useState(false)
   const [rewardsError, setRewardsError] = useState('')
   const [showAllBadges, setShowAllBadges] = useState(false)
+  const [showWalletModal, setShowWalletModal] = useState(false)
   const [ownedThemeIds, setOwnedThemeIds] = useState<string[]>([])
   const [storeMessage, setStoreMessage] = useState('')
   const [equippedAvatarFrame, setEquippedAvatarFrame] = useState<AvatarFrameId>('none')
@@ -783,6 +784,7 @@ export function DailyRewards({ navigation, route }: any) {
   }
 
   return (
+    <>
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
       <View style={styles.heroTitleRow}>
         <Pressable
@@ -948,10 +950,15 @@ export function DailyRewards({ navigation, route }: any) {
           <Text style={[styles.mainScreenHeading, styles.wonderStoreHeading]} numberOfLines={2}>
             Wonder Store
           </Text>
-          <View style={styles.storeBalanceBadge}>
+          <Pressable
+            style={styles.storeBalanceBadge}
+            onPress={() => setShowWalletModal(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Open Wonder Wallet"
+          >
             <RewardStaticCoin size={22} color={theme.brandAccent} />
             <Text style={styles.storeBalanceBadgeValue}>{availableCoins}</Text>
-          </View>
+          </Pressable>
         </View>
 
         <Text style={styles.badgesHeading}>Badges</Text>
@@ -1218,7 +1225,14 @@ export function DailyRewards({ navigation, route }: any) {
           </Text>
         </Pressable>
       </View>
+
     </ScrollView>
+    <WonderWalletModal
+      visible={showWalletModal}
+      balance={availableCoins}
+      onClose={() => setShowWalletModal(false)}
+    />
+    </>
   )
 }
 

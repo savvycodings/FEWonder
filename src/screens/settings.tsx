@@ -1,8 +1,8 @@
-import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native'
+import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
 import { useContext } from 'react'
 import { useNavigation } from '@react-navigation/native'
-import { HeaderBackButton } from '@react-navigation/elements'
 import FeatherIcon from '@expo/vector-icons/Feather'
+import { ProfilePageHeading, ProfileStackBackBar } from '../components'
 import { ThemeContext } from '../context'
 import { User } from '../../types'
 import { brandAccentRgba } from '../brandAccent'
@@ -27,16 +27,7 @@ export function Settings({ user, sessionToken, onUserUpdated, onLogout }: Settin
 
   return (
     <View style={styles.screen}>
-      <View style={styles.headerBar}>
-        <HeaderBackButton
-          label="Profile"
-          truncatedLabel="Profile"
-          displayMode="default"
-          tintColor={theme.textColor}
-          labelStyle={styles.headerBackLabel}
-          onPress={() => navigation.goBack()}
-        />
-      </View>
+      <ProfileStackBackBar backLabel="Profile" />
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.contentContainer}
@@ -44,8 +35,7 @@ export function Settings({ user, sessionToken, onUserUpdated, onLogout }: Settin
         automaticallyAdjustContentInsets={false}
         showsVerticalScrollIndicator={false}
       >
-      <Text style={styles.pageTitle}>Settings</Text>
-      <View style={styles.accentRule} />
+      <ProfilePageHeading title="Settings" flush />
 
       <View style={styles.sectionCard}>
         <Pressable
@@ -156,32 +146,9 @@ const getStyles = (theme:any) => {
     flex: 1,
     backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
   },
-  headerBar: {
-    height: 44,
-    justifyContent: 'center',
-    paddingLeft: Platform.OS === 'ios' ? 0 : 2,
-  },
-  headerBackLabel: {
-    fontSize: 17,
-    fontFamily: theme.regularFont,
-  },
   container: {
     flex: 1,
     backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
-  },
-  pageTitle: {
-    marginTop: 0,
-    marginBottom: 8,
-    color: theme.headingColor || theme.textColor,
-    fontFamily: 'Montserrat_700Bold',
-    fontSize: 30,
-  },
-  accentRule: {
-    width: 62,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: theme.brandAccent,
-    marginBottom: 14,
   },
   contentContainer: {
     paddingHorizontal: 16,

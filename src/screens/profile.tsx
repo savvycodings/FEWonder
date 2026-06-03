@@ -7,7 +7,6 @@ import {
   Pressable,
   Image,
   ActivityIndicator,
-  Modal,
 } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useFocusEffect } from '@react-navigation/native'
@@ -16,6 +15,7 @@ import {
   AccountRowChevron,
   AvatarFrameWrapper,
   WonderSpinningCoin,
+  WonderWalletModal,
   useEquippedAvatarFrame,
 } from '../components'
 import { ProfileHeroBannerBackground } from '../components/ProfileHeroBannerBackground'
@@ -275,18 +275,33 @@ export function Profile({
       </View>
       <View style={styles.statsGroupCard}>
         <View style={styles.statsRow}>
-          <Pressable style={styles.statCard} onPress={() => navigation.navigate('ProfileMyOrders')}>
+          <Pressable
+            style={styles.statCard}
+            onPress={() => navigation.navigate('ProfileMyOrders')}
+            accessibilityRole="button"
+            accessibilityLabel="View orders"
+          >
             <Text style={styles.statValue}>{orderTotalCount}</Text>
             <Text style={styles.statLabel}>Orders</Text>
           </Pressable>
-          <View style={styles.statCard}>
+          <Pressable
+            style={styles.statCard}
+            onPress={() => navigation.navigate('ProfileCart')}
+            accessibilityRole="button"
+            accessibilityLabel="View shopping cart"
+          >
             <Text style={styles.statValue}>{cartItems.length}</Text>
             <Text style={styles.statLabel}>In Cart</Text>
-          </View>
-          <View style={styles.statCard}>
+          </Pressable>
+          <Pressable
+            style={styles.statCard}
+            onPress={() => navigation.navigate('Saved')}
+            accessibilityRole="button"
+            accessibilityLabel="View saved items"
+          >
             <Text style={styles.statValue}>{savedItems.length}</Text>
             <Text style={styles.statLabel}>Saved</Text>
-          </View>
+          </Pressable>
         </View>
       </View>
 
@@ -383,40 +398,18 @@ export function Profile({
         )}
       </View>
 
-      <Modal visible={showWalletModal} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, styles.walletModalCard]}>
-            <View style={styles.walletHelpIconWrap}>
-              <FeatherIcon name="help-circle" size={18} color={theme.mutedForegroundColor} />
-            </View>
-            <Text style={styles.walletModalTitle}>Wonder Wallet</Text>
-            <Text style={styles.walletModalSubtitle}>Your current Wonder Wallet balance.</Text>
-
-            <View style={styles.walletModalBalanceRow}>
-              <WonderSpinningCoin size={20} fallbackColor={theme.textColor} />
-              <Text style={styles.walletModalBalanceValue}>{walletBalance}</Text>
-            </View>
-
-            <View style={styles.walletModalButtons}>
-              <Pressable style={styles.walletModalButtonSecondary} onPress={() => setShowWalletModal(false)}>
-                <Text style={styles.walletModalButtonSecondaryText}>Close</Text>
-              </Pressable>
-              <Pressable
-                style={styles.walletModalButtonPrimary}
-                onPress={() => {
-                  setShowWalletModal(false)
-                  navigation.getParent()?.navigate('Home', {
-                    screen: 'DailyRewards',
-                    params: { sessionToken },
-                  })
-                }}
-              >
-                <Text style={styles.modalPrimaryButtonText}>Wonderstore</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <WonderWalletModal
+        visible={showWalletModal}
+        balance={walletBalance}
+        onClose={() => setShowWalletModal(false)}
+        onWonderStorePress={() => {
+          setShowWalletModal(false)
+          navigation.getParent()?.navigate('Home', {
+            screen: 'DailyRewards',
+            params: { sessionToken },
+          })
+        }}
+      />
 
     </ScrollView>
   )
@@ -888,89 +881,6 @@ const getStyles = (theme: any) => {
     color: theme.tintTextColor || '#ffffff',
     fontFamily: 'Geist-SemiBold',
     fontSize: 13,
-  },
-  walletModalBalanceRow: {
-    marginTop: 4,
-    marginBottom: 10,
-    alignSelf: 'center',
-    borderRadius: 12,
-    backgroundColor: theme.sheetRowBackgroundColor || theme.appBackgroundColor || '#f4f6fb',
-    borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#e7ebf3',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  walletModalBalanceValue: {
-    color: theme.textColor,
-    fontFamily: 'Geist-Bold',
-    fontSize: 22,
-  },
-  walletModalCard: {
-    position: 'relative',
-  },
-  walletHelpIconWrap: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: theme.tileBackgroundColor || '#ffffff',
-    borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#e7ebf3',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  walletModalTitle: {
-    color: theme.textColor,
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 20,
-    textAlign: 'center',
-  },
-  walletModalSubtitle: {
-    color: theme.mutedForegroundColor,
-    fontFamily: 'Geist-Regular',
-    fontSize: 12,
-    marginTop: 3,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  walletModalButtons: {
-    marginTop: 2,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  walletModalButtonSecondary: {
-    flex: 1,
-    maxWidth: 150,
-    minHeight: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: theme.tileBorderColor || '#cfd8ec',
-    backgroundColor: theme.tileBackgroundColor || '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-  },
-  walletModalButtonSecondaryText: {
-    color: theme.textColor,
-    fontFamily: 'Geist-SemiBold',
-    fontSize: 13,
-  },
-  walletModalButtonPrimary: {
-    flex: 1,
-    maxWidth: 150,
-    minHeight: 40,
-    borderRadius: 10,
-    backgroundColor: theme.tintColor || theme.tileActiveBackgroundColor,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
   },
 })
 }

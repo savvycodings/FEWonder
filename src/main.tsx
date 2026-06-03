@@ -33,6 +33,7 @@ import {
   CommunityUserProfile,
 } from './screens'
 import { CartCheckout } from './screens/cartCheckout'
+import { CheckoutDelivery } from './screens/checkoutDelivery'
 import { WonderJump } from './screens/wonderJump'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -47,21 +48,8 @@ import { FLOATING_TAB_BAR_BOTTOM, FLOATING_TAB_BAR_HEIGHT } from './tabBarLayout
 /** Tab shell padding below status bar; Search hero bleed should match. */
 const TAB_SHELL_TOP_EXTRA = 6
 
-/** Profile stack routes that use the native header (tab shell top pad would double the inset). */
-const PROFILE_STACK_HEADER_ROUTE_NAMES = new Set([
-  'ProfileHeroEdit',
-  'ProfileMyOrders',
-  'ProfileMyOrderDetail',
-  'ProfileAccountSettings',
-  'Shipping',
-  'Payment',
-  'RedeemCode',
-  'AdminOrdersLogin',
-  'AdminOrdersHub',
-  'AdminOrderDetail',
-  'AdminUserOrders',
-  'AdminReportedMessages',
-])
+/** Only Edit profile uses the native stack header (with tab-shell lift). Other profile screens use in-app “Profile” back bar. */
+const PROFILE_STACK_HEADER_ROUTE_NAMES = new Set(['ProfileHeroEdit'])
 
 /** Matches `tabBarStyle.borderRadius` — clips blur + tint to the floating pill. */
 const TAB_BAR_RADIUS = 18
@@ -235,6 +223,7 @@ function ProfileStackScreen({
     <ProfileStack.Navigator
       screenOptions={{
         headerShown: false,
+        headerShadowVisible: false,
         contentStyle: {
           backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
         },
@@ -278,32 +267,8 @@ function ProfileStackScreen({
       </ProfileStack.Screen>
       <ProfileStack.Screen name="Saved" component={Saved} />
       <ProfileStack.Screen name="ProfileCart" component={Cart} />
-      <ProfileStack.Screen
-        name="ProfileMyOrders"
-        component={MyOrders}
-        options={{
-          headerShown: true,
-          headerTitle: 'My orders',
-          headerBackTitle: '',
-          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
-          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
-          headerTintColor: theme.textColor,
-          headerShadowVisible: false,
-        }}
-      />
-      <ProfileStack.Screen
-        name="ProfileMyOrderDetail"
-        component={MyOrderDetail}
-        options={{
-          headerShown: true,
-          headerTitle: 'Order detail',
-          headerBackTitle: '',
-          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
-          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
-          headerTintColor: theme.textColor,
-          headerShadowVisible: false,
-        }}
-      />
+      <ProfileStack.Screen name="ProfileMyOrders" component={MyOrders} />
+      <ProfileStack.Screen name="ProfileMyOrderDetail" component={MyOrderDetail} />
       <ProfileStack.Screen
         name="ProfileSettings"
         options={{
@@ -319,18 +284,7 @@ function ProfileStackScreen({
           />
         )}
       </ProfileStack.Screen>
-      <ProfileStack.Screen
-        name="ProfileAccountSettings"
-        options={{
-          headerShown: true,
-          headerTitle: 'Profile',
-          headerBackTitle: '',
-          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
-          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
-          headerTintColor: theme.textColor,
-          headerShadowVisible: false,
-        }}
-      >
+      <ProfileStack.Screen name="ProfileAccountSettings">
         {() => (
           <ProfileAccountSettings
             user={user}
@@ -339,18 +293,7 @@ function ProfileStackScreen({
           />
         )}
       </ProfileStack.Screen>
-      <ProfileStack.Screen
-        name="Shipping"
-        options={{
-          headerShown: true,
-          headerTitle: 'Shipping address',
-          headerBackTitle: '',
-          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
-          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
-          headerTintColor: theme.textColor,
-          headerShadowVisible: false,
-        }}
-      >
+      <ProfileStack.Screen name="Shipping">
         {() => (
           <Shipping
             user={user}
@@ -359,18 +302,7 @@ function ProfileStackScreen({
           />
         )}
       </ProfileStack.Screen>
-      <ProfileStack.Screen
-        name="Payment"
-        options={{
-          headerShown: true,
-          headerTitle: 'Payments & billing',
-          headerBackTitle: '',
-          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
-          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
-          headerTintColor: theme.textColor,
-          headerShadowVisible: false,
-        }}
-      >
+      <ProfileStack.Screen name="Payment">
         {() => (
           <Payment
             user={user}
@@ -379,86 +311,15 @@ function ProfileStackScreen({
           />
         )}
       </ProfileStack.Screen>
-      <ProfileStack.Screen
-        name="RedeemCode"
-        options={{
-          headerShown: true,
-          headerTitle: 'Redeem code',
-          headerBackTitle: '',
-          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
-          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
-          headerTintColor: theme.textColor,
-          headerShadowVisible: false,
-        }}
-      >
+      <ProfileStack.Screen name="RedeemCode">
         {() => <RedeemCode sessionToken={sessionToken} />}
       </ProfileStack.Screen>
       <ProfileStack.Screen name="ProfileDailyRewards" component={DailyRewards} />
-      <ProfileStack.Screen
-        name="AdminOrdersLogin"
-        component={AdminOrdersLogin}
-        options={{
-          headerShown: true,
-          headerTitle: 'Admin orders',
-          headerBackTitle: '',
-          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
-          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
-          headerTintColor: theme.textColor,
-          headerShadowVisible: false,
-        }}
-      />
-      <ProfileStack.Screen
-        name="AdminOrdersHub"
-        component={AdminOrdersHub}
-        options={{
-          headerShown: true,
-          headerTitle: 'Orders',
-          headerBackTitle: '',
-          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
-          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
-          headerTintColor: theme.textColor,
-          headerShadowVisible: false,
-        }}
-      />
-      <ProfileStack.Screen
-        name="AdminOrderDetail"
-        component={AdminOrderDetail}
-        options={{
-          headerShown: true,
-          headerTitle: 'Order',
-          headerBackTitle: '',
-          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
-          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
-          headerTintColor: theme.textColor,
-          headerShadowVisible: false,
-        }}
-      />
-      <ProfileStack.Screen
-        name="AdminUserOrders"
-        component={AdminUserOrders}
-        options={{
-          headerShown: true,
-          headerTitle: 'User orders',
-          headerBackTitle: '',
-          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
-          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
-          headerTintColor: theme.textColor,
-          headerShadowVisible: false,
-        }}
-      />
-      <ProfileStack.Screen
-        name="AdminReportedMessages"
-        component={AdminReportedMessages}
-        options={{
-          headerShown: true,
-          headerTitle: 'Reported messages',
-          headerBackTitle: '',
-          headerStyle: { backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
-          headerTitleStyle: { color: theme.textColor, fontFamily: theme.boldFont },
-          headerTintColor: theme.textColor,
-          headerShadowVisible: false,
-        }}
-      />
+      <ProfileStack.Screen name="AdminOrdersLogin" component={AdminOrdersLogin} />
+      <ProfileStack.Screen name="AdminOrdersHub" component={AdminOrdersHub} />
+      <ProfileStack.Screen name="AdminOrderDetail" component={AdminOrderDetail} />
+      <ProfileStack.Screen name="AdminUserOrders" component={AdminUserOrders} />
+      <ProfileStack.Screen name="AdminReportedMessages" component={AdminReportedMessages} />
     </ProfileStack.Navigator>
     </View>
   )
@@ -738,6 +599,7 @@ export function Main() {
         </Stack.Screen>
       )}
       <Stack.Screen name="Cart" component={Cart} />
+      <Stack.Screen name="CheckoutDelivery" component={CheckoutDelivery} />
       <Stack.Screen name="CartCheckout" component={CartCheckout} />
       <Stack.Screen name="Product" component={Product} />
       <Stack.Screen

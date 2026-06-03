@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native'
 import { ThemeContext } from '../context'
+import { ProfileStackBackBar } from '../components/ProfileStackBackBar'
 import { User } from '../../types'
 import { updateProfileDetails } from '../utils'
 import { brandAccentRgba } from '../brandAccent'
@@ -143,8 +144,10 @@ export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <View style={styles.page}>
+      <ProfileStackBackBar backLabel="Settings" />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Shipping address</Text>
         <Text style={styles.subtitle}>Save your main shipping address used during checkout.</Text>
         <View style={styles.accentRule} />
@@ -224,6 +227,7 @@ export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </View>
   )
 }
 
@@ -234,6 +238,7 @@ const getStyles = (theme: any) => {
       flex: 1,
       backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
     },
+    flex: { flex: 1 },
     content: {
       paddingHorizontal: 14,
       paddingTop: 12,

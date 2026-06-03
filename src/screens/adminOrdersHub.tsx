@@ -9,6 +9,7 @@ import {
   Pressable,
 } from 'react-native'
 import { ThemeContext } from '../context'
+import { ProfileStackBackBar } from '../components/ProfileStackBackBar'
 import { fetchAdminOrders } from '../ordersApi'
 
 type Filter = 'yoco' | 'eft'
@@ -45,6 +46,7 @@ export function AdminOrdersHub({ navigation }: any) {
 
   return (
     <View style={styles.page}>
+      <ProfileStackBackBar />
       <View style={styles.manageRow}>
         <TouchableOpacity
           style={styles.manageButton}

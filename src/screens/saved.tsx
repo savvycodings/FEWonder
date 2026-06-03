@@ -3,19 +3,16 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppContext, ThemeContext } from '../context'
+import { ProfilePageHeading, ProfileStackBackBar } from '../components'
 import { formatMoney } from '../money'
 import { brandAccentRgba } from '../brandAccent'
 import { savedProductListKey } from '../productSave'
-
-/** Montserrat — registered in App.tsx `useFonts` */
-const HEADING_FONT = 'Montserrat_700Bold' as const
 
 export function Saved({ navigation }: any) {
   const { theme } = useContext(ThemeContext)
   const styles = useMemo(() => getStyles(theme), [theme])
   const { savedItems, removeSavedItem } = useContext(AppContext)
   const insets = useSafeAreaInsets()
-  const iconColor = theme.textColor || '#ffffff'
 
   function thumbSource(item: any) {
     if (item?.featuredImageUrl && String(item.featuredImageUrl).trim()) {
@@ -30,18 +27,8 @@ export function Saved({ navigation }: any) {
   if (!savedItems.length) {
     return (
       <View style={[styles.container, styles.screenFill]}>
-        <View style={styles.topNavRow}>
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
-                <FeatherIcon name="arrow-left" size={20} color={iconColor} />
-              </Pressable>
-              <Text style={styles.title} numberOfLines={1}>
-                Saved Items
-              </Text>
-            </View>
-          </View>
-        </View>
+        <ProfileStackBackBar backLabel="Profile" />
+        <ProfilePageHeading title="Saved items" />
         <View style={[styles.emptyBody, { paddingBottom: 24 + insets.bottom }]}>
           <View style={styles.emptyIconWrap}>
             <FeatherIcon name="heart" size={28} color={theme.brandAccent} />
@@ -55,19 +42,11 @@ export function Saved({ navigation }: any) {
 
   return (
     <View style={[styles.container, styles.screenFill]}>
-      <View style={styles.topNavRow}>
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
-              <FeatherIcon name="arrow-left" size={20} color={iconColor} />
-            </Pressable>
-            <Text style={styles.title} numberOfLines={1}>
-              Saved Items
-            </Text>
-          </View>
-          <Text style={styles.count}>{savedItems.length} saved</Text>
-        </View>
-      </View>
+      <ProfileStackBackBar backLabel="Profile" />
+      <ProfilePageHeading
+        title="Saved items"
+        right={<Text style={styles.count}>{savedItems.length} saved</Text>}
+      />
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPad }]}
@@ -126,43 +105,6 @@ const getStyles = (theme: any) => {
     content: {
       paddingHorizontal: 16,
       paddingTop: 8,
-    },
-    topNavRow: {
-      paddingHorizontal: 16,
-      paddingBottom: 8,
-    },
-    header: {
-      minHeight: 44,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    headerLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      flex: 1,
-      minWidth: 0,
-      marginRight: 8,
-    },
-    backButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor || '#2a2a2a',
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: theme.tileBorderColor || theme.borderColor || 'rgba(255,255,255,0.12)',
-    },
-    title: {
-      flex: 1,
-      minWidth: 0,
-      color: theme.headingColor || theme.textColor || '#ffffff',
-      fontFamily: HEADING_FONT,
-      fontSize: 22,
-      lineHeight: 28,
-      letterSpacing: -0.25,
     },
     count: {
       flexShrink: 0,
@@ -255,7 +197,7 @@ const getStyles = (theme: any) => {
     },
     emptyTitle: {
       color: theme.headingColor || theme.textColor || '#ffffff',
-      fontFamily: HEADING_FONT,
+      fontFamily: 'Montserrat_700Bold',
       fontSize: 22,
       lineHeight: 28,
       marginBottom: 6,

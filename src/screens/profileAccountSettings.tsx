@@ -13,6 +13,7 @@ import {
 } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { ThemeContext } from '../context'
+import { PasswordInput, ProfileStackBackBar } from '../components'
 import { User } from '../../types'
 import { changePassword, updateProfileDetails } from '../utils'
 import {
@@ -139,8 +140,10 @@ export function ProfileAccountSettings({ user, sessionToken, onUserUpdated }: Pr
   }
 
   return (
-    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <View style={styles.page}>
+      <ProfileStackBackBar backLabel="Settings" />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Profile</Text>
         <Text style={styles.subtitle}>Update your account name and email.</Text>
         <View style={styles.accentRule} />
@@ -200,34 +203,28 @@ export function ProfileAccountSettings({ user, sessionToken, onUserUpdated }: Pr
               Forgot your password? Sign out and use Forgot password on the sign-in screen.
             </Text>
             <Text style={styles.label}>Current password</Text>
-            <TextInput
+            <PasswordInput
               value={currentPassword}
               onChangeText={setCurrentPassword}
               placeholder="Current password"
               placeholderTextColor={theme.mutedForegroundColor}
               style={styles.input}
-              secureTextEntry
-              autoCapitalize="none"
             />
             <Text style={styles.label}>New password</Text>
-            <TextInput
+            <PasswordInput
               value={newPassword}
               onChangeText={setNewPassword}
               placeholder="At least 8 characters"
               placeholderTextColor={theme.mutedForegroundColor}
               style={styles.input}
-              secureTextEntry
-              autoCapitalize="none"
             />
             <Text style={styles.label}>Confirm new password</Text>
-            <TextInput
+            <PasswordInput
               value={confirmNewPassword}
               onChangeText={setConfirmNewPassword}
               placeholder="Repeat new password"
               placeholderTextColor={theme.mutedForegroundColor}
               style={styles.input}
-              secureTextEntry
-              autoCapitalize="none"
             />
             {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
             {passwordSuccess ? <Text style={styles.successText}>{passwordSuccess}</Text> : null}
@@ -247,6 +244,7 @@ export function ProfileAccountSettings({ user, sessionToken, onUserUpdated }: Pr
         )}
       </ScrollView>
     </KeyboardAvoidingView>
+    </View>
   )
 }
 
@@ -257,6 +255,7 @@ const getStyles = (theme: any) => {
       flex: 1,
       backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
     },
+    flex: { flex: 1 },
     content: {
       paddingHorizontal: 14,
       paddingTop: 12,

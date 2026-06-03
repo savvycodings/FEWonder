@@ -284,6 +284,15 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
     }, [refreshDailyRewardsAlert]),
   )
 
+  const openCart = useCallback(() => {
+    const rootNav = navigation.getParent()?.getParent()
+    if (rootNav?.navigate) {
+      rootNav.navigate('Cart')
+      return
+    }
+    navigation.navigate('Cart')
+  }, [navigation])
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -305,9 +314,24 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
               <TouchableOpacity
                 style={styles.bellButton}
                 activeOpacity={0.85}
+                onPress={openCart}
+                accessibilityRole="button"
+                accessibilityLabel="Open shopping cart"
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              >
+                <FeatherIcon name="shopping-bag" size={24} color="#000000" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.iconBadgeWrap}>
+              <TouchableOpacity
+                style={styles.bellButton}
+                activeOpacity={0.85}
                 onPress={() =>
                   navigation.navigate('DailyRewards', { sessionToken: sessionToken || '' })
                 }
+                accessibilityRole="button"
+                accessibilityLabel="Daily rewards"
+                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
               >
                 <FeatherIcon name="gift" size={26} color={theme.textColor} />
               </TouchableOpacity>

@@ -1,6 +1,7 @@
 import { useCallback, useContext, useEffect, useState } from 'react'
 import { View, Text, FlatList, StyleSheet, Pressable, RefreshControl, Image } from 'react-native'
 import { ThemeContext } from '../context'
+import { ProfileStackBackBar } from '../components/ProfileStackBackBar'
 import { fetchAdminUserOrders } from '../ordersApi'
 
 function centsLabel(cents: number, code: string) {
@@ -41,6 +42,7 @@ export function AdminUserOrders({ navigation, route }: any) {
 
   return (
     <View style={styles.page}>
+      <ProfileStackBackBar />
       {user ? (
         <View style={styles.header}>
           {user.image ? <Image source={{ uri: user.image }} style={styles.avatar} /> : <View style={styles.avatarPh} />}

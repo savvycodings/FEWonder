@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native'
 import { ThemeContext } from '../context'
+import { ProfileStackBackBar } from '../components/ProfileStackBackBar'
 import { getDailyRewardStatus, redeemWonderCode } from '../utils'
 import { brandAccentRgba } from '../brandAccent'
 
@@ -57,8 +58,10 @@ export function RedeemCode({ sessionToken }: Props) {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.page} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <View style={styles.page}>
+      <ProfileStackBackBar backLabel="Settings" />
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>Redeem code</Text>
         <Text style={styles.subtitle}>Enter a promotional or reward code when available.</Text>
         <View style={styles.accentRule} />
@@ -90,6 +93,7 @@ export function RedeemCode({ sessionToken }: Props) {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </View>
   )
 }
 
@@ -100,6 +104,7 @@ const getStyles = (theme: any) => {
       flex: 1,
       backgroundColor: theme.appBackgroundColor || theme.backgroundColor,
     },
+    flex: { flex: 1 },
     content: {
       paddingHorizontal: 14,
       paddingTop: 12,

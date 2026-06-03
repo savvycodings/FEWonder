@@ -15,6 +15,7 @@ import {
   fetchAdminCommunityReports,
 } from '../ordersApi'
 import { ThemeContext } from '../context'
+import { ProfileStackBackBar } from '../components/ProfileStackBackBar'
 
 type Filter = 'open' | 'resolved' | 'all'
 
@@ -81,6 +82,7 @@ export function AdminReportedMessages() {
 
   return (
     <View style={styles.page}>
+      <ProfileStackBackBar />
       <View style={styles.segmentRow}>
         {(['open', 'resolved', 'all'] as Filter[]).map((key) => (
           <TouchableOpacity

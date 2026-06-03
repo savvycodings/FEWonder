@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View 
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { PasswordInput } from '../components'
 import { ThemeContext } from '../context'
 import { loginUser } from '../utils'
 import type { SignupDraft } from './signupVerifyEmail'
@@ -202,13 +203,12 @@ export function Login({ onAuthSuccess }: Props) {
             autoCorrect={false}
             keyboardType="email-address"
           />
-          <TextInput
+          <PasswordInput
             value={password}
             onChangeText={setPassword}
             placeholder="Password (min 8 characters)"
             placeholderTextColor={theme.mutedForegroundColor}
             style={styles.input}
-            secureTextEntry
           />
 
           {mode === 'signin' ? (

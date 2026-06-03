@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import {
-  PUDO_DELIVERY_HINT,
   PUDO_LOCKER_LABELS,
   PUDO_LOCKER_TIERS,
   formatTierPrice,
@@ -17,6 +16,16 @@ type Props = {
   onPudoNameChange: (v: string) => void
   pudoAddr: string
   onPudoAddrChange: (v: string) => void
+  shippingLine1: string
+  onShippingLine1Change: (v: string) => void
+  shippingLine2: string
+  onShippingLine2Change: (v: string) => void
+  shippingPostalCode: string
+  onShippingPostalCodeChange: (v: string) => void
+  shippingCity: string
+  onShippingCityChange: (v: string) => void
+  shippingProvince: string
+  onShippingProvinceChange: (v: string) => void
   hasWholeSet: boolean
 }
 
@@ -28,9 +37,20 @@ export function PudoCheckoutSection({
   onPudoNameChange,
   pudoAddr,
   onPudoAddrChange,
+  shippingLine1,
+  onShippingLine1Change,
+  shippingLine2,
+  onShippingLine2Change,
+  shippingPostalCode,
+  onShippingPostalCodeChange,
+  shippingCity,
+  onShippingCityChange,
+  shippingProvince,
+  onShippingProvinceChange,
   hasWholeSet,
 }: Props) {
   const styles = useMemo(() => getStyles(theme), [theme])
+  const isDoor = pudoLockerTier === 'door'
 
   return (
     <>
@@ -38,7 +58,9 @@ export function PudoCheckoutSection({
       <Text style={styles.sectionHint}>
         {hasWholeSet
           ? 'Whole set orders use door delivery (R110).'
-          : PUDO_DELIVERY_HINT}
+          : isDoor
+            ? 'Door delivery (R110). Use your saved address or enter it below.'
+            : 'Locker collection (R90). Enter your Pudo locker details below.'}
       </Text>
       <View style={styles.optionRow}>
         {PUDO_LOCKER_TIERS.map((tier) => {
@@ -66,23 +88,87 @@ export function PudoCheckoutSection({
           )
         })}
       </View>
-      <Text style={styles.fieldLabel}>Locker name or code</Text>
-      <TextInput
-        value={pudoName}
-        onChangeText={onPudoNameChange}
-        placeholder="e.g. Mall locker name"
-        placeholderTextColor={theme.mutedForegroundColor}
-        style={styles.input}
-      />
-      <Text style={styles.fieldLabel}>Locker address</Text>
-      <TextInput
-        value={pudoAddr}
-        onChangeText={onPudoAddrChange}
-        placeholder="Mall or Pudo point"
-        placeholderTextColor={theme.mutedForegroundColor}
-        style={[styles.input, styles.inputMultiline]}
-        multiline
-      />
+
+      {isDoor ? (
+        <>
+          <Text style={styles.fieldLabel}>Address line 1</Text>
+          <TextInput
+            value={shippingLine1}
+            onChangeText={onShippingLine1Change}
+            placeholder="Street address, building, or complex"
+            placeholderTextColor={theme.mutedForegroundColor}
+            style={styles.input}
+            autoCapitalize="words"
+            maxLength={120}
+          />
+          <Text style={styles.fieldLabel}>Address line 2</Text>
+          <TextInput
+            value={shippingLine2}
+            onChangeText={onShippingLine2Change}
+            placeholder="Apartment, suite, unit, floor"
+            placeholderTextColor={theme.mutedForegroundColor}
+            style={styles.input}
+            autoCapitalize="words"
+            maxLength={80}
+          />
+          <View style={styles.fieldRow}>
+            <View style={styles.fieldHalf}>
+              <Text style={styles.fieldLabel}>Postal code</Text>
+              <TextInput
+                value={shippingPostalCode}
+                onChangeText={(v) => onShippingPostalCodeChange(v.replace(/\D/g, '').slice(0, 4))}
+                placeholder="0000"
+                placeholderTextColor={theme.mutedForegroundColor}
+                style={styles.input}
+                keyboardType="number-pad"
+                maxLength={4}
+              />
+            </View>
+            <View style={styles.fieldHalf}>
+              <Text style={styles.fieldLabel}>City</Text>
+              <TextInput
+                value={shippingCity}
+                onChangeText={onShippingCityChange}
+                placeholder="Cape Town"
+                placeholderTextColor={theme.mutedForegroundColor}
+                style={styles.input}
+                autoCapitalize="words"
+                maxLength={60}
+              />
+            </View>
+          </View>
+          <Text style={styles.fieldLabel}>Province</Text>
+          <TextInput
+            value={shippingProvince}
+            onChangeText={onShippingProvinceChange}
+            placeholder="Western Cape"
+            placeholderTextColor={theme.mutedForegroundColor}
+            style={styles.input}
+            autoCapitalize="words"
+            maxLength={60}
+          />
+        </>
+      ) : (
+        <>
+          <Text style={styles.fieldLabel}>Locker name or code</Text>
+          <TextInput
+            value={pudoName}
+            onChangeText={onPudoNameChange}
+            placeholder="e.g. Mall locker name"
+            placeholderTextColor={theme.mutedForegroundColor}
+            style={styles.input}
+          />
+          <Text style={styles.fieldLabel}>Locker address</Text>
+          <TextInput
+            value={pudoAddr}
+            onChangeText={onPudoAddrChange}
+            placeholder="Mall or Pudo point"
+            placeholderTextColor={theme.mutedForegroundColor}
+            style={[styles.input, styles.inputMultiline]}
+            multiline
+          />
+        </>
+      )}
     </>
   )
 }
@@ -140,6 +226,14 @@ function getStyles(theme: any) {
       fontSize: 15,
       color: theme.mutedForegroundColor,
       marginTop: 4,
+    },
+    fieldRow: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    fieldHalf: {
+      flex: 1,
+      minWidth: 0,
     },
     fieldLabel: {
       fontFamily: theme.mediumFont,

@@ -12,7 +12,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { ThemeContext } from '../context'
-import { WonderportAccentCard } from '../components'
+import { ProfilePageHeading, ProfileStackBackBar, WonderportAccentCard } from '../components'
 import { fetchMyOrders } from '../ordersApi'
 import { brandAccentRgba } from '../brandAccent'
 
@@ -50,6 +50,8 @@ export function MyOrders({ navigation }: any) {
 
   return (
     <View style={styles.page}>
+      <ProfileStackBackBar backLabel="Profile" />
+      <ProfilePageHeading title="My orders" />
       {error ? <Text style={styles.errorBanner}>{error}</Text> : null}
       {loading && !orders.length ? (
         <ActivityIndicator style={{ marginTop: 24 }} color={theme.brandAccent} />

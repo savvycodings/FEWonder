@@ -106,6 +106,11 @@ export type CreateOrderPayload = {
   contactEmail?: string
   pudoLockerName?: string
   pudoLockerAddress?: string
+  shippingAddress?: string
+  shippingAddressLine2?: string
+  shippingPostalCode?: string
+  shippingCity?: string
+  shippingProvince?: string
   customerEftAccountName?: string
   customerEftBankName?: string
   customerEftAccountNumber?: string

@@ -12,6 +12,7 @@ import {
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemeContext } from '../context'
+import { ProfileStackBackBar } from '../components/ProfileStackBackBar'
 import { adminOrdersLogin } from '../ordersApi'
 
 const HOME_ACCENT_TEXT = '#000000'
@@ -39,7 +40,9 @@ export function AdminOrdersLogin({ navigation }: any) {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <View style={styles.safe}>
+      <ProfileStackBackBar />
+    <SafeAreaView style={styles.safeInner} edges={['bottom']}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -86,12 +89,14 @@ export function AdminOrdersLogin({ navigation }: any) {
         </KeyboardAwareScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+    </View>
   )
 }
 
 const getStyles = (theme: any) =>
   StyleSheet.create({
     safe: { flex: 1, backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+    safeInner: { flex: 1 },
     flex: { flex: 1 },
     scroll: {
       flexGrow: 1,

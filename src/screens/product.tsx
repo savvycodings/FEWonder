@@ -2,40 +2,25 @@ import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   ScrollView,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
   useWindowDimensions,
 } from 'react-native'
-import * as ImagePicker from 'expo-image-picker'
-import * as Clipboard from 'expo-clipboard'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { ThemeContext, AppContext } from '../context'
-import { PaymentMethodModal, PudoCheckoutSection, WonderportAccentCard, YocoPaymentModal } from '../components'
+import { WonderportAccentCard } from '../components'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { formatMoney, parseMoneyToNumber } from '../money'
-import {
-  createOrder,
-  fetchEftInstructions,
-  getUserSessionToken,
-  initYocoCheckout,
-  uploadEftProof,
-} from '../ordersApi'
-import { finalizeYocoCheckout, parseYocoReturnRoute, yocoOutcomeAlert } from '../yocoCheckout'
-import { fetchSessionUser } from '../utils'
 import { getDbProductByHandle } from '../utils'
 import type { ShopifyMoney, ShopifyProduct } from '../../types'
-import { SHOW_YOCO_CHECKOUT } from '../../constants'
 import { brandAccentRgba } from '../brandAccent'
 import {
   formatStockLabel,
@@ -44,16 +29,8 @@ import {
 } from '../productStock'
 import { productShowsPackagingChoice } from '../productPurchaseMode'
 import { isSameSavedProduct, shopifyProductToSavePayload } from '../productSave'
-import { defaultTierForCart, tierAllowedForCart, type PudoLockerTier } from '../pudoLockerSizes'
-
 const ACCENT_ON_BADGE_TEXT = '#ffffff'
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
-
-async function copyLabelValue(label: string, value: string) {
-  if (!value) return
-  await Clipboard.setStringAsync(value)
-  Alert.alert('Copied', `${label} copied to clipboard.`)
-}
 
 function collectProductGalleryUrls(product: ShopifyProduct): string[] {
   const seen = new Set<string>()
@@ -105,6 +82,8 @@ export function Product({ route, navigation }: any) {
   const productHandle = String(route?.params?.product?.handle || '').trim()
   const loadedHeroUrisRef = useRef<Set<string>>(new Set())
   const heroImageUriRef = useRef('')
+  const galleryListRef = useRef<FlatList<string>>(null)
+  const [heroGalleryWidth, setHeroGalleryWidth] = useState(0)
   const [heroImageLoading, setHeroImageLoading] = useState(false)
   const [selectedGalleryUri, setSelectedGalleryUri] = useState('')
   const [packaging, setPackaging] = useState<'single' | 'set'>('single')
@@ -162,8 +141,31 @@ export function Product({ route, navigation }: any) {
   }, [heroImageUri, product?.image])
 
   const showGalleryThumbs = galleryUrls.length > 1
-
+  /** Measured inner width of hero frame — avoids peek of adjacent slides (borders / rounding). */
+  const galleryPageWidth = heroGalleryWidth > 0 ? heroGalleryWidth : Math.max(width - 32, 1)
   const heroShowsLoadingOverlay = Boolean(heroImageUri && heroImageLoading)
+
+  function selectGalleryIndex(index: number, animated = true) {
+    if (index < 0 || index >= galleryUrls.length) return
+    const uri = galleryUrls[index]
+    if (!uri) return
+    setSelectedGalleryUri(uri)
+    if (galleryUrls.length > 1) {
+      galleryListRef.current?.scrollToIndex({ index, animated })
+    }
+  }
+
+  function syncGalleryFromScrollOffset(offsetX: number) {
+    if (galleryUrls.length < 2) return
+    const index = Math.round(offsetX / galleryPageWidth)
+    const clamped = Math.min(Math.max(index, 0), galleryUrls.length - 1)
+    const uri = galleryUrls[clamped]
+    if (uri && uri !== selectedGalleryUri) setSelectedGalleryUri(uri)
+  }
+
+  function onGalleryScrollEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    syncGalleryFromScrollOffset(event.nativeEvent.contentOffset.x)
+  }
 
   heroImageUriRef.current = heroImageUri
 
@@ -226,151 +228,13 @@ export function Product({ route, navigation }: any) {
   )
   const heroSize = Math.min(Math.max(width - 32, 260), 380)
 
-  const [checkoutBusy, setCheckoutBusy] = useState(false)
-  const [eftModalOpen, setEftModalOpen] = useState(false)
-  const [eftBank, setEftBank] = useState<{
-    accountName: string
-    accountNumber: string
-    bank: string
-    branch: string
-    message: string
-  } | null>(null)
-  const [eftOrderId, setEftOrderId] = useState<string | null>(null)
-  const [eftReference, setEftReference] = useState<string | null>(null)
-  const [eftTotalLabel, setEftTotalLabel] = useState<string>('')
-  const [yocoModalOpen, setYocoModalOpen] = useState(false)
-  const [yocoRedirectUrl, setYocoRedirectUrl] = useState<string | null>(null)
-  const [yocoOrderId, setYocoOrderId] = useState<string | null>(null)
-  const [yocoSyncing, setYocoSyncing] = useState(false)
-  const yocoHandledRef = useRef(false)
-  const [eftUploadBusy, setEftUploadBusy] = useState(false)
-
-  const [deliveryModalOpen, setDeliveryModalOpen] = useState(false)
-  const [paymentMethodModalOpen, setPaymentMethodModalOpen] = useState(false)
-  const [pudoLockerTier, setPudoLockerTier] = useState<PudoLockerTier>(() => defaultTierForCart(false))
-  const [contactPhone, setContactPhone] = useState('')
-  const [contactEmail, setContactEmail] = useState('')
-  const [pudoName, setPudoName] = useState('')
-  const [pudoAddr, setPudoAddr] = useState('')
-  const [customerEftName, setCustomerEftName] = useState('')
-  const [customerEftBank, setCustomerEftBank] = useState('')
-  const [customerEftAcct, setCustomerEftAcct] = useState('')
-  const [checkoutFormError, setCheckoutFormError] = useState('')
-
-  useEffect(() => {
-    if (!deliveryModalOpen) return
-    let cancelled = false
-    ;(async () => {
-      const token = await getUserSessionToken()
-      if (!token || cancelled) return
-      try {
-        const u = await fetchSessionUser(token)
-        if (cancelled) return
-        setContactEmail(e => e || u.email || '')
-        setContactPhone(p => p || u.phone || '')
-        setPudoName(n => n || u.pudoLockerName || '')
-        setPudoAddr(a => a || u.pudoLockerAddress || '')
-        setCustomerEftName(n => n || u.eftBankAccountName || '')
-        setCustomerEftBank(b => b || u.eftBankName || '')
-        setCustomerEftAcct(a => a || u.eftBankAccountNumber || '')
-      } catch {
-        /* ignore prefill errors */
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [deliveryModalOpen])
-
-  useEffect(() => {
-    if (hasWholeSet && !tierAllowedForCart(pudoLockerTier, true)) {
-      setPudoLockerTier('door')
-    }
-  }, [hasWholeSet, pudoLockerTier])
-
-  function validateDeliveryCheckout(): string | null {
-    const phone = contactPhone.trim()
-    if (!phone || phone.replace(/\D/g, '').length < 9) {
-      return 'Enter a valid cellphone number for this order.'
-    }
-    const em = contactEmail.trim().toLowerCase()
-    if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-      return 'Enter a valid email address for order updates.'
-    }
-    if (!pudoName.trim() || !pudoAddr.trim()) {
-      return 'Enter your Pudo locker name and address.'
-    }
-    if (hasWholeSet && !tierAllowedForCart(pudoLockerTier, true)) {
-      return 'Whole set orders require door delivery (R110).'
-    }
-    return null
-  }
-
-  async function runCheckout(method: 'eft' | 'yoco') {
+  function onBuyNowPress() {
     if (!inStock) {
       Alert.alert('Out of stock', 'This item is not available to purchase right now.')
       return
     }
     if (!product?.id) {
       Alert.alert('Product', 'This listing cannot be ordered (missing id).')
-      return
-    }
-    const token = await getUserSessionToken()
-    if (!token) {
-      Alert.alert('Sign in required', 'Please sign in from Profile to purchase.')
-      return
-    }
-    setCheckoutBusy(true)
-    try {
-      const created = await createOrder({
-        paymentMethod: method,
-        items: [{ productId: String(product.id), quantity, packaging: linePackaging }],
-        deliveryMethod: 'pudo',
-        pudoLockerTier,
-        contactPhone: contactPhone.trim(),
-        contactEmail: contactEmail.trim().toLowerCase(),
-        pudoLockerName: pudoName.trim(),
-        pudoLockerAddress: pudoAddr.trim(),
-        customerEftAccountName: customerEftName.trim() || undefined,
-        customerEftBankName: customerEftBank.trim() || undefined,
-        customerEftAccountNumber: customerEftAcct.trim() || undefined,
-      })
-      if (method === 'eft') {
-        const bank = await fetchEftInstructions()
-        setEftBank(bank)
-        setEftOrderId(created.orderId)
-        setEftReference(created.referenceCode)
-        setEftTotalLabel(`${(created.totalCents / 100).toFixed(2)} ${created.currencyCode}`)
-        setEftModalOpen(true)
-      } else {
-        const yoco = await initYocoCheckout(created.orderId)
-        yocoHandledRef.current = false
-        setYocoOrderId(created.orderId)
-        setYocoRedirectUrl(yoco.redirectUrl)
-        setYocoModalOpen(true)
-      }
-    } catch (e: any) {
-      Alert.alert('Checkout', e?.message || 'Could not start checkout')
-    } finally {
-      setCheckoutBusy(false)
-    }
-  }
-
-  function continueDeliveryThenPay() {
-    Keyboard.dismiss()
-    setCheckoutFormError('')
-    const err = validateDeliveryCheckout()
-    if (err) {
-      setCheckoutFormError(err)
-      return
-    }
-    setDeliveryModalOpen(false)
-    setPaymentMethodModalOpen(true)
-  }
-
-  function onBuyNowPress() {
-    if (!inStock) {
-      Alert.alert('Out of stock', 'This item is not available to purchase right now.')
       return
     }
     if (priceText === 'Price on request') {
@@ -385,80 +249,16 @@ export function Product({ route, navigation }: any) {
       )
       return
     }
-    setCheckoutFormError('')
-    setDeliveryModalOpen(true)
-  }
-
-  async function onPickEftProof() {
-    if (!eftOrderId) return
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
-    if (!perm.granted) {
-      Alert.alert('Permission', 'Photo library access is needed to upload proof.')
-      return
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      quality: 0.85,
-      base64: true,
+    navigation.navigate('CheckoutDelivery', {
+      from: 'product',
+      items: [
+        {
+          productId: String(product.id),
+          quantity,
+          packaging: linePackaging,
+        },
+      ],
     })
-    if (result.canceled || !result.assets?.[0]?.base64) return
-    const asset = result.assets[0]
-    const mime = asset.mimeType || 'image/jpeg'
-    setEftUploadBusy(true)
-    try {
-      await uploadEftProof(eftOrderId, asset.base64!, mime)
-      Alert.alert('Uploaded', 'We received your proof of payment.')
-      setEftModalOpen(false)
-    } catch (e: any) {
-      Alert.alert('Upload', e?.message || 'Upload failed')
-    } finally {
-      setEftUploadBusy(false)
-    }
-  }
-
-  async function finishYocoCheckoutFlow(orderId: string) {
-    setYocoSyncing(true)
-    try {
-      const outcome = await finalizeYocoCheckout(orderId)
-      const copy = yocoOutcomeAlert(outcome)
-      if (copy) Alert.alert(copy.title, copy.message)
-    } catch {
-      Alert.alert(
-        'Payment status',
-        'Could not confirm payment. Check Profile → Orders for the latest status.',
-      )
-    } finally {
-      setYocoSyncing(false)
-      setYocoModalOpen(false)
-      setYocoRedirectUrl(null)
-      setYocoOrderId(null)
-    }
-  }
-
-  function onYocoWebViewNavigation(navState: { url?: string }) {
-    const route = parseYocoReturnRoute(navState.url || '')
-    if (!route || !yocoOrderId || yocoHandledRef.current || yocoSyncing) return
-    yocoHandledRef.current = true
-    void finishYocoCheckoutFlow(yocoOrderId)
-  }
-
-  function handleYocoModalClose() {
-    if (yocoSyncing) return
-    const orderId = yocoOrderId
-    setYocoRedirectUrl(null)
-    if (!orderId) {
-      setYocoModalOpen(false)
-      setYocoOrderId(null)
-      return
-    }
-    if (yocoHandledRef.current) {
-      setYocoModalOpen(false)
-      setYocoOrderId(null)
-      return
-    }
-    yocoHandledRef.current = true
-    void finishYocoCheckoutFlow(orderId)
   }
 
   return (
@@ -481,13 +281,67 @@ export function Product({ route, navigation }: any) {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
       >
         <View style={[styles.heroImageWrap, { height: heroSize }]}>
-          {heroImageSource ? (
+          <View
+            style={styles.heroGalleryClip}
+            onLayout={(e) => {
+              const w = Math.round(e.nativeEvent.layout.width)
+              if (w > 0 && w !== heroGalleryWidth) setHeroGalleryWidth(w)
+            }}
+          >
+          {galleryUrls.length > 0 ? (
+            <FlatList
+              key={`${product.id || product.handle || 'product'}-gallery-${galleryPageWidth}`}
+              ref={galleryListRef}
+              style={[styles.heroGalleryList, { width: galleryPageWidth, height: heroSize }]}
+              data={galleryUrls}
+              horizontal
+              pagingEnabled
+              nestedScrollEnabled
+              scrollEnabled={galleryUrls.length > 1}
+              showsHorizontalScrollIndicator={false}
+              removeClippedSubviews
+              overScrollMode="never"
+              bounces={false}
+              decelerationRate="fast"
+              keyExtractor={(uri, index) => `${uri}-${index}`}
+              getItemLayout={(_, index) => ({
+                length: galleryPageWidth,
+                offset: galleryPageWidth * index,
+                index,
+              })}
+              onMomentumScrollEnd={onGalleryScrollEnd}
+              onScrollEndDrag={onGalleryScrollEnd}
+              onScrollToIndexFailed={(info) => {
+                galleryListRef.current?.scrollToOffset({
+                  offset: galleryPageWidth * info.index,
+                  animated: false,
+                })
+              }}
+              renderItem={({ item: uri }) => (
+                <View style={[styles.heroGallerySlide, { width: galleryPageWidth, height: heroSize }]}>
+                  <Image
+                    source={{ uri }}
+                    style={styles.heroGalleryImage}
+                    resizeMode="cover"
+                    onLoadStart={() => {
+                      if (!uri || loadedHeroUrisRef.current.has(uri)) return
+                      if (heroImageUriRef.current === uri) setHeroImageLoading(true)
+                    }}
+                    onLoad={() => markHeroImageLoaded(uri)}
+                    onLoadEnd={() => markHeroImageLoaded(uri)}
+                    onError={() => markHeroImageLoaded(uri)}
+                  />
+                </View>
+              )}
+            />
+          ) : heroImageSource ? (
             <Image
               key={heroImageUri || 'local-hero'}
               source={heroImageSource}
-              style={StyleSheet.absoluteFillObject}
+              style={styles.heroGalleryImage}
               resizeMode="cover"
               onLoadStart={() => {
                 const uri = heroImageUri
@@ -503,6 +357,7 @@ export function Product({ route, navigation }: any) {
               <Text style={styles.heroPlaceholderText}>{product.title || 'Product'}</Text>
             </View>
           )}
+          </View>
           {heroShowsLoadingOverlay ? (
             <View style={styles.heroImageLoadingOverlay} pointerEvents="none">
               <ActivityIndicator size="large" color={theme.brandAccent} />
@@ -523,7 +378,7 @@ export function Product({ route, navigation }: any) {
                 <TouchableOpacity
                   key={uri}
                   activeOpacity={0.85}
-                  onPress={() => setSelectedGalleryUri(uri)}
+                  onPress={() => selectGalleryIndex(galleryUrls.indexOf(uri))}
                   style={[styles.galleryThumbWrap, active && styles.galleryThumbWrapActive]}
                   accessibilityRole="button"
                   accessibilityLabel="View product image"
@@ -650,238 +505,14 @@ export function Product({ route, navigation }: any) {
           <TouchableOpacity
             style={[styles.buyButton, !inStock ? styles.footerButtonDisabled : null]}
             activeOpacity={0.9}
-            disabled={checkoutBusy || !inStock}
+            disabled={!inStock}
             onPress={onBuyNowPress}
           >
-            {checkoutBusy ? (
-              <ActivityIndicator color={ACCENT_ON_BADGE_TEXT} />
-            ) : (
-              <Text style={styles.buyButtonText}>Buy now</Text>
-            )}
+            <Text style={styles.buyButtonText}>Buy now</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <Modal visible={deliveryModalOpen} animationType="fade" transparent>
-        <SafeAreaView style={styles.deliveryBackdrop} edges={['top', 'bottom']}>
-          <KeyboardAvoidingView
-            style={styles.deliveryKeyboardWrap}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          >
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-              <View style={styles.deliveryBackdropInner}>
-                  <View style={styles.deliveryCard}>
-            <Text style={styles.deliveryTitle}>Pudo delivery & contact</Text>
-            <ScrollView
-              keyboardShouldPersistTaps="never"
-              keyboardDismissMode="on-drag"
-              style={styles.deliveryScroll}
-              showsVerticalScrollIndicator={false}
-            >
-              <Text style={styles.deliveryFieldLabel}>Email</Text>
-              <TextInput
-                value={contactEmail}
-                onChangeText={setContactEmail}
-                placeholder="you@example.com"
-                placeholderTextColor={theme.mutedForegroundColor}
-                style={styles.deliveryInput}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-              <Text style={styles.deliveryFieldLabel}>Cellphone</Text>
-              <TextInput
-                value={contactPhone}
-                onChangeText={setContactPhone}
-                placeholder="082 000 0000"
-                placeholderTextColor={theme.mutedForegroundColor}
-                style={styles.deliveryInput}
-                keyboardType="phone-pad"
-              />
-              <PudoCheckoutSection
-                theme={theme}
-                pudoLockerTier={pudoLockerTier}
-                onPudoLockerTierChange={setPudoLockerTier}
-                pudoName={pudoName}
-                onPudoNameChange={setPudoName}
-                pudoAddr={pudoAddr}
-                onPudoAddrChange={setPudoAddr}
-                hasWholeSet={hasWholeSet}
-              />
-              <Text style={[styles.deliveryFieldLabel, styles.deliveryBankHeading]}>
-                Your bank (optional)
-              </Text>
-              <Text style={styles.deliveryFieldLabel}>Account holder</Text>
-              <TextInput
-                value={customerEftName}
-                onChangeText={setCustomerEftName}
-                placeholder="Name on account"
-                placeholderTextColor={theme.mutedForegroundColor}
-                style={styles.deliveryInput}
-                returnKeyType="next"
-                blurOnSubmit={false}
-              />
-              <Text style={styles.deliveryFieldLabel}>Bank name</Text>
-              <TextInput
-                value={customerEftBank}
-                onChangeText={setCustomerEftBank}
-                placeholder="e.g. FNB"
-                placeholderTextColor={theme.mutedForegroundColor}
-                style={styles.deliveryInput}
-                returnKeyType="next"
-                blurOnSubmit={false}
-              />
-              <Text style={styles.deliveryFieldLabel}>Account number</Text>
-              <TextInput
-                value={customerEftAcct}
-                onChangeText={setCustomerEftAcct}
-                placeholder="Account number"
-                placeholderTextColor={theme.mutedForegroundColor}
-                style={styles.deliveryInput}
-                keyboardType="number-pad"
-                returnKeyType="done"
-                onSubmitEditing={Keyboard.dismiss}
-              />
-            </ScrollView>
-            {checkoutFormError ? <Text style={styles.deliveryError}>{checkoutFormError}</Text> : null}
-            <View style={styles.deliveryFooterRow}>
-              <TouchableOpacity
-                style={styles.deliveryCancelBtn}
-                onPress={() => {
-                  Keyboard.dismiss()
-                  setDeliveryModalOpen(false)
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.deliveryCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.deliveryContinueBtn}
-                onPress={continueDeliveryThenPay}
-                activeOpacity={0.9}
-              >
-                <Text style={styles.deliveryContinueText} numberOfLines={1}>
-                  Payment
-                </Text>
-              </TouchableOpacity>
-            </View>
-                  </View>
-              </View>
-            </TouchableWithoutFeedback>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </Modal>
-
-      <Modal visible={eftModalOpen} animationType="slide" transparent>
-        <SafeAreaView style={styles.checkoutBackdrop} edges={['top', 'bottom']}>
-          <WonderportAccentCard
-            borderWidth={3}
-            borderRadius={18}
-            innerBackgroundColor={frameFill}
-            style={styles.checkoutShell}
-            contentStyle={styles.checkoutInner}
-          >
-            <ScrollView style={styles.checkoutScroll} showsVerticalScrollIndicator={false}>
-              <Text style={styles.checkoutTitle}>Bank transfer (EFT)</Text>
-              <Text style={styles.checkoutSubtitle}>
-                Your order is already created. Use this reference on your bank payment, then upload proof.
-              </Text>
-              {eftReference ? (
-                <View style={styles.copyBlock}>
-                  <View style={styles.copyTextCol}>
-                    <Text style={styles.checkoutLabel}>Order reference</Text>
-                    <Text style={styles.checkoutValueMono}>{eftReference}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.copyBtn}
-                    onPress={() => copyLabelValue('Order reference', eftReference)}
-                  >
-                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
-                    <Text style={styles.copyBtnText}>Copy</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-              {eftTotalLabel ? (
-                <View style={styles.copyBlock}>
-                  <View style={styles.copyTextCol}>
-                    <Text style={styles.checkoutLabel}>Amount to pay</Text>
-                    <Text style={styles.checkoutValueMono}>{eftTotalLabel}</Text>
-                  </View>
-                  <TouchableOpacity
-                    style={styles.copyBtn}
-                    onPress={() => copyLabelValue('Amount', eftTotalLabel)}
-                  >
-                    <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
-                    <Text style={styles.copyBtnText}>Copy</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
-              {eftBank ? (
-                <>
-                  <Text style={styles.checkoutSection}>Bank details</Text>
-                  {[
-                    ['Account name', eftBank.accountName],
-                    ['Account number', eftBank.accountNumber],
-                    ['Bank', eftBank.bank],
-                    ['Branch code', eftBank.branch],
-                  ].map(([label, val]) => (
-                    <View key={String(label)} style={styles.copyBlock}>
-                      <View style={styles.copyTextCol}>
-                        <Text style={styles.checkoutLabel}>{label}</Text>
-                        <Text style={styles.checkoutValueMono}>{val}</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.copyBtn}
-                        onPress={() => copyLabelValue(String(label), String(val))}
-                      >
-                        <FeatherIcon name="copy" size={18} color={theme.brandAccent} />
-                        <Text style={styles.copyBtnText}>Copy</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                  <Text style={styles.checkoutHint}>{eftBank.message}</Text>
-                </>
-              ) : null}
-            </ScrollView>
-            <TouchableOpacity
-              style={styles.checkoutPrimaryBtn}
-              onPress={onPickEftProof}
-              disabled={eftUploadBusy}
-            >
-              {eftUploadBusy ? (
-                <ActivityIndicator color={ACCENT_ON_BADGE_TEXT} />
-              ) : (
-                <Text style={styles.checkoutPrimaryBtnText}>Upload proof of payment</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.checkoutGhostBtn} onPress={() => setEftModalOpen(false)}>
-              <Text style={styles.checkoutGhostBtnText}>Close</Text>
-            </TouchableOpacity>
-          </WonderportAccentCard>
-        </SafeAreaView>
-      </Modal>
-
-      <PaymentMethodModal
-        visible={paymentMethodModalOpen}
-        showCard={SHOW_YOCO_CHECKOUT}
-        onEft={() => {
-          setPaymentMethodModalOpen(false)
-          runCheckout('eft')
-        }}
-        onCard={() => {
-          setPaymentMethodModalOpen(false)
-          runCheckout('yoco')
-        }}
-        onCancel={() => setPaymentMethodModalOpen(false)}
-      />
-
-      <YocoPaymentModal
-        visible={yocoModalOpen}
-        redirectUrl={yocoRedirectUrl}
-        accentColor={theme.brandAccent}
-        syncing={yocoSyncing}
-        onClose={handleYocoModalClose}
-        onNavigationStateChange={onYocoWebViewNavigation}
-      />
     </View>
   )
 }
@@ -935,6 +566,23 @@ const getStyles = (theme: any) => {
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: surfaceBorder,
+  },
+  heroGalleryClip: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  heroGalleryList: {
+    flexGrow: 0,
+    flexShrink: 0,
+    overflow: 'hidden',
+  },
+  heroGallerySlide: {
+    overflow: 'hidden',
+    backgroundColor: surfaceBg,
+  },
+  heroGalleryImage: {
+    width: '100%',
+    height: '100%',
   },
   heroImageLoadingOverlay: {
     ...StyleSheet.absoluteFillObject,

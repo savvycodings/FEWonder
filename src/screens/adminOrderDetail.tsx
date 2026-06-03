@@ -15,6 +15,7 @@ import {
 import * as Clipboard from 'expo-clipboard'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { ThemeContext } from '../context'
+import { ProfileStackBackBar } from '../components/ProfileStackBackBar'
 import { acceptAdminEftPayment, adminBookCourier, fetchAdminOrderDetail } from '../ordersApi'
 import { lockerTierDisplay, packagingLabel } from '../pudoLockerSizes'
 
@@ -117,9 +118,10 @@ export function AdminOrderDetail({ route }: any) {
   }
 
   return (
-    <>
+    <View style={styles.screen}>
+      <ProfileStackBackBar />
     <ScrollView
-      style={styles.page}
+      style={styles.flex}
       contentContainerStyle={styles.pad}
       refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
     >
@@ -501,12 +503,14 @@ export function AdminOrderDetail({ route }: any) {
         </View>
       </TouchableOpacity>
     </Modal>
-    </>
+    </View>
   )
 }
 
 const getStyles = (theme: any) =>
   StyleSheet.create({
+    screen: { flex: 1, backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+    flex: { flex: 1 },
     page: { flex: 1, backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
     pad: { padding: 16, paddingBottom: 48 },
     error: { color: '#c62828', marginBottom: 12, fontFamily: theme.mediumFont },

@@ -1,7 +1,7 @@
 import { useCallback, useContext, useEffect, useState } from 'react'
 import { View, Text, ScrollView, StyleSheet, Image, ActivityIndicator } from 'react-native'
 import { ThemeContext } from '../context'
-import { WonderportAccentCard } from '../components'
+import { ProfileStackBackBar, WonderportAccentCard } from '../components'
 import { fetchMyOrder } from '../ordersApi'
 import { brandAccentRgba } from '../brandAccent'
 import { lockerTierDisplay } from '../pudoLockerSizes'
@@ -39,14 +39,19 @@ export function MyOrderDetail({ route }: any) {
 
   if (loading && !data) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={theme.brandAccent} />
+      <View style={styles.page}>
+        <ProfileStackBackBar />
+        <View style={styles.centered}>
+          <ActivityIndicator color={theme.brandAccent} />
+        </View>
       </View>
     )
   }
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.pad}>
+    <View style={styles.page}>
+      <ProfileStackBackBar />
+      <ScrollView style={styles.flex} contentContainerStyle={styles.pad}>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       {o ? (
         <>
@@ -104,6 +109,7 @@ export function MyOrderDetail({ route }: any) {
         </>
       ) : null}
     </ScrollView>
+    </View>
   )
 }
 
@@ -111,6 +117,7 @@ const getStyles = (theme: any) => {
   const L = (a: number) => brandAccentRgba(theme, a)
   return StyleSheet.create({
     page: { flex: 1, backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
+    flex: { flex: 1 },
     pad: { padding: 16, paddingBottom: 40 },
     centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     error: { color: '#ff6b6b', marginBottom: 12, fontFamily: theme.mediumFont },

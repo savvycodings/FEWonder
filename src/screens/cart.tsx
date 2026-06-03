@@ -4,8 +4,10 @@ import FeatherIcon from '@expo/vector-icons/Feather'
 import { useRoute } from '@react-navigation/native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppContext, ThemeContext } from '../context'
+import { ProfilePageHeading, ProfileStackBackBar } from '../components'
 import { formatMoney, parseMoneyToNumber } from '../money'
 import { brandAccentRgba } from '../brandAccent'
+import { cartItemsToCheckoutLines } from '../checkoutFlow'
 import { getCartStockError, maxPurchasableQuantity } from '../productStock'
 
 const CART_CURRENCY = 'ZAR'
@@ -16,14 +18,13 @@ const HEADING_FONT = 'Montserrat_700Bold' as const
 export function Cart({ navigation }: any) {
   const { theme } = useContext(ThemeContext)
   const styles = useMemo(() => getStyles(theme), [theme])
+  const iconColor = theme.textColor || '#ffffff'
   const route = useRoute()
   const { width: windowWidth } = useWindowDimensions()
   /** `Tabs` shell already applies top/horizontal safe insets; root `Stack` `Cart` does not. */
   const isProfileCart = route.name === 'ProfileCart'
   const insets = useSafeAreaInsets()
   const { cartItems, updateCartItemQuantity, removeFromCart, clearCart } = useContext(AppContext)
-  const iconColor = theme.textColor || '#ffffff'
-
   const subtotal = useMemo(() => {
     return cartItems.reduce((sum, item) => {
       const price = parseMoneyToNumber(item.price)
@@ -41,12 +42,22 @@ export function Cart({ navigation }: any) {
   const scrollBottomPad = 120 + insets.bottom
   const emptyTitleFontSize = Math.max(18, Math.min(22, windowWidth * 0.055))
 
+  function navigateToCheckoutDelivery() {
+    const payload = { from: 'cart' as const, items: cartItemsToCheckoutLines(cartItems) }
+    const rootNav = navigation.getParent()?.getParent?.() ?? navigation.getParent()
+    if (rootNav?.navigate) {
+      rootNav.navigate('CheckoutDelivery', payload)
+      return
+    }
+    navigation.navigate('CheckoutDelivery', payload)
+  }
+
   function onCheckoutPress() {
     if (cartStockErr) {
       Alert.alert('Out of stock', cartStockErr)
       return
     }
-    navigation.navigate('CartCheckout')
+    navigateToCheckoutDelivery()
   }
 
   function goBackToPrevious() {
@@ -54,7 +65,32 @@ export function Cart({ navigation }: any) {
       navigation.goBack()
       return
     }
-    navigation.navigate('ProfileHome')
+    if (isProfileCart) {
+      navigation.navigate('ProfileHome')
+      return
+    }
+    navigation.navigate('Tabs')
+  }
+
+  function renderCartHeader(showClear: boolean) {
+    return (
+      <>
+        <ProfileStackBackBar
+          backLabel={isProfileCart ? 'Profile' : undefined}
+          onBack={goBackToPrevious}
+        />
+        <ProfilePageHeading
+          title="Shopping cart"
+          right={
+            showClear ? (
+              <Pressable onPress={clearCart} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.clearText}>Clear</Text>
+              </Pressable>
+            ) : undefined
+          }
+        />
+      </>
+    )
   }
 
   function cartThumbSource(item: any) {
@@ -77,17 +113,7 @@ export function Cart({ navigation }: any) {
   if (!cartItems.length) {
     return screenShell(
       <>
-        <View style={styles.topNavRow}>
-          <Pressable
-            style={styles.backButton}
-            onPress={goBackToPrevious}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <FeatherIcon name="arrow-left" size={20} color={iconColor} />
-          </Pressable>
-        </View>
+        {renderCartHeader(false)}
         <View style={[styles.emptyBody, { paddingBottom: 24 + insets.bottom }]}>
           <View style={styles.emptyIconWrap}>
             <FeatherIcon name="shopping-bag" size={28} color={theme.brandAccent} />
@@ -109,27 +135,7 @@ export function Cart({ navigation }: any) {
 
   return screenShell(
     <>
-      <View style={styles.topNavRow}>
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Pressable
-              style={styles.backButton}
-              onPress={goBackToPrevious}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <FeatherIcon name="arrow-left" size={20} color={iconColor} />
-            </Pressable>
-            <Text style={styles.title} numberOfLines={1}>
-              Shopping Cart
-            </Text>
-          </View>
-          <Pressable onPress={clearCart} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Text style={styles.clearText}>Clear</Text>
-          </Pressable>
-        </View>
-      </View>
+      {renderCartHeader(true)}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: scrollBottomPad }]}
@@ -222,49 +228,12 @@ const getStyles = (theme: any) => {
     screenFill: {
       flex: 1,
     },
-    topNavRow: {
-      paddingHorizontal: 16,
-      paddingBottom: 8,
-    },
     scroll: {
       flex: 1,
     },
     content: {
       padding: 16,
       paddingTop: 8,
-    },
-    header: {
-      minHeight: 44,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    headerLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      flex: 1,
-      minWidth: 0,
-      marginRight: 8,
-    },
-    backButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor || '#2a2a2a',
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: theme.tileBorderColor || theme.borderColor || 'rgba(255,255,255,0.12)',
-    },
-    title: {
-      flex: 1,
-      minWidth: 0,
-      color: theme.headingColor || theme.textColor || '#ffffff',
-      fontFamily: HEADING_FONT,
-      fontSize: 22,
-      lineHeight: 28,
-      letterSpacing: -0.25,
     },
     clearText: {
       color: theme.brandAccent,

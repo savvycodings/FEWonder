@@ -5,24 +5,31 @@ import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } fro
 import {
   ActivityIndicator,
   Alert,
-  Keyboard,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import * as Clipboard from 'expo-clipboard'
 import FeatherIcon from '@expo/vector-icons/Feather'
+import { useRoute } from '@react-navigation/native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ThemeContext, AppContext } from '../context'
-import { PaymentMethodModal, PudoCheckoutSection, WonderportAccentCard, YocoPaymentModal } from '../components'
+import {
+  PaymentMethodModal,
+  ProfilePageHeading,
+  ProfileStackBackBar,
+  WonderportAccentCard,
+  YocoPaymentModal,
+} from '../components'
+import {
+  type CheckoutDeliveryDetails,
+  type CheckoutFlowSource,
+  type CheckoutLineItem,
+  cartItemsToCheckoutLines,
+} from '../checkoutFlow'
 import {
   createOrder,
   fetchEftInstructions,
@@ -31,17 +38,9 @@ import {
   uploadEftProof,
 } from '../ordersApi'
 import { finalizeYocoCheckout, parseYocoReturnRoute, yocoOutcomeAlert } from '../yocoCheckout'
-import { fetchSessionUser } from '../utils'
 import { SHOW_YOCO_CHECKOUT } from '../../constants'
 import { brandAccentRgba } from '../brandAccent'
 import { getCartStockError } from '../productStock'
-import {
-  cartHasWholeSet,
-  defaultTierForCart,
-  linePackagingFromItem,
-  tierAllowedForCart,
-  type PudoLockerTier,
-} from '../pudoLockerSizes'
 
 const ACCENT_ON_BADGE_TEXT = '#ffffff'
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
@@ -52,8 +51,10 @@ async function copyLabelValue(label: string, value: string) {
   Alert.alert('Copied', `${label} copied to clipboard.`)
 }
 
-function linePackaging(item: any): 'single' | 'set' {
-  return linePackagingFromItem(item)
+type CheckoutRouteParams = {
+  from?: CheckoutFlowSource
+  items?: CheckoutLineItem[]
+  delivery?: CheckoutDeliveryDetails
 }
 
 function cartItemsAllZar(items: any[]): boolean {
@@ -70,24 +71,22 @@ function cartItemsAllZar(items: any[]): boolean {
 export function CartCheckout({ navigation }: { navigation: any }) {
   const { theme } = useContext(ThemeContext)
   const { cartItems, clearCart } = useContext(AppContext)
+  const route = useRoute()
+  const params = (route.params || {}) as CheckoutRouteParams
   const styles = useMemo(() => getStyles(theme), [theme])
   const frameFill = theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
 
-  const [deliveryModalOpen, setDeliveryModalOpen] = useState(false)
+  const from: CheckoutFlowSource = params.from === 'product' ? 'product' : 'cart'
+  const lineItems = useMemo<CheckoutLineItem[]>(() => {
+    if (Array.isArray(params.items) && params.items.length) {
+      return params.items
+    }
+    return cartItemsToCheckoutLines(cartItems)
+  }, [params.items, cartItems])
+  const delivery = params.delivery
+
   const [paymentMethodModalOpen, setPaymentMethodModalOpen] = useState(false)
   const [checkoutBusy, setCheckoutBusy] = useState(false)
-  const [checkoutFormError, setCheckoutFormError] = useState('')
-  const hasWholeSet = useMemo(() => cartHasWholeSet(cartItems), [cartItems])
-  const [pudoLockerTier, setPudoLockerTier] = useState<PudoLockerTier>(() =>
-    defaultTierForCart(cartHasWholeSet(cartItems)),
-  )
-  const [contactPhone, setContactPhone] = useState('')
-  const [contactEmail, setContactEmail] = useState('')
-  const [pudoName, setPudoName] = useState('')
-  const [pudoAddr, setPudoAddr] = useState('')
-  const [customerEftName, setCustomerEftName] = useState('')
-  const [customerEftBank, setCustomerEftBank] = useState('')
-  const [customerEftAcct, setCustomerEftAcct] = useState('')
 
   const [eftModalOpen, setEftModalOpen] = useState(false)
   const [eftBank, setEftBank] = useState<{
@@ -109,72 +108,26 @@ export function CartCheckout({ navigation }: { navigation: any }) {
   const yocoHandledRef = useRef(false)
 
   useLayoutEffect(() => {
-    if (!cartItems?.length) {
+    if (!lineItems.length) {
       navigation.goBack()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only if cart empty when opening this screen
-  }, [])
+  }, [lineItems.length, navigation])
 
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      const token = await getUserSessionToken()
-      if (!token || cancelled) return
-      try {
-        const u = await fetchSessionUser(token)
-        if (cancelled) return
-        setContactEmail((e) => e || u.email || '')
-        setContactPhone((p) => p || u.phone || '')
-        setPudoName((n) => n || u.pudoLockerName || '')
-        setPudoAddr((a) => a || u.pudoLockerAddress || '')
-        setCustomerEftName((n) => n || u.eftBankAccountName || '')
-        setCustomerEftBank((b) => b || u.eftBankName || '')
-        setCustomerEftAcct((a) => a || u.eftBankAccountNumber || '')
-      } catch {
-        /* ignore */
-      }
-    })()
-    return () => {
-      cancelled = true
+    if (!delivery) {
+      navigation.replace('CheckoutDelivery', { from, items: lineItems })
+      return
     }
-  }, [])
-
-  useEffect(() => {
-    if (hasWholeSet && !tierAllowedForCart(pudoLockerTier, true)) {
-      setPudoLockerTier('door')
-    }
-  }, [hasWholeSet, pudoLockerTier])
-
-  useEffect(() => {
-    if (!cartItems?.length) return
-    if (!cartItemsAllZar(cartItems)) {
+    if (from === 'cart' && cartItems.length && !cartItemsAllZar(cartItems)) {
       Alert.alert(
         'Checkout',
         'South African shipping applies to ZAR-priced items only. One or more cart lines are not ZAR.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
+        [{ text: 'OK', onPress: () => navigation.goBack() }],
       )
       return
     }
-    setDeliveryModalOpen(true)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps -- open once on mount
-
-  function validateDeliveryCheckout(): string | null {
-    const phone = contactPhone.trim()
-    if (!phone || phone.replace(/\D/g, '').length < 9) {
-      return 'Enter a valid cellphone number for this order.'
-    }
-    const em = contactEmail.trim().toLowerCase()
-    if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
-      return 'Enter a valid email address for order updates.'
-    }
-    if (!pudoName.trim() || !pudoAddr.trim()) {
-      return 'Enter your Pudo locker name and address.'
-    }
-    if (hasWholeSet && !tierAllowedForCart(pudoLockerTier, true)) {
-      return 'Whole set orders require door delivery (R110).'
-    }
-    return null
-  }
+    setPaymentMethodModalOpen(true)
+  }, [delivery, from, lineItems, cartItems, navigation])
 
   async function runCheckout(method: 'eft' | 'yoco') {
     const token = await getUserSessionToken()
@@ -182,33 +135,37 @@ export function CartCheckout({ navigation }: { navigation: any }) {
       Alert.alert('Sign in required', 'Please sign in from Profile to purchase.')
       return
     }
-    if (!cartItems?.length) return
-    const stockErr = getCartStockError(cartItems)
-    if (stockErr) {
-      Alert.alert('Out of stock', stockErr)
+    if (!lineItems.length || !delivery) {
+      navigation.replace('CheckoutDelivery', { from, items: lineItems })
       return
+    }
+    if (from === 'cart') {
+      const stockErr = getCartStockError(cartItems)
+      if (stockErr) {
+        Alert.alert('Out of stock', stockErr)
+        return
+      }
     }
 
     setCheckoutBusy(true)
     try {
-      const items = cartItems.map((item) => ({
-        productId: String(item.id),
-        quantity: Math.max(1, Math.min(99, Math.floor(Number(item.quantity) || 1))),
-        packaging: linePackaging(item),
-      }))
-
       const created = await createOrder({
         paymentMethod: method,
-        items,
+        items: lineItems,
         deliveryMethod: 'pudo',
-        pudoLockerTier,
-        contactPhone: contactPhone.trim(),
-        contactEmail: contactEmail.trim().toLowerCase(),
-        pudoLockerName: pudoName.trim(),
-        pudoLockerAddress: pudoAddr.trim(),
-        customerEftAccountName: customerEftName.trim() || undefined,
-        customerEftBankName: customerEftBank.trim() || undefined,
-        customerEftAccountNumber: customerEftAcct.trim() || undefined,
+        pudoLockerTier: delivery.pudoLockerTier,
+        contactPhone: delivery.contactPhone,
+        contactEmail: delivery.contactEmail,
+        pudoLockerName: delivery.pudoLockerName,
+        pudoLockerAddress: delivery.pudoLockerAddress,
+        shippingAddress: delivery.shippingAddress,
+        shippingAddressLine2: delivery.shippingAddressLine2,
+        shippingPostalCode: delivery.shippingPostalCode,
+        shippingCity: delivery.shippingCity,
+        shippingProvince: delivery.shippingProvince,
+        customerEftAccountName: delivery.customerEftAccountName,
+        customerEftBankName: delivery.customerEftBankName,
+        customerEftAccountNumber: delivery.customerEftAccountNumber,
       })
       // Match product.tsx: open payment UI before clearing cart. Clearing first made `cartItems`
       // empty so we hit `return null` below and never rendered the EFT / Yoco modals.
@@ -219,7 +176,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
         setEftReference(created.referenceCode)
         setEftTotalLabel(`${(created.totalCents / 100).toFixed(2)} ${created.currencyCode}`)
         setEftModalOpen(true)
-        clearCart()
+        if (from === 'cart') clearCart()
       } else {
         const yoco = await initYocoCheckout(created.orderId)
         yocoHandledRef.current = false
@@ -232,23 +189,6 @@ export function CartCheckout({ navigation }: { navigation: any }) {
     } finally {
       setCheckoutBusy(false)
     }
-  }
-
-  function continueDeliveryThenPay() {
-    Keyboard.dismiss()
-    setCheckoutFormError('')
-    const stockErr = getCartStockError(cartItems)
-    if (stockErr) {
-      Alert.alert('Out of stock', stockErr)
-      return
-    }
-    const err = validateDeliveryCheckout()
-    if (err) {
-      setCheckoutFormError(err)
-      return
-    }
-    setDeliveryModalOpen(false)
-    setPaymentMethodModalOpen(true)
   }
 
   async function onPickEftProof() {
@@ -287,7 +227,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
       const copy = yocoOutcomeAlert(outcome)
       if (copy) Alert.alert(copy.title, copy.message)
       if (outcome === 'paid') {
-        clearCart()
+        if (from === 'cart') clearCart()
         navigation.navigate('Tabs')
       }
     } catch {
@@ -330,145 +270,29 @@ export function CartCheckout({ navigation }: { navigation: any }) {
 
   const keepUiWithoutCart =
     checkoutBusy || yocoSyncing || eftModalOpen || yocoModalOpen || Boolean(eftOrderId || yocoRedirectUrl)
-  if (!cartItems?.length && !keepUiWithoutCart) {
+  if (!lineItems.length && !keepUiWithoutCart) {
     return null
   }
 
   return (
     <View style={styles.page}>
-      <SafeAreaView style={styles.safeTop} edges={['top']}>
-        <View style={styles.topNavRow}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.8}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <FeatherIcon name="chevron-left" size={20} color={theme.brandAccent} />
-          </TouchableOpacity>
-          <Text style={styles.navTitle}>Checkout</Text>
-        </View>
+      <SafeAreaView style={styles.safeTop} edges={['top', 'left', 'right']}>
+        <ProfileStackBackBar onBack={() => navigation.goBack()} />
+        <ProfilePageHeading title="Checkout" />
       </SafeAreaView>
 
       <View style={styles.hintWrap}>
         <Text style={styles.hintText}>
-          {cartItems.length} line{cartItems.length === 1 ? '' : 's'} · ZAR only
+          {lineItems.length} item{lineItems.length === 1 ? '' : 's'} · choose how to pay
         </Text>
+        <TouchableOpacity
+          style={styles.editDeliveryLink}
+          onPress={() => navigation.navigate('CheckoutDelivery', { from, items: lineItems })}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.editDeliveryLinkText}>Edit delivery details</Text>
+        </TouchableOpacity>
       </View>
-
-      <Modal visible={deliveryModalOpen} animationType="fade" transparent>
-        <SafeAreaView style={styles.deliveryBackdrop} edges={['top', 'bottom']}>
-          <KeyboardAvoidingView
-            style={styles.deliveryKeyboardWrap}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          >
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-              <View style={styles.deliveryBackdropInner}>
-                  <View style={styles.deliveryCard}>
-            <Text style={styles.deliveryTitle}>Pudo delivery & contact</Text>
-            <ScrollView
-              keyboardShouldPersistTaps="never"
-              keyboardDismissMode="on-drag"
-              style={styles.deliveryScroll}
-              showsVerticalScrollIndicator={false}
-            >
-              <Text style={styles.deliveryFieldLabel}>Email</Text>
-              <TextInput
-                value={contactEmail}
-                onChangeText={setContactEmail}
-                placeholder="you@example.com"
-                placeholderTextColor={theme.mutedForegroundColor}
-                style={styles.deliveryInput}
-                autoCapitalize="none"
-                keyboardType="email-address"
-              />
-              <Text style={styles.deliveryFieldLabel}>Cellphone</Text>
-              <TextInput
-                value={contactPhone}
-                onChangeText={setContactPhone}
-                placeholder="082 000 0000"
-                placeholderTextColor={theme.mutedForegroundColor}
-                style={styles.deliveryInput}
-                keyboardType="phone-pad"
-              />
-              <PudoCheckoutSection
-                theme={theme}
-                pudoLockerTier={pudoLockerTier}
-                onPudoLockerTierChange={setPudoLockerTier}
-                pudoName={pudoName}
-                onPudoNameChange={setPudoName}
-                pudoAddr={pudoAddr}
-                onPudoAddrChange={setPudoAddr}
-                hasWholeSet={hasWholeSet}
-              />
-              <Text style={[styles.deliveryFieldLabel, styles.deliveryBankHeading]}>
-                Your bank (optional)
-              </Text>
-              <Text style={styles.deliveryFieldLabel}>Account holder</Text>
-              <TextInput
-                value={customerEftName}
-                onChangeText={setCustomerEftName}
-                placeholder="Name on account"
-                placeholderTextColor={theme.mutedForegroundColor}
-                style={styles.deliveryInput}
-                returnKeyType="next"
-                blurOnSubmit={false}
-              />
-              <Text style={styles.deliveryFieldLabel}>Bank name</Text>
-              <TextInput
-                value={customerEftBank}
-                onChangeText={setCustomerEftBank}
-                placeholder="e.g. FNB"
-                placeholderTextColor={theme.mutedForegroundColor}
-                style={styles.deliveryInput}
-                returnKeyType="next"
-                blurOnSubmit={false}
-              />
-              <Text style={styles.deliveryFieldLabel}>Account number</Text>
-              <TextInput
-                value={customerEftAcct}
-                onChangeText={setCustomerEftAcct}
-                placeholder="Account number"
-                placeholderTextColor={theme.mutedForegroundColor}
-                style={styles.deliveryInput}
-                keyboardType="number-pad"
-                returnKeyType="done"
-                onSubmitEditing={Keyboard.dismiss}
-              />
-            </ScrollView>
-            {checkoutFormError ? <Text style={styles.deliveryError}>{checkoutFormError}</Text> : null}
-            <View style={styles.deliveryFooterRow}>
-              <TouchableOpacity
-                style={styles.deliveryCancelBtn}
-                onPress={() => {
-                  Keyboard.dismiss()
-                  navigation.goBack()
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.deliveryCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.deliveryContinueBtn}
-                onPress={continueDeliveryThenPay}
-                activeOpacity={0.9}
-                disabled={checkoutBusy}
-              >
-                {checkoutBusy ? (
-                  <ActivityIndicator color={HOME_ACCENT_TEXT} />
-                ) : (
-                  <Text style={styles.deliveryContinueText} numberOfLines={1}>
-                    Payment
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-                  </View>
-              </View>
-            </TouchableWithoutFeedback>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </Modal>
 
       <Modal visible={eftModalOpen} animationType="slide" transparent>
         <SafeAreaView style={styles.checkoutBackdrop} edges={['top', 'bottom']}>
@@ -597,29 +421,14 @@ function getStyles(theme: any) {
   return StyleSheet.create({
     page: { flex: 1, backgroundColor: pageBg },
     safeTop: { backgroundColor: pageBg },
-    topNavRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 12,
-      gap: 8,
-    },
-    backButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: frameFill,
-      borderWidth: 1,
-      borderColor: surfaceBorder,
-    },
-    navTitle: {
-      fontFamily: HOME_MONTSERRAT_BOLD,
-      fontSize: 18,
-      color: textPrimary,
-    },
-    hintWrap: { paddingHorizontal: 20, paddingTop: 8 },
+    hintWrap: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 8 },
     hintText: { fontFamily: theme.regularFont, fontSize: 13, color: textMuted },
+    editDeliveryLink: { marginTop: 10, alignSelf: 'flex-start' },
+    editDeliveryLinkText: {
+      fontFamily: theme.semiBoldFont,
+      fontSize: 13,
+      color: theme.brandAccent,
+    },
     deliveryBackdrop: {
       flex: 1,
       backgroundColor: modalOverlay,
