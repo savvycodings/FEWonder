@@ -101,10 +101,15 @@ export function ForgotPassword() {
     }
   }
 
+  const horizontalPad = Math.max(20, insets.left, insets.right)
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <KeyboardAwareScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: 24 + insets.bottom }]}
+        contentContainerStyle={[
+          styles.content,
+          { paddingHorizontal: horizontalPad, paddingBottom: 24 + insets.bottom },
+        ]}
         keyboardShouldPersistTaps="handled"
       >
         <Pressable onPress={() => navigation.goBack()} style={styles.backRow} hitSlop={12}>
@@ -135,7 +140,9 @@ export function ForgotPassword() {
         {step === 'otp' ? (
           <>
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
-            <OtpCodeInput value={otp} onChange={setOtp} disabled={busy} autoFocus />
+            <View style={styles.otpWrap}>
+              <OtpCodeInput value={otp} onChange={setOtp} disabled={busy} autoFocus />
+            </View>
           </>
         ) : null}
 
@@ -190,7 +197,8 @@ function getStyles(theme: any) {
   const L = (a: number) => brandAccentRgba(theme, a)
   return StyleSheet.create({
     safe: { flex: 1, backgroundColor: theme.appBackgroundColor || theme.backgroundColor },
-    content: { paddingHorizontal: 20, paddingTop: 8 },
+    content: { paddingTop: 8 },
+    otpWrap: { width: '100%', alignSelf: 'stretch' },
     backRow: { marginBottom: 16 },
     backText: {
       color: theme.brandAccent,
