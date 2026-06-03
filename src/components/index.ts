@@ -36,6 +36,10 @@ export { ProfileStackBackBar, resolveProfileStackBackLabel } from './ProfileStac
 export { ProfilePageHeading } from './ProfilePageHeading'
 export { WonderSpinningCoin, WonderStaticCoin } from './WonderCoin'
 export { WonderWalletModal, showWonderWalletHelp, WONDER_WALLET_HELP_TEXT } from './WonderWalletModal'
+export {
+  InsufficientWonderCoinsModal,
+  isInsufficientWonderCoinsError,
+} from './InsufficientWonderCoinsModal'
 export { PasswordInput } from './PasswordInput'
 export { WonderBadgeImage } from './WonderBadgeImage'
 export { GiftboxAnimationPreview, GiftBoxPrizeRays, GIFT_BOX_PREVIEW_RAY_ANGLES } from './GiftboxAnimationPreview'

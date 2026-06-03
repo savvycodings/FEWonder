@@ -26,6 +26,7 @@ const AppContext = createContext<IAppContext>({
   sessionToken: '',
   setSessionToken: () => null,
   refreshSavedItems: async () => {},
+  refreshCart: async () => {},
   toggleSavedItem: async () => {},
   removeSavedItem: async () => {},
 })

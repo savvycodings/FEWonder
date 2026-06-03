@@ -1,14 +1,15 @@
 import { useContext, useEffect } from 'react'
 import { AppContext } from './context'
 
-/** Syncs auth session into AppContext and reloads account-backed saved products. */
+/** Syncs auth session into AppContext and reloads account-backed cart and saved products. */
 export function AppSessionBridge({ sessionToken }: { sessionToken: string }) {
-  const { setSessionToken, refreshSavedItems } = useContext(AppContext)
+  const { setSessionToken, refreshSavedItems, refreshCart } = useContext(AppContext)
 
   useEffect(() => {
     setSessionToken(sessionToken)
     void refreshSavedItems(sessionToken)
-  }, [sessionToken, setSessionToken, refreshSavedItems])
+    void refreshCart(sessionToken)
+  }, [sessionToken, setSessionToken, refreshSavedItems, refreshCart])
 
   return null
 }

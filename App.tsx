@@ -34,8 +34,17 @@ import {
   saveProductToAccount,
   unsaveProductFromAccount,
 } from './src/savedProductsApi'
+import { fetchCart, syncCartToAccount } from './src/cartApi'
+import { cartItemsToSyncLines } from './src/cartLine'
+import { readPersistedCartItems, writePersistedCartItems } from './src/cartPersistence'
+import {
+  clearPersistedSavedItems,
+  readPersistedSavedItems,
+  writePersistedSavedItems,
+} from './src/savedPersistence'
 import type { ShopifyProduct } from './types'
 import { getCartStockError, isProductInStock, maxPurchasableQuantity } from './src/productStock'
+import { getProductSaveImageSource } from './src/productSave'
 import { Platform } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
@@ -58,6 +67,9 @@ export default function App() {
   const [savedItems, setSavedItems] = useState<ProductSavePayload[]>([])
   const [sessionToken, setSessionToken] = useState('')
   const [modalVisible, setModalVisible] = useState<boolean>(false)
+  const skipNextCartSyncRef = useRef(false)
+  const cartAccountReadyRef = useRef(false)
+  const cartSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [fontsLoaded] = useFonts({
     'Geist-Regular': require('./assets/fonts/Geist-Regular.otf'),
     'Geist-Light': require('./assets/fonts/Geist-Light.otf'),
@@ -86,9 +98,28 @@ export default function App() {
       if (_chatType) setChatType(JSON.parse(_chatType))
       const _imageModel = await AsyncStorage.getItem('rnai-imageModel')
       if (_imageModel) setImageModel(_imageModel)
+      const localCart = await readPersistedCartItems()
+      if (localCart.length > 0) {
+        skipNextCartSyncRef.current = true
+        setCartItems(localCart)
+      }
+      const localSaved = await readPersistedSavedItems()
+      if (localSaved.length > 0) {
+        setSavedItems(localSaved)
+      }
     } catch (err) {
       console.log('error configuring storage', err)
     }
+  }
+
+  function applyCartItemsFromRemote(items: any[]) {
+    skipNextCartSyncRef.current = true
+    setCartItems(
+      items.map((item) => ({
+        ...item,
+        image: getProductSaveImageSource(item),
+      })),
+    )
   }
 
   const bottomSheetModalRef = useRef<BottomSheetModal>(null)
@@ -188,19 +219,63 @@ export default function App() {
     setCartItems([])
   }
 
+  const refreshCart = useCallback(async (token?: string) => {
+    const activeToken = token ?? sessionToken
+    if (!activeToken) {
+      cartAccountReadyRef.current = false
+      return
+    }
+    cartAccountReadyRef.current = false
+    try {
+      const items = await fetchCart(activeToken)
+      applyCartItemsFromRemote(items)
+    } catch (error) {
+      console.log('Failed to load cart', error)
+    } finally {
+      cartAccountReadyRef.current = true
+    }
+  }, [sessionToken])
+
   const refreshSavedItems = useCallback(async (token?: string) => {
     const activeToken = token ?? sessionToken
     if (!activeToken) {
       setSavedItems([])
+      await clearPersistedSavedItems()
       return
     }
     try {
       const products = await fetchSavedProducts(activeToken)
-      setSavedItems(products.map((p) => shopifyProductToSavePayload(p as ShopifyProduct)))
+      const next = products.map((p) => shopifyProductToSavePayload(p as ShopifyProduct))
+      setSavedItems(next)
+      await writePersistedSavedItems(next)
     } catch (error) {
       console.log('Failed to load saved products', error)
     }
   }, [sessionToken])
+
+  useEffect(() => {
+    void writePersistedCartItems(cartItems)
+    if (skipNextCartSyncRef.current) {
+      skipNextCartSyncRef.current = false
+      return
+    }
+    if (!sessionToken || !cartAccountReadyRef.current) return
+    if (cartSyncTimerRef.current) clearTimeout(cartSyncTimerRef.current)
+    cartSyncTimerRef.current = setTimeout(() => {
+      const lines = cartItemsToSyncLines(cartItems)
+      void syncCartToAccount(sessionToken, lines).catch((error) => {
+        console.log('Failed to sync cart', error)
+      })
+    }, 500)
+    return () => {
+      if (cartSyncTimerRef.current) clearTimeout(cartSyncTimerRef.current)
+    }
+  }, [cartItems, sessionToken])
+
+  useEffect(() => {
+    if (savedItems.length === 0 && !sessionToken) return
+    void writePersistedSavedItems(savedItems)
+  }, [savedItems, sessionToken])
 
   const toggleSavedItem = useCallback(
     async (item: ProductSavePayload) => {
@@ -224,7 +299,9 @@ export default function App() {
         const products = exists
           ? await unsaveProductFromAccount(sessionToken, productId)
           : await saveProductToAccount(sessionToken, productId)
-        setSavedItems(products.map((p) => shopifyProductToSavePayload(p as ShopifyProduct)))
+        const next = products.map((p) => shopifyProductToSavePayload(p as ShopifyProduct))
+        setSavedItems(next)
+        await writePersistedSavedItems(next)
       } catch (error) {
         console.log('Failed to update saved product', error)
         setSavedItems(previous)
@@ -251,7 +328,9 @@ export default function App() {
       setSavedItems((prev) => prev.filter((item) => !isSameSavedProduct(item, target)))
       try {
         const products = await unsaveProductFromAccount(sessionToken, target.id)
-        setSavedItems(products.map((p) => shopifyProductToSavePayload(p as ShopifyProduct)))
+        const next = products.map((p) => shopifyProductToSavePayload(p as ShopifyProduct))
+        setSavedItems(next)
+        await writePersistedSavedItems(next)
       } catch (error) {
         console.log('Failed to remove saved product', error)
         setSavedItems(previous)
@@ -286,6 +365,7 @@ export default function App() {
               sessionToken,
               setSessionToken,
               refreshSavedItems,
+              refreshCart,
               toggleSavedItem,
               removeSavedItem,
             }}

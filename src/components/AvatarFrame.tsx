@@ -818,7 +818,8 @@ export function AvatarFramePreviewTile({
   const onAccentText = theme.priceBadgeTextColor || '#ffffff'
   const meta = AVATAR_FRAME_SHOP.find((f) => f.id === frameId)
   const uri = previewUri?.trim() ? previewUri : null
-  const primaryDisabled = busy || (!owned && !canAfford)
+  const primaryDisabled = busy
+  const cannotAfford = !owned && !canAfford
   const primaryLabel = busy ? 'Buying...' : equipped ? 'Equipped' : !owned ? 'Buy' : 'Equip'
 
   const previewChild = uri ? (
@@ -877,6 +878,7 @@ export function AvatarFramePreviewTile({
                 borderColor: accent,
               }
             : null,
+          cannotAfford ? styles.tileButtonMuted : null,
         ]}
         disabled={primaryDisabled}
         onPress={onPrimaryPress}
@@ -886,6 +888,7 @@ export function AvatarFramePreviewTile({
             styles.tileButtonText,
             { color: onAccentText },
             equipped ? { color: accent } : null,
+            cannotAfford ? styles.tileButtonTextMuted : null,
           ]}
         >
           {primaryLabel}
@@ -1007,5 +1010,11 @@ const styles = StyleSheet.create({
   },
   tileButtonTextEquipped: {
     color: '#111111',
+  },
+  tileButtonMuted: {
+    opacity: 0.55,
+  },
+  tileButtonTextMuted: {
+    opacity: 0.9,
   },
 })

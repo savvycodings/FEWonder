@@ -159,6 +159,7 @@ export interface IAppContext {
   sessionToken: string,
   setSessionToken: (token: string) => void,
   refreshSavedItems: (token?: string) => Promise<void>,
+  refreshCart: (token?: string) => Promise<void>,
   toggleSavedItem: (item: ProductSavePayload) => Promise<void>,
   removeSavedItem: (productIdOrTitle: string) => Promise<void>,
 }

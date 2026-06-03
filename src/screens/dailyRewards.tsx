@@ -40,7 +40,14 @@ import {
 import type { AvatarFrameId } from '../components/AvatarFrame'
 import { ThemeContext } from '../context'
 import { brandAccentRgba, normalizeBrandAccentId } from '../brandAccent'
-import { WonderBadgeImage, WonderSpinningCoin, WonderStaticCoin, WonderWalletModal } from '../components'
+import {
+  InsufficientWonderCoinsModal,
+  isInsufficientWonderCoinsError,
+  WonderBadgeImage,
+  WonderSpinningCoin,
+  WonderStaticCoin,
+  WonderWalletModal,
+} from '../components'
 import {
   isProfileBadgeSlotFreeForWonderEquip,
   loadProfileHeroPreferences,
@@ -211,8 +218,10 @@ const weekDays = ['1', '2', '3', '4', '5', '6', '7']
 const weekRewards = [1, 2, 3, 4, 5, 6, 7]
 const ACCENT_ON_BADGE_TEXT = '#ffffff'
 
+const DAILY_STREAK_HELP_TITLE = 'Daily login streak'
+
 const DAILY_STREAK_HELP_TEXT =
-  'Open this screen once a day to grow your streak. After day 7, rewards repeat every week (day 8, 9, and so on).'
+  'Log in every day and claim your reward here to keep your streak going.\n\nEarn Wonder coins and unlock special badges. Come back once a day so you don\'t miss out !\n\nAfter you finish all 7 days in a row, rewards start again from day 1 on your next visit.'
 const THEME_STORE_OWNED_KEY = 'wonderport-theme-store-owned-ids'
 const THEME_STORE_ITEMS = [
   { id: 'midnight', name: 'Midnight', cost: 5, image: require('../../assets/dailyrewards/midnight.png') },
@@ -266,6 +275,10 @@ export function DailyRewards({ navigation, route }: any) {
   const [rewardsError, setRewardsError] = useState('')
   const [showAllBadges, setShowAllBadges] = useState(false)
   const [showWalletModal, setShowWalletModal] = useState(false)
+  const [insufficientCoinsModal, setInsufficientCoinsModal] = useState<{
+    visible: boolean
+    itemCost?: number
+  }>({ visible: false })
   const [ownedThemeIds, setOwnedThemeIds] = useState<string[]>([])
   const [storeMessage, setStoreMessage] = useState('')
   const [equippedAvatarFrame, setEquippedAvatarFrame] = useState<AvatarFrameId>('none')
@@ -311,6 +324,11 @@ export function DailyRewards({ navigation, route }: any) {
       : null
   const walletBalance = rewardStatus?.walletBalance || 0
   const availableCoins = walletBalance
+
+  const openInsufficientCoinsModal = useCallback((itemCost?: number) => {
+    setInsufficientCoinsModal({ visible: true, itemCost })
+  }, [])
+
   const rewardCarouselViewportW = screenWidth - REWARD_CONTENT_H_PAD
   /** Two cards + one gap fill the viewport so only ~2 cards show at once. */
   const rewardCardWidth = useMemo(
@@ -559,9 +577,14 @@ export function DailyRewards({ navigation, route }: any) {
   async function purchaseStoreItem(
     itemId: string,
     afterSuccess?: (status: DailyRewardStatus) => Promise<void>,
+    options?: { cost?: number },
   ) {
     if (!sessionToken) {
       setStoreMessage('Log in to purchase from the Wonder Store.')
+      return
+    }
+    if (typeof options?.cost === 'number' && availableCoins < options.cost) {
+      openInsufficientCoinsModal(options.cost)
       return
     }
     setPurchasingItemId(itemId)
@@ -591,6 +614,8 @@ export function DailyRewards({ navigation, route }: any) {
         } catch {
           setStoreMessage('Already owned. Please reopen Wonder Store to refresh.')
         }
+      } else if (isInsufficientWonderCoinsError(msg)) {
+        openInsufficientCoinsModal(options?.cost)
       } else {
         setStoreMessage(msg)
       }
@@ -620,7 +645,7 @@ export function DailyRewards({ navigation, route }: any) {
     const id = normalizeThemeStoreId(themeId)
     if (isThemeStoreIdOwned(ownedThemeIds, id)) return
     if (availableCoins < cost) {
-      setStoreMessage('Not enough coins for this theme yet.')
+      openInsufficientCoinsModal(cost)
       return
     }
     if (!sessionToken) {
@@ -672,7 +697,11 @@ export function DailyRewards({ navigation, route }: any) {
       void AsyncStorage.setItem(THEME_STORE_OWNED_KEY, JSON.stringify(prevOwned)).catch(
         () => {},
       )
-      setStoreMessage(msg)
+      if (isInsufficientWonderCoinsError(msg)) {
+        openInsufficientCoinsModal(cost)
+      } else {
+        setStoreMessage(msg)
+      }
     }
   }
 
@@ -809,9 +838,9 @@ export function DailyRewards({ navigation, route }: any) {
             <Text style={styles.bannerTitle}>Keep your streak alive</Text>
             <Pressable
               style={styles.bannerHelpButton}
-              onPress={() => Alert.alert('Daily streak', DAILY_STREAK_HELP_TEXT)}
+              onPress={() => Alert.alert(DAILY_STREAK_HELP_TITLE, DAILY_STREAK_HELP_TEXT)}
               accessibilityRole="button"
-              accessibilityLabel="How daily streaks work"
+              accessibilityLabel="How daily login rewards and badges work"
               hitSlop={8}
             >
               <FeatherIcon name="help-circle" size={20} color={theme.mutedForegroundColor} />
@@ -1077,10 +1106,12 @@ export function DailyRewards({ navigation, route }: any) {
                           : styles.themeBuyButtonOwned
                         : null,
                     ]}
-                    disabled={!isOwned && !canBuy}
+                    disabled={!isOwned && purchasingItemId === themeItem.id}
                     onPress={() => {
                       if (isOwned) {
                         void handleEquipAccentTheme(accentEquipped ? 'default' : themeItem.id)
+                      } else if (!canBuy) {
+                        openInsufficientCoinsModal(themeItem.cost)
                       } else {
                         void handleBuyTheme(themeItem.id, themeItem.cost)
                       }
@@ -1134,16 +1165,27 @@ export function DailyRewards({ navigation, route }: any) {
                       style={[
                         styles.characterEquipButton,
                         equipped ? styles.characterEquipButtonEquipped : null,
-                        !equipped && Boolean(purchaseConfig) && !owned && (busy || !canAfford)
+                        !equipped && Boolean(purchaseConfig) && !owned && busy
+                          ? styles.characterEquipButtonDisabled
+                          : null,
+                        !equipped && Boolean(purchaseConfig) && !owned && !canAfford
                           ? styles.characterEquipButtonDisabled
                           : null,
                       ]}
-                      disabled={Boolean(purchaseConfig) && !owned && (busy || !canAfford)}
+                      disabled={Boolean(purchaseConfig) && !owned && busy}
                       onPress={() => {
                         if (purchaseConfig && !owned) {
-                          void purchaseStoreItem(purchaseConfig.itemId, async (status) => {
-                            await handleEquipWonderJumpCharacter(option.id, status)
-                          })
+                          if (!canAfford) {
+                            openInsufficientCoinsModal(purchaseConfig.cost)
+                            return
+                          }
+                          void purchaseStoreItem(
+                            purchaseConfig.itemId,
+                            async (status) => {
+                              await handleEquipWonderJumpCharacter(option.id, status)
+                            },
+                            { cost: purchaseConfig.cost },
+                          )
                           return
                         }
                         void handleEquipWonderJumpCharacter(option.id)
@@ -1194,9 +1236,17 @@ export function DailyRewards({ navigation, route }: any) {
                 busy={busy}
                 onPrimaryPress={() => {
                   if (!owned) {
-                    void purchaseStoreItem(itemId, async (status) => {
-                      await handleEquipAvatarFrame(frame.id, status)
-                    })
+                    if (!canAfford) {
+                      openInsufficientCoinsModal(price)
+                      return
+                    }
+                    void purchaseStoreItem(
+                      itemId,
+                      async (status) => {
+                        await handleEquipAvatarFrame(frame.id, status)
+                      },
+                      { cost: price },
+                    )
                     return
                   }
                   void handleEquipAvatarFrame(frame.id)
@@ -1231,6 +1281,11 @@ export function DailyRewards({ navigation, route }: any) {
       visible={showWalletModal}
       balance={availableCoins}
       onClose={() => setShowWalletModal(false)}
+    />
+    <InsufficientWonderCoinsModal
+      visible={insufficientCoinsModal.visible}
+      balance={availableCoins}
+      onClose={() => setInsufficientCoinsModal({ visible: false })}
     />
     </>
   )
