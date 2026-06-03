@@ -249,8 +249,10 @@ export function Product({ route, navigation }: any) {
       )
       return
     }
+    const subtotalZar = parseMoneyToNumber(selectedUnitPrice) * quantity
     navigation.navigate('CheckoutDelivery', {
       from: 'product',
+      subtotalZar,
       items: [
         {
           productId: String(product.id),

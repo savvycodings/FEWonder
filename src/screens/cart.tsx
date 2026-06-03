@@ -9,6 +9,13 @@ import { formatMoney, parseMoneyToNumber } from '../money'
 import { brandAccentRgba } from '../brandAccent'
 import { cartItemsToCheckoutLines } from '../checkoutFlow'
 import { getCartStockError, maxPurchasableQuantity } from '../productStock'
+import {
+  cartHasWholeSet,
+  defaultTierForCart,
+  formatTierPrice,
+  qualifiesForFreeDeliveryZar,
+  shippingZarForTier,
+} from '../pudoLockerSizes'
 
 const CART_CURRENCY = 'ZAR'
 
@@ -32,8 +39,14 @@ export function Cart({ navigation }: any) {
     }, 0)
   }, [cartItems])
 
-  const shippingNote = 'Pudo locker (from R60 at checkout)'
-  const orderTotal = subtotal
+  const hasWholeSet = useMemo(() => cartHasWholeSet(cartItems), [cartItems])
+  const estimatedTier = defaultTierForCart(hasWholeSet)
+  const shippingZar = shippingZarForTier(estimatedTier, subtotal)
+  const freeDelivery = qualifiesForFreeDeliveryZar(subtotal)
+  const shippingNote = freeDelivery
+    ? 'Free'
+    : formatTierPrice(estimatedTier)
+  const orderTotal = subtotal + shippingZar
   const cartStockErr = useMemo(() => getCartStockError(cartItems), [cartItems])
 
   const formatZar = (amount: number) =>

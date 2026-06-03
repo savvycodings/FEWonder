@@ -27,6 +27,7 @@ import {
   validateCheckoutDelivery,
 } from '../checkoutFlow'
 import { defaultTierForCart } from '../pudoLockerSizes'
+import { parseMoneyToNumber } from '../money'
 import type { User } from '../../types'
 import { fetchSessionUser, getUserSessionToken, readStoredAuthPayload, redeemWonderCode } from '../utils'
 import { brandAccentRgba } from '../brandAccent'
@@ -47,6 +48,8 @@ function cartItemsAllZar(items: { price?: { currencyCode?: string } | null }[]):
 type RouteParams = {
   from?: CheckoutFlowSource
   items?: CheckoutLineItem[]
+  /** Buy-now flow passes line subtotal; cart flow derives from cartItems. */
+  subtotalZar?: number
 }
 
 export function CheckoutDelivery({ navigation }: { navigation: any }) {
@@ -74,6 +77,17 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
   }, [params.items, cartItems])
 
   const hasWholeSet = useMemo(() => checkoutHasWholeSet(items), [items])
+
+  const subtotalZar = useMemo(() => {
+    if (from === 'cart') {
+      return cartItems.reduce((sum, item) => {
+        const price = parseMoneyToNumber(item.price)
+        return sum + price * (item.quantity || 1)
+      }, 0)
+    }
+    const paramSub = Number(params.subtotalZar)
+    return Number.isFinite(paramSub) && paramSub > 0 ? paramSub : 0
+  }, [from, cartItems, params.subtotalZar])
 
   const [pudoLockerTier, setPudoLockerTier] = useState(() => defaultTierForCart(hasWholeSet))
   const [contactPhone, setContactPhone] = useState('')
@@ -333,6 +347,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
             shippingProvince={shippingProvince}
             onShippingProvinceChange={setShippingProvince}
             hasWholeSet={hasWholeSet}
+            subtotalZar={subtotalZar}
           />
 
           <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>Your bank (optional)</Text>

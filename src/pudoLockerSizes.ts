@@ -6,13 +6,28 @@ export const PUDO_LOCKER_PRICES_ZAR: Record<PudoLockerTier, number> = {
   door: 110,
 }
 
+/** Orders at or above this ZAR subtotal qualify for free Pudo delivery. */
+export const FREE_DELIVERY_MIN_SUBTOTAL_ZAR = 1000
+
 export const PUDO_LOCKER_LABELS: Record<PudoLockerTier, string> = {
   locker: 'Locker',
   door: 'Door',
 }
 
+export const FREE_DELIVERY_MESSAGE =
+  'Free delivery on orders of R1,000 or more.'
+
 export const PUDO_DELIVERY_HINT =
-  'Choose locker collection (R90) or door delivery (R110). Enter your Pudo point details below.'
+  'Choose locker collection (R90) or door delivery (R110). Free delivery when your order is R1,000 or more.'
+
+export function qualifiesForFreeDeliveryZar(subtotalZar: number): boolean {
+  return Number.isFinite(subtotalZar) && subtotalZar >= FREE_DELIVERY_MIN_SUBTOTAL_ZAR
+}
+
+export function shippingZarForTier(tier: PudoLockerTier, subtotalZar: number): number {
+  if (qualifiesForFreeDeliveryZar(subtotalZar)) return 0
+  return PUDO_LOCKER_PRICES_ZAR[tier]
+}
 
 /** @deprecated Legacy size tiers — display only for older orders. */
 const LEGACY_TIER_LABELS: Record<string, string> = {
@@ -35,8 +50,26 @@ export function defaultTierForCart(hasWholeSet: boolean): PudoLockerTier {
   return hasWholeSet ? 'door' : 'locker'
 }
 
-export function formatTierPrice(tier: PudoLockerTier): string {
+export function formatTierPrice(tier: PudoLockerTier, subtotalZar?: number): string {
+  if (subtotalZar != null && qualifiesForFreeDeliveryZar(subtotalZar)) return 'Free'
   return `R${PUDO_LOCKER_PRICES_ZAR[tier]}`
+}
+
+export function shippingHintForTier(
+  tier: PudoLockerTier,
+  hasWholeSet: boolean,
+  subtotalZar: number,
+): string {
+  if (qualifiesForFreeDeliveryZar(subtotalZar)) {
+    return hasWholeSet
+      ? 'Your order qualifies for free door delivery.'
+      : tier === 'door'
+        ? 'Your order qualifies for free door delivery.'
+        : 'Your order qualifies for free locker collection.'
+  }
+  if (hasWholeSet) return 'Whole set orders use door delivery (R110).'
+  if (tier === 'door') return 'Door delivery (R110). Use your saved address or enter it below.'
+  return 'Locker collection (R90). Enter your Pudo locker details below.'
 }
 
 export function lockerTierDisplay(tier: string | null | undefined): string {

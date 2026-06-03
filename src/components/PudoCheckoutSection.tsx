@@ -1,9 +1,12 @@
 import { useMemo } from 'react'
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import {
+  FREE_DELIVERY_MESSAGE,
   PUDO_LOCKER_LABELS,
   PUDO_LOCKER_TIERS,
   formatTierPrice,
+  qualifiesForFreeDeliveryZar,
+  shippingHintForTier,
   tierAllowedForCart,
   type PudoLockerTier,
 } from '../pudoLockerSizes'
@@ -27,6 +30,7 @@ type Props = {
   shippingProvince: string
   onShippingProvinceChange: (v: string) => void
   hasWholeSet: boolean
+  subtotalZar: number
 }
 
 export function PudoCheckoutSection({
@@ -48,19 +52,20 @@ export function PudoCheckoutSection({
   shippingProvince,
   onShippingProvinceChange,
   hasWholeSet,
+  subtotalZar,
 }: Props) {
   const styles = useMemo(() => getStyles(theme), [theme])
   const isDoor = pudoLockerTier === 'door'
+  const freeDelivery = qualifiesForFreeDeliveryZar(subtotalZar)
 
   return (
     <>
       <Text style={styles.sectionHeading}>Pudo delivery</Text>
+      {freeDelivery ? (
+        <Text style={styles.freeDeliveryBanner}>{FREE_DELIVERY_MESSAGE}</Text>
+      ) : null}
       <Text style={styles.sectionHint}>
-        {hasWholeSet
-          ? 'Whole set orders use door delivery (R110).'
-          : isDoor
-            ? 'Door delivery (R110). Use your saved address or enter it below.'
-            : 'Locker collection (R90). Enter your Pudo locker details below.'}
+        {shippingHintForTier(pudoLockerTier, hasWholeSet, subtotalZar)}
       </Text>
       <View style={styles.optionRow}>
         {PUDO_LOCKER_TIERS.map((tier) => {
@@ -82,7 +87,7 @@ export function PudoCheckoutSection({
                 {PUDO_LOCKER_LABELS[tier]}
               </Text>
               <Text style={[styles.optionChipPrice, active ? styles.optionChipLabelActive : null]}>
-                {formatTierPrice(tier)}
+                {formatTierPrice(tier, subtotalZar)}
               </Text>
             </TouchableOpacity>
           )
@@ -183,6 +188,13 @@ function getStyles(theme: any) {
       color: theme.textColor,
       marginTop: 4,
       marginBottom: 4,
+    },
+    freeDeliveryBanner: {
+      fontFamily: theme.semiBoldFont,
+      fontSize: 12,
+      color: theme.brandAccent,
+      lineHeight: 17,
+      marginBottom: 6,
     },
     sectionHint: {
       fontFamily: theme.regularFont,
