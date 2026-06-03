@@ -62,7 +62,9 @@ export function MyOrders({ navigation }: any) {
           refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={theme.brandAccent} />}
           contentContainerStyle={styles.list}
           ListEmptyComponent={
-            <Text style={styles.empty}>No orders yet. Use Buy now on a product to place an order.</Text>
+            <Text style={styles.empty}>
+              No completed orders yet. Finished purchases (paid card or uploaded EFT proof) appear here.
+            </Text>
           }
           renderItem={({ item }) => (
             <Pressable onPress={() => navigation.navigate('ProfileMyOrderDetail', { orderId: item.id })}>

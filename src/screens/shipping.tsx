@@ -1,15 +1,14 @@
 import { useContext, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ThemeContext } from '../context'
 import { ProfileStackBackBar } from '../components/ProfileStackBackBar'
 import { User } from '../../types'
@@ -36,14 +35,22 @@ type Props = {
 export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
   const { theme } = useContext(ThemeContext)
   const styles = getStyles(theme)
+  const insets = useSafeAreaInsets()
+  const keyboardAwareBottomOffset = insets.bottom + 24
+  const contentBottomPad = 48 + insets.bottom
   const [line1, setLine1] = useState(user.shippingAddress || '')
   const [line2, setLine2] = useState(user.shippingAddressLine2 || '')
   const [postalCode, setPostalCode] = useState(user.shippingPostalCode || '')
   const [city, setCity] = useState(user.shippingCity || '')
   const [province, setProvince] = useState(user.shippingProvince || '')
+  const [pudoName, setPudoName] = useState(user.pudoLockerName || '')
+  const [pudoAddress, setPudoAddress] = useState(user.pudoLockerAddress || '')
   const [saving, setSaving] = useState(false)
+  const [savingPudo, setSavingPudo] = useState(false)
   const [error, setError] = useState('')
+  const [pudoError, setPudoError] = useState('')
   const [success, setSuccess] = useState('')
+  const [pudoSuccess, setPudoSuccess] = useState('')
   const [fieldErrors, setFieldErrors] = useState<AddressFieldErrors>({})
 
   useEffect(() => {
@@ -52,6 +59,8 @@ export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
     setPostalCode(user.shippingPostalCode || '')
     setCity(user.shippingCity || '')
     setProvince(user.shippingProvince || '')
+    setPudoName(user.pudoLockerName || '')
+    setPudoAddress(user.pudoLockerAddress || '')
   }, [user])
 
   const legacyAddressChanged = useMemo(
@@ -68,6 +77,15 @@ export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
   )
 
   const canSave = legacyAddressChanged || addressDetailsChanged
+
+  const pudoChanged = useMemo(
+    () =>
+      pudoName.trim() !== (user.pudoLockerName || '').trim() ||
+      pudoAddress.trim() !== (user.pudoLockerAddress || '').trim(),
+    [pudoAddress, pudoName, user]
+  )
+
+  const canSavePudo = pudoChanged
 
   function validateAddressFields() {
     const nextErrors: AddressFieldErrors = {}
@@ -143,13 +161,45 @@ export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
     }
   }
 
+  async function onSavePudo() {
+    if (!canSavePudo || savingPudo) return
+    setPudoError('')
+    setPudoSuccess('')
+    const trimmedName = pudoName.trim()
+    const trimmedAddr = pudoAddress.trim()
+    if ((trimmedName && !trimmedAddr) || (!trimmedName && trimmedAddr)) {
+      setPudoError('Enter both locker name and address, or leave both empty.')
+      return
+    }
+    setSavingPudo(true)
+    try {
+      const nextUser = await updateProfileDetails({
+        sessionToken,
+        pudoLockerName: trimmedName,
+        pudoLockerAddress: trimmedAddr,
+      })
+      await onUserUpdated(nextUser)
+      setPudoSuccess('Pudo locker details updated.')
+    } catch (e: any) {
+      setPudoError(e?.message || 'Could not update Pudo locker details.')
+    } finally {
+      setSavingPudo(false)
+    }
+  }
+
   return (
     <View style={styles.page}>
       <ProfileStackBackBar backLabel="Settings" />
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView style={styles.flex} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView
+        style={styles.flex}
+        bottomOffset={keyboardAwareBottomOffset}
+        extraKeyboardSpace={20}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={[styles.content, { paddingBottom: contentBottomPad }]}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.title}>Shipping address</Text>
-        <Text style={styles.subtitle}>Save your main shipping address used during checkout.</Text>
         <View style={styles.accentRule} />
         <View style={styles.card}>
           <Text style={styles.sectionLabel}>Delivery details</Text>
@@ -225,8 +275,53 @@ export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
             {saving ? <ActivityIndicator color={theme.tintTextColor} /> : <Text style={styles.saveText}>Save</Text>}
           </TouchableOpacity>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        <View style={[styles.card, styles.cardSpaced]}>
+          <Text style={styles.sectionLabel}>Pudo locker</Text>
+          <Text style={styles.label}>Locker name or code</Text>
+          <TextInput
+            value={pudoName}
+            onChangeText={(value) => {
+              setPudoName(value)
+              setPudoSuccess('')
+              if (pudoError) setPudoError('')
+            }}
+            placeholder="e.g. Mall locker name"
+            placeholderTextColor={theme.mutedForegroundColor}
+            style={styles.input}
+            autoCapitalize="words"
+            maxLength={120}
+          />
+          <Text style={styles.label}>Locker address</Text>
+          <TextInput
+            value={pudoAddress}
+            onChangeText={(value) => {
+              setPudoAddress(value)
+              setPudoSuccess('')
+              if (pudoError) setPudoError('')
+            }}
+            placeholder="Mall or Pudo point address"
+            placeholderTextColor={theme.mutedForegroundColor}
+            style={[styles.input, styles.inputMultiline]}
+            multiline
+            maxLength={200}
+          />
+          {pudoError ? <Text style={styles.errorText}>{pudoError}</Text> : null}
+          {pudoSuccess ? <Text style={styles.successText}>{pudoSuccess}</Text> : null}
+          <TouchableOpacity
+            style={[styles.saveButton, (!canSavePudo || savingPudo) && styles.saveButtonDisabled]}
+            onPress={onSavePudo}
+            disabled={!canSavePudo || savingPudo}
+            activeOpacity={0.9}
+          >
+            {savingPudo ? (
+              <ActivityIndicator color={theme.tintTextColor} />
+            ) : (
+              <Text style={styles.saveText}>Save locker details</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAwareScrollView>
     </View>
   )
 }
@@ -250,12 +345,6 @@ const getStyles = (theme: any) => {
       fontSize: 30,
       marginBottom: 4,
     },
-    subtitle: {
-      color: theme.mutedForegroundColor,
-      fontFamily: theme.regularFont,
-      fontSize: 13,
-      marginBottom: 8,
-    },
     accentRule: {
       width: 62,
       height: 4,
@@ -269,6 +358,9 @@ const getStyles = (theme: any) => {
       borderWidth: 1,
       borderColor: L(0.3),
       padding: 12,
+    },
+    cardSpaced: {
+      marginTop: 14,
     },
     sectionLabel: {
       color: theme.textColor,
@@ -295,6 +387,10 @@ const getStyles = (theme: any) => {
     },
     inputError: {
       borderColor: '#ef4444',
+    },
+    inputMultiline: {
+      minHeight: 72,
+      textAlignVertical: 'top',
     },
     fieldErrorText: {
       color: '#ef4444',

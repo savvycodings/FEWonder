@@ -47,30 +47,13 @@ export async function finalizeYocoCheckout(orderId: string): Promise<YocoFinaliz
   return 'pending'
 }
 
+/** Only successful payment shows a popup; cancel/close/fail are silent. */
 export function yocoOutcomeAlert(outcome: YocoFinalizeOutcome): { title: string; message: string } | null {
-  switch (outcome) {
-    case 'paid':
-      return {
-        title: 'Payment complete',
-        message: 'Thank you! Your order is paid.',
-      }
-    case 'cancelled':
-      return {
-        title: 'Payment cancelled',
-        message: 'No charge was made. You can complete payment later from Profile → Orders.',
-      }
-    case 'failed':
-      return {
-        title: 'Payment not completed',
-        message: 'The card payment did not go through. You can try again from Profile → Orders.',
-      }
-    case 'pending':
-      return {
-        title: 'Payment not completed',
-        message:
-          'We have not confirmed your payment yet. Your order stays pending — you can try again from Profile → Orders.',
-      }
-    default:
-      return null
+  if (outcome === 'paid') {
+    return {
+      title: 'Payment complete',
+      message: 'Thank you! Your order is paid.',
+    }
   }
+  return null
 }

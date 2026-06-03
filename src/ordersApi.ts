@@ -155,6 +155,14 @@ export async function syncYocoCheckout(orderId: string) {
   }>
 }
 
+/** Drop an incomplete checkout (card not paid, or EFT closed without proof). */
+export async function abandonOrder(orderId: string) {
+  return userFetch(`/orders/${encodeURIComponent(orderId)}/abandon`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }) as Promise<{ ok: boolean; alreadyCancelled?: boolean }>
+}
+
 export async function uploadEftProof(orderId: string, imageBase64: string, mimeType: string, note?: string) {
   return userFetch(`/orders/${orderId}/eft-proof`, {
     method: 'POST',

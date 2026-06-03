@@ -48,7 +48,6 @@ export function Settings({ user, sessionToken, onUserUpdated, onLogout }: Settin
             </View>
             <View style={styles.textWrap}>
               <Text style={styles.rowTitle}>Profile</Text>
-              <Text style={styles.rowSub}>{user.fullName || user.email}</Text>
             </View>
           </View>
           <FeatherIcon name="chevron-right" size={18} color={theme.tintColor} />
@@ -63,10 +62,7 @@ export function Settings({ user, sessionToken, onUserUpdated, onLogout }: Settin
               <FeatherIcon name="map-pin" size={17} color={theme.tintColor} />
             </View>
             <View style={styles.textWrap}>
-              <Text style={styles.rowTitle}>Shipping address</Text>
-              <Text style={styles.rowSub}>
-                {user.shippingAddress?.trim() || 'Add where we should deliver your orders'}
-              </Text>
+              <Text style={styles.rowTitle}>Shipping & Pudo</Text>
             </View>
           </View>
           <FeatherIcon name="chevron-right" size={18} color={theme.tintColor} />
@@ -82,9 +78,6 @@ export function Settings({ user, sessionToken, onUserUpdated, onLogout }: Settin
             </View>
             <View style={styles.textWrap}>
               <Text style={styles.rowTitle}>Payments & billing</Text>
-              <Text style={styles.rowSub}>
-                {user.eftBankName?.trim() || user.phone?.trim() || 'Manage EFT and billing details'}
-              </Text>
             </View>
           </View>
           <FeatherIcon name="chevron-right" size={18} color={theme.tintColor} />
@@ -97,7 +90,6 @@ export function Settings({ user, sessionToken, onUserUpdated, onLogout }: Settin
             </View>
             <View style={styles.textWrap}>
               <Text style={styles.rowTitle}>Redeem code</Text>
-              <Text style={styles.rowSub}>Enter a promotional or reward code</Text>
             </View>
           </View>
           <FeatherIcon name="chevron-right" size={18} color={theme.tintColor} />
@@ -207,7 +199,7 @@ const getStyles = (theme:any) => {
     fontSize: 15,
   },
   bannerRow: {
-    minHeight: 64,
+    minHeight: 52,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: L(0.24),
@@ -246,12 +238,6 @@ const getStyles = (theme:any) => {
     color: theme.textColor,
     fontFamily: theme.semiBoldFont,
     fontSize: 14,
-  },
-  rowSub: {
-    color: theme.mutedForegroundColor,
-    fontFamily: theme.regularFont,
-    fontSize: 12,
-    marginTop: 1,
   },
 })
 }

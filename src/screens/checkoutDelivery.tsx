@@ -3,20 +3,20 @@ import {
   ActivityIndicator,
   Alert,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { useFocusEffect, useRoute } from '@react-navigation/native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FLOATING_TAB_BAR_BOTTOM } from '../tabBarLayout'
-import { ProfilePageHeading, ProfileStackBackBar, PudoCheckoutSection } from '../components'
+import { PaymentMethodModal, ProfilePageHeading, ProfileStackBackBar, PudoCheckoutSection } from '../components'
 import { AppContext, ThemeContext } from '../context'
+import { SHOW_YOCO_CHECKOUT } from '../../constants'
+import { getCartStockError } from '../productStock'
 import {
   type CheckoutDeliveryDetails,
   type CheckoutFlowSource,
@@ -33,6 +33,17 @@ import { brandAccentRgba } from '../brandAccent'
 
 const ACCENT_ON_BADGE_TEXT = '#ffffff'
 
+function cartItemsAllZar(items: { price?: { currencyCode?: string } | null }[]): boolean {
+  if (!items.length) return false
+  return items.every((item) => {
+    const p = item?.price
+    if (p && typeof p === 'object' && 'currencyCode' in p) {
+      return String((p as { currencyCode?: string }).currencyCode || '').trim().toUpperCase() === 'ZAR'
+    }
+    return false
+  })
+}
+
 type RouteParams = {
   from?: CheckoutFlowSource
   items?: CheckoutLineItem[]
@@ -48,6 +59,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
   /** Align footer with floating tab bar height (root stack screens sit above the tab pill). */
   const footerBottomPad = insets.bottom + FLOATING_TAB_BAR_BOTTOM + 12
   const scrollBottomPad = 24 + 58 + footerBottomPad
+  const keyboardAwareBottomOffset = insets.bottom + FLOATING_TAB_BAR_BOTTOM + 24
 
   const from: CheckoutFlowSource = params.from === 'product' ? 'product' : 'cart'
   const items = useMemo<CheckoutLineItem[]>(() => {
@@ -81,6 +93,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
   const [promoBusy, setPromoBusy] = useState(false)
   const [promoError, setPromoError] = useState('')
   const [promoSuccess, setPromoSuccess] = useState('')
+  const [paymentMethodModalOpen, setPaymentMethodModalOpen] = useState(false)
   const lastProfileUserRef = useRef<Partial<User> | null>(null)
 
   const applyProfilePrefill = useCallback((user: Partial<User>) => {
@@ -131,7 +144,8 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
   )
 
   useEffect(() => {
-    if (pudoLockerTier === 'door' && lastProfileUserRef.current) {
+    if (!lastProfileUserRef.current) return
+    if (pudoLockerTier === 'door' || pudoLockerTier === 'locker') {
       applyProfilePrefill(lastProfileUserRef.current)
     }
   }, [pudoLockerTier, applyProfilePrefill])
@@ -200,10 +214,31 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
       setFormError(err)
       return
     }
+    if (from === 'cart') {
+      const stockErr = getCartStockError(cartItems)
+      if (stockErr) {
+        Alert.alert('Out of stock', stockErr)
+        return
+      }
+      if (cartItems.length && !cartItemsAllZar(cartItems)) {
+        Alert.alert(
+          'Checkout',
+          'South African shipping applies to ZAR-priced items only. One or more cart lines are not ZAR.',
+        )
+        return
+      }
+    }
+    setPaymentMethodModalOpen(true)
+  }
+
+  function startPayment(method: 'eft' | 'yoco') {
+    setPaymentMethodModalOpen(false)
+    const delivery = buildDeliveryDetails()
     navigation.navigate('CartCheckout', {
       from,
       items,
       delivery,
+      paymentMethod: method,
     })
   }
 
@@ -218,16 +253,14 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
         <ProfilePageHeading title="Delivery & contact" />
       </SafeAreaView>
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
-      >
-        <ScrollView
+      <View style={styles.flex}>
+        <KeyboardAwareScrollView
           style={styles.flex}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPad }]}
+          bottomOffset={keyboardAwareBottomOffset}
+          extraKeyboardSpace={20}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPad }]}
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.sectionLabel}>Redeem Code (Optional)</Text>
@@ -330,14 +363,22 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
           />
 
           {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
-        </ScrollView>
+        </KeyboardAwareScrollView>
 
         <View style={[styles.footer, { paddingBottom: footerBottomPad }]}>
           <Pressable style={styles.continueBtn} onPress={onContinueToPayment}>
             <Text style={styles.continueText}>Continue to payment</Text>
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </View>
+
+      <PaymentMethodModal
+        visible={paymentMethodModalOpen}
+        showCard={SHOW_YOCO_CHECKOUT}
+        onEft={() => startPayment('eft')}
+        onCard={() => startPayment('yoco')}
+        onCancel={() => setPaymentMethodModalOpen(false)}
+      />
     </View>
   )
 }

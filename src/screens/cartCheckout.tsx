@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,13 +18,7 @@ import FeatherIcon from '@expo/vector-icons/Feather'
 import { useRoute } from '@react-navigation/native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ThemeContext, AppContext } from '../context'
-import {
-  PaymentMethodModal,
-  ProfilePageHeading,
-  ProfileStackBackBar,
-  WonderportAccentCard,
-  YocoPaymentModal,
-} from '../components'
+import { WonderportAccentCard, YocoPaymentModal } from '../components'
 import {
   type CheckoutDeliveryDetails,
   type CheckoutFlowSource,
@@ -31,6 +26,7 @@ import {
   cartItemsToCheckoutLines,
 } from '../checkoutFlow'
 import {
+  abandonOrder,
   createOrder,
   fetchEftInstructions,
   getUserSessionToken,
@@ -38,7 +34,6 @@ import {
   uploadEftProof,
 } from '../ordersApi'
 import { finalizeYocoCheckout, parseYocoReturnRoute, yocoOutcomeAlert } from '../yocoCheckout'
-import { SHOW_YOCO_CHECKOUT } from '../../constants'
 import { brandAccentRgba } from '../brandAccent'
 import { getCartStockError } from '../productStock'
 
@@ -55,17 +50,7 @@ type CheckoutRouteParams = {
   from?: CheckoutFlowSource
   items?: CheckoutLineItem[]
   delivery?: CheckoutDeliveryDetails
-}
-
-function cartItemsAllZar(items: any[]): boolean {
-  if (!items.length) return false
-  return items.every((item) => {
-    const p = item?.price
-    if (p && typeof p === 'object' && 'currencyCode' in p) {
-      return String((p as any).currencyCode || '').trim().toUpperCase() === 'ZAR'
-    }
-    return false
-  })
+  paymentMethod?: 'eft' | 'yoco'
 }
 
 export function CartCheckout({ navigation }: { navigation: any }) {
@@ -85,8 +70,8 @@ export function CartCheckout({ navigation }: { navigation: any }) {
   }, [params.items, cartItems])
   const delivery = params.delivery
 
-  const [paymentMethodModalOpen, setPaymentMethodModalOpen] = useState(false)
   const [checkoutBusy, setCheckoutBusy] = useState(false)
+  const checkoutStartedRef = useRef(false)
 
   const [eftModalOpen, setEftModalOpen] = useState(false)
   const [eftBank, setEftBank] = useState<{
@@ -107,6 +92,29 @@ export function CartCheckout({ navigation }: { navigation: any }) {
   const [yocoSyncing, setYocoSyncing] = useState(false)
   const yocoHandledRef = useRef(false)
 
+  async function dropIncompleteOrder(orderId: string | null) {
+    if (!orderId) return
+    try {
+      await abandonOrder(orderId)
+    } catch {
+      /* best effort — order stays hidden from My orders until completed */
+    }
+  }
+
+  function resetEftCheckoutState() {
+    setEftModalOpen(false)
+    setEftOrderId(null)
+    setEftReference(null)
+    setEftTotalLabel('')
+    setEftBank(null)
+  }
+
+  function resetYocoCheckoutState() {
+    setYocoModalOpen(false)
+    setYocoRedirectUrl(null)
+    setYocoOrderId(null)
+  }
+
   useLayoutEffect(() => {
     if (!lineItems.length) {
       navigation.goBack()
@@ -118,16 +126,15 @@ export function CartCheckout({ navigation }: { navigation: any }) {
       navigation.replace('CheckoutDelivery', { from, items: lineItems })
       return
     }
-    if (from === 'cart' && cartItems.length && !cartItemsAllZar(cartItems)) {
-      Alert.alert(
-        'Checkout',
-        'South African shipping applies to ZAR-priced items only. One or more cart lines are not ZAR.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }],
-      )
+    const method = params.paymentMethod
+    if (method !== 'eft' && method !== 'yoco') {
+      navigation.goBack()
       return
     }
-    setPaymentMethodModalOpen(true)
-  }, [delivery, from, lineItems, cartItems, navigation])
+    if (checkoutStartedRef.current) return
+    checkoutStartedRef.current = true
+    void runCheckout(method)
+  }, [delivery, from, lineItems, navigation, params.paymentMethod])
 
   async function runCheckout(method: 'eft' | 'yoco') {
     const token = await getUserSessionToken()
@@ -185,7 +192,9 @@ export function CartCheckout({ navigation }: { navigation: any }) {
         setYocoModalOpen(true)
       }
     } catch (e: any) {
-      Alert.alert('Checkout', e?.message || 'Could not start checkout')
+      Alert.alert('Checkout', e?.message || 'Could not start checkout', [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ])
     } finally {
       setCheckoutBusy(false)
     }
@@ -211,7 +220,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
     try {
       await uploadEftProof(eftOrderId, asset.base64!, mime)
       Alert.alert('Uploaded', 'We received your proof of payment.')
-      setEftModalOpen(false)
+      resetEftCheckoutState()
       navigation.navigate('Tabs')
     } catch (e: any) {
       Alert.alert('Upload', e?.message || 'Upload failed')
@@ -220,26 +229,35 @@ export function CartCheckout({ navigation }: { navigation: any }) {
     }
   }
 
-  async function finishYocoCheckoutFlow(orderId: string) {
+  async function finishYocoCheckoutFlow(
+    orderId: string,
+    opts?: { treatPendingAsAbandoned?: boolean },
+  ) {
     setYocoSyncing(true)
+    let leaveCheckout = true
     try {
       const outcome = await finalizeYocoCheckout(orderId)
-      const copy = yocoOutcomeAlert(outcome)
-      if (copy) Alert.alert(copy.title, copy.message)
       if (outcome === 'paid') {
+        leaveCheckout = false
+        const copy = yocoOutcomeAlert(outcome)
+        if (copy) Alert.alert(copy.title, copy.message)
         if (from === 'cart') clearCart()
         navigation.navigate('Tabs')
+      } else if (
+        outcome === 'failed' ||
+        outcome === 'cancelled' ||
+        (outcome === 'pending' && opts?.treatPendingAsAbandoned)
+      ) {
+        await dropIncompleteOrder(orderId)
       }
     } catch {
-      Alert.alert(
-        'Payment status',
-        'Could not confirm payment. Check Profile → Orders for the latest status.',
-      )
+      /* User closed or cancelled — no popup; order stays hidden until paid if webhook completes later */
     } finally {
       setYocoSyncing(false)
-      setYocoModalOpen(false)
-      setYocoRedirectUrl(null)
-      setYocoOrderId(null)
+      resetYocoCheckoutState()
+      if (leaveCheckout && navigation.canGoBack()) {
+        navigation.goBack()
+      }
     }
   }
 
@@ -247,25 +265,33 @@ export function CartCheckout({ navigation }: { navigation: any }) {
     const route = parseYocoReturnRoute(navState.url || '')
     if (!route || !yocoOrderId || yocoHandledRef.current || yocoSyncing) return
     yocoHandledRef.current = true
-    void finishYocoCheckoutFlow(yocoOrderId)
+    void finishYocoCheckoutFlow(yocoOrderId, {
+      treatPendingAsAbandoned: route === 'cancelled' || route === 'failed',
+    })
   }
 
   function handleYocoModalClose() {
     if (yocoSyncing) return
     const orderId = yocoOrderId
-    setYocoRedirectUrl(null)
     if (!orderId) {
-      setYocoModalOpen(false)
-      setYocoOrderId(null)
+      resetYocoCheckoutState()
+      if (navigation.canGoBack()) navigation.goBack()
       return
     }
     if (yocoHandledRef.current) {
-      setYocoModalOpen(false)
-      setYocoOrderId(null)
+      resetYocoCheckoutState()
+      if (navigation.canGoBack()) navigation.goBack()
       return
     }
     yocoHandledRef.current = true
-    void finishYocoCheckoutFlow(orderId)
+    void finishYocoCheckoutFlow(orderId, { treatPendingAsAbandoned: true })
+  }
+
+  function closeEftModalWithoutProof() {
+    const orderId = eftOrderId
+    resetEftCheckoutState()
+    void dropIncompleteOrder(orderId)
+    if (navigation.canGoBack()) navigation.goBack()
   }
 
   const keepUiWithoutCart =
@@ -274,25 +300,16 @@ export function CartCheckout({ navigation }: { navigation: any }) {
     return null
   }
 
+  const showPaymentSpinner =
+    (checkoutBusy || yocoSyncing) && !eftModalOpen && !yocoModalOpen
+
   return (
     <View style={styles.page}>
-      <SafeAreaView style={styles.safeTop} edges={['top', 'left', 'right']}>
-        <ProfileStackBackBar onBack={() => navigation.goBack()} />
-        <ProfilePageHeading title="Checkout" />
-      </SafeAreaView>
-
-      <View style={styles.hintWrap}>
-        <Text style={styles.hintText}>
-          {lineItems.length} item{lineItems.length === 1 ? '' : 's'} · choose how to pay
-        </Text>
-        <TouchableOpacity
-          style={styles.editDeliveryLink}
-          onPress={() => navigation.navigate('CheckoutDelivery', { from, items: lineItems })}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.editDeliveryLinkText}>Edit delivery details</Text>
-        </TouchableOpacity>
-      </View>
+      {showPaymentSpinner ? (
+        <View style={styles.spinnerWrap}>
+          <ActivityIndicator color={theme.brandAccent} size="large" />
+        </View>
+      ) : null}
 
       <Modal visible={eftModalOpen} animationType="slide" transparent>
         <SafeAreaView style={styles.checkoutBackdrop} edges={['top', 'bottom']}>
@@ -376,26 +393,12 @@ export function CartCheckout({ navigation }: { navigation: any }) {
                 <Text style={styles.checkoutPrimaryBtnText}>Upload proof of payment</Text>
               )}
             </TouchableOpacity>
-            <TouchableOpacity style={styles.checkoutGhostBtn} onPress={() => setEftModalOpen(false)}>
+            <TouchableOpacity style={styles.checkoutGhostBtn} onPress={closeEftModalWithoutProof}>
               <Text style={styles.checkoutGhostBtnText}>Close</Text>
             </TouchableOpacity>
           </WonderportAccentCard>
         </SafeAreaView>
       </Modal>
-
-      <PaymentMethodModal
-        visible={paymentMethodModalOpen}
-        showCard={SHOW_YOCO_CHECKOUT}
-        onEft={() => {
-          setPaymentMethodModalOpen(false)
-          runCheckout('eft')
-        }}
-        onCard={() => {
-          setPaymentMethodModalOpen(false)
-          runCheckout('yoco')
-        }}
-        onCancel={() => setPaymentMethodModalOpen(false)}
-      />
 
       <YocoPaymentModal
         visible={yocoModalOpen}
@@ -420,6 +423,11 @@ function getStyles(theme: any) {
   const modalOverlay = theme.modalOverlayColor || 'rgba(0, 0, 0, 0.38)'
   return StyleSheet.create({
     page: { flex: 1, backgroundColor: pageBg },
+    spinnerWrap: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
     safeTop: { backgroundColor: pageBg },
     hintWrap: { paddingHorizontal: 16, paddingTop: 0, paddingBottom: 8 },
     hintText: { fontFamily: theme.regularFont, fontSize: 13, color: textMuted },
