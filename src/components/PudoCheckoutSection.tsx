@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import { ProvinceSelectField } from './ProvinceSelectField'
 import {
   FREE_DELIVERY_MESSAGE,
   PUDO_LOCKER_LABELS,
@@ -147,15 +148,11 @@ export function PudoCheckoutSection({
             </View>
           </View>
           <Text style={styles.fieldLabel}>Province</Text>
-          <TextInput
-            key="door-province"
+          <ProvinceSelectField
+            theme={theme}
             value={shippingProvince}
-            onChangeText={onShippingProvinceChange}
-            placeholder="Western Cape"
-            placeholderTextColor={theme.mutedForegroundColor}
-            style={styles.input}
-            autoCapitalize="words"
-            maxLength={60}
+            onChange={onShippingProvinceChange}
+            variant="checkout"
           />
         </>
       ) : (

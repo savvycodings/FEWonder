@@ -30,6 +30,7 @@ import {
   AdminReportedMessages,
   MyOrders,
   MyOrderDetail,
+  ContactUs,
   CommunityUserProfile,
 } from './screens'
 import { CartCheckout } from './screens/cartCheckout'
@@ -314,6 +315,11 @@ function ProfileStackScreen({
       <ProfileStack.Screen name="RedeemCode">
         {() => <RedeemCode sessionToken={sessionToken} />}
       </ProfileStack.Screen>
+      <ProfileStack.Screen
+        name="ContactUs"
+        component={ContactUs}
+        options={{ headerShown: false }}
+      />
       <ProfileStack.Screen name="ProfileDailyRewards" component={DailyRewards} />
       <ProfileStack.Screen name="AdminOrdersLogin" component={AdminOrdersLogin} />
       <ProfileStack.Screen name="AdminOrdersHub" component={AdminOrdersHub} />

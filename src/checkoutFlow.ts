@@ -26,7 +26,7 @@ export function deliveryPrefillFromUser(user: Partial<User> | null | undefined):
     shippingLine2: String(user?.shippingAddressLine2 || '').trim(),
     shippingPostalCode: String(user?.shippingPostalCode || '').trim(),
     shippingCity: String(user?.shippingCity || '').trim(),
-    shippingProvince: String(user?.shippingProvince || '').trim(),
+    shippingProvince: '',
     customerEftName: String(user?.eftBankAccountName || '').trim(),
     customerEftBank: String(user?.eftBankName || '').trim(),
     customerEftAcct: String(user?.eftBankAccountNumber || '').trim(),

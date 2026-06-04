@@ -11,6 +11,7 @@ const PREVIOUS_ROUTE_BACK_LABEL: Record<string, string> = {
   ProfileCart: 'Profile',
   Saved: 'Profile',
   ProfileHeroEdit: 'Profile',
+  ContactUs: 'Profile',
   AdminOrdersLogin: 'Settings',
   AdminOrdersHub: 'Settings',
   AdminOrderDetail: 'Orders',

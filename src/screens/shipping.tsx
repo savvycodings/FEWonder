@@ -14,6 +14,26 @@ import { ProfileStackBackBar } from '../components/ProfileStackBackBar'
 import { User } from '../../types'
 import { updateProfileDetails } from '../utils'
 import { brandAccentRgba } from '../brandAccent'
+import { ProvinceSelectField } from '../components/ProvinceSelectField'
+import {
+  isValidSouthAfricaProvince,
+  normalizeSouthAfricaProvince,
+  provinceDisplayValue,
+} from '../southAfricaProvinces'
+
+function hasCompleteSavedShippingAddress(user: User): boolean {
+  return (
+    Boolean(String(user.shippingAddress || '').trim()) &&
+    /^\d{4}$/.test(String(user.shippingPostalCode || '').trim()) &&
+    Boolean(String(user.shippingCity || '').trim()) &&
+    isValidSouthAfricaProvince(String(user.shippingProvince || ''))
+  )
+}
+
+function provinceFromUserProfile(user: User): string {
+  if (!hasCompleteSavedShippingAddress(user)) return ''
+  return provinceDisplayValue(user.shippingProvince)
+}
 
 const ADDRESS_TEXT_PATTERN = /^[a-zA-Z0-9\s,.'#/-]+$/
 const PLACE_NAME_PATTERN = /^[a-zA-Z][a-zA-Z\s'.-]*$/
@@ -42,7 +62,7 @@ export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
   const [line2, setLine2] = useState(user.shippingAddressLine2 || '')
   const [postalCode, setPostalCode] = useState(user.shippingPostalCode || '')
   const [city, setCity] = useState(user.shippingCity || '')
-  const [province, setProvince] = useState(user.shippingProvince || '')
+  const [province, setProvince] = useState(() => provinceFromUserProfile(user))
   const [pudoName, setPudoName] = useState(user.pudoLockerName || '')
   const [pudoAddress, setPudoAddress] = useState(user.pudoLockerAddress || '')
   const [saving, setSaving] = useState(false)
@@ -58,7 +78,7 @@ export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
     setLine2(user.shippingAddressLine2 || '')
     setPostalCode(user.shippingPostalCode || '')
     setCity(user.shippingCity || '')
-    setProvince(user.shippingProvince || '')
+    setProvince(provinceFromUserProfile(user))
     setPudoName(user.pudoLockerName || '')
     setPudoAddress(user.pudoLockerAddress || '')
   }, [user])
@@ -72,7 +92,7 @@ export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
     () =>
       postalCode.trim() !== (user.shippingPostalCode || '') ||
       city.trim() !== (user.shippingCity || '') ||
-      province.trim() !== (user.shippingProvince || ''),
+      province.trim() !== provinceFromUserProfile(user),
     [city, postalCode, province, user]
   )
 
@@ -117,8 +137,8 @@ export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
 
     if (!trimmedProvince) {
       nextErrors.province = 'Province is required.'
-    } else if (!PLACE_NAME_PATTERN.test(trimmedProvince)) {
-      nextErrors.province = 'Enter a valid province.'
+    } else if (!isValidSouthAfricaProvince(trimmedProvince)) {
+      nextErrors.province = 'Select a province from the list.'
     }
 
     return nextErrors
@@ -150,7 +170,7 @@ export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
         shippingAddressLine2: line2.trim(),
         shippingPostalCode: postalCode.trim(),
         shippingCity: city.trim(),
-        shippingProvince: province.trim(),
+        shippingProvince: normalizeSouthAfricaProvince(province),
       })
       await onUserUpdated(nextUser)
       setSuccess('Shipping address updated.')
@@ -254,14 +274,12 @@ export function Shipping({ user, sessionToken, onUserUpdated }: Props) {
             </View>
           </View>
           <Text style={styles.label}>Province</Text>
-          <TextInput
+          <ProvinceSelectField
+            theme={theme}
             value={province}
-            onChangeText={(value) => updateField('province', value, setProvince)}
-            placeholder="Western Cape"
-            placeholderTextColor={theme.mutedForegroundColor}
-            style={[styles.input, fieldErrors.province && styles.inputError]}
-            autoCapitalize="words"
-            maxLength={60}
+            onChange={(value) => updateField('province', value, setProvince)}
+            hasError={Boolean(fieldErrors.province)}
+            variant="profile"
           />
           {fieldErrors.province ? <Text style={styles.fieldErrorText}>{fieldErrors.province}</Text> : null}
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -358,6 +376,7 @@ const getStyles = (theme: any) => {
       borderWidth: 1,
       borderColor: L(0.3),
       padding: 12,
+      overflow: 'visible',
     },
     cardSpaced: {
       marginTop: 14,

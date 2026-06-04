@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import {
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -150,11 +151,14 @@ export function Profile({
   ]
   const accountDetails = [
     { label: 'Settings', key: 'settings', icon: 'sliders' as const, value: 'Profile, shipping & billing' },
+    { label: 'Contact us', key: 'contact_us', icon: 'phone' as const, value: 'Help with orders & account' },
   ]
 
   function onAccountRowPress(key: string) {
     if (key === 'settings') {
       navigation.navigate('ProfileSettings')
+    } else if (key === 'contact_us') {
+      navigation.navigate('ContactUs')
     } else if (key === 'cart') {
       navigation.navigate('ProfileCart')
     } else if (key === 'saved') {
@@ -344,8 +348,17 @@ export function Profile({
             onPress={() => onAccountRowPress(item.key)}
           >
             <View style={styles.actionLeft}>
-              <View style={styles.iconBubble}>
-                <FeatherIcon name={item.icon} size={22} color={theme.brandAccent} />
+              <View
+                style={[
+                  styles.iconBubble,
+                  item.key === 'contact_us' ? styles.iconBubbleContact : null,
+                ]}
+              >
+                <FeatherIcon
+                  name={item.icon}
+                  size={item.key === 'contact_us' ? 20 : 22}
+                  color={theme.brandAccent}
+                />
               </View>
               <View>
                 <Text style={styles.actionLabel}>{item.label}</Text>
@@ -678,14 +691,19 @@ const getStyles = (theme: any) => {
     gap: 10,
   },
   iconBubble: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: cardFill,
     borderWidth: 1,
     borderColor: L(0.28),
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+    ...(Platform.OS === 'ios' ? { borderCurve: 'continuous' as const } : null),
+  },
+  iconBubbleContact: {
+    paddingTop: 2,
   },
   actionLabel: {
     color: textPrimary,

@@ -122,7 +122,6 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
     setShippingLine2((v) => fill(v, p.shippingLine2))
     setShippingPostalCode((v) => fill(v, p.shippingPostalCode))
     setShippingCity((v) => fill(v, p.shippingCity))
-    setShippingProvince((v) => fill(v, p.shippingProvince))
     setCustomerEftName((v) => fill(v, p.customerEftName))
     setCustomerEftBank((v) => fill(v, p.customerEftBank))
     setCustomerEftAcct((v) => fill(v, p.customerEftAcct))

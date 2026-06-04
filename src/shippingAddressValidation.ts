@@ -1,3 +1,5 @@
+import { isValidSouthAfricaProvince } from './southAfricaProvinces'
+
 const ADDRESS_TEXT_PATTERN = /^[a-zA-Z0-9\s,.'#/-]+$/
 const PLACE_NAME_PATTERN = /^[a-zA-Z][a-zA-Z\s'.-]*$/
 
@@ -28,8 +30,11 @@ export function validateShippingAddressInput(input: ShippingAddressInput): strin
   if (!city || !PLACE_NAME_PATTERN.test(city)) {
     return 'Enter a valid city name.'
   }
-  if (!province || !PLACE_NAME_PATTERN.test(province)) {
-    return 'Enter a valid province.'
+  if (!province) {
+    return 'Select a province.'
+  }
+  if (!isValidSouthAfricaProvince(province)) {
+    return 'Select a province from the list.'
   }
   return null
 }
