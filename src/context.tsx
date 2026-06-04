@@ -22,6 +22,8 @@ const AppContext = createContext<IAppContext>({
   updateCartItemQuantity: () => null,
   removeFromCart: () => null,
   clearCart: () => null,
+  showHomeCartBadge: false,
+  markCartViewed: () => null,
   savedItems: [],
   sessionToken: '',
   setSessionToken: () => null,

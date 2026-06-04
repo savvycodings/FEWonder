@@ -1,5 +1,5 @@
 import 'react-native-gesture-handler'
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { NavigationContainer } from '@react-navigation/native'
 import { Main } from './src/main'
 import { useFonts } from 'expo-font'
@@ -58,6 +58,10 @@ LogBox.ignoreLogs([
   "Property 'NotificationsModal' doesn't exist",
 ])
 
+function cartLineQuantityTotal(items: { quantity?: number }[]): number {
+  return items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity) || 1), 0)
+}
+
 export default function App() {
   const [theme, setTheme] = useState<string>('wonderport')
   const [brandAccentId, setBrandAccentId] = useState<string>('default')
@@ -70,6 +74,9 @@ export default function App() {
   const skipNextCartSyncRef = useRef(false)
   const cartAccountReadyRef = useRef(false)
   const cartSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [cartBadgeDismissed, setCartBadgeDismissed] = useState(false)
+  const cartQtyTotal = useMemo(() => cartLineQuantityTotal(cartItems), [cartItems])
+  const prevCartQtyRef = useRef(cartQtyTotal)
   const [fontsLoaded] = useFonts({
     'Geist-Regular': require('./assets/fonts/Geist-Regular.otf'),
     'Geist-Light': require('./assets/fonts/Geist-Light.otf'),
@@ -219,6 +226,19 @@ export default function App() {
     setCartItems([])
   }
 
+  useEffect(() => {
+    if (cartQtyTotal > prevCartQtyRef.current) {
+      setCartBadgeDismissed(false)
+    }
+    prevCartQtyRef.current = cartQtyTotal
+  }, [cartQtyTotal])
+
+  const showHomeCartBadge = cartQtyTotal > 0 && !cartBadgeDismissed
+
+  const markCartViewed = useCallback(() => {
+    setCartBadgeDismissed(true)
+  }, [])
+
   const refreshCart = useCallback(async (token?: string) => {
     const activeToken = token ?? sessionToken
     if (!activeToken) {
@@ -361,6 +381,8 @@ export default function App() {
               updateCartItemQuantity,
               removeFromCart,
               clearCart,
+              showHomeCartBadge,
+              markCartViewed,
               savedItems,
               sessionToken,
               setSessionToken,

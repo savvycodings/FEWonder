@@ -155,6 +155,9 @@ export interface IAppContext {
   updateCartItemQuantity: (title: string, quantity: number) => void,
   removeFromCart: (title: string) => void,
   clearCart: () => void,
+  /** Red dot on Home cart icon after items are added until user opens the cart. */
+  showHomeCartBadge: boolean,
+  markCartViewed: () => void,
   savedItems: ProductSavePayload[],
   sessionToken: string,
   setSessionToken: (token: string) => void,

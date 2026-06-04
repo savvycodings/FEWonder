@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import {
   FREE_DELIVERY_MESSAGE,
   PUDO_LOCKER_LABELS,
@@ -72,7 +72,7 @@ export function PudoCheckoutSection({
           const allowed = tierAllowedForCart(tier, hasWholeSet)
           const active = pudoLockerTier === tier
           return (
-            <TouchableOpacity
+            <Pressable
               key={tier}
               style={[
                 styles.optionChip,
@@ -80,7 +80,6 @@ export function PudoCheckoutSection({
                 !allowed ? styles.optionChipDisabled : null,
               ]}
               onPress={() => allowed && onPudoLockerTierChange(tier)}
-              activeOpacity={allowed ? 0.85 : 1}
               disabled={!allowed}
             >
               <Text style={[styles.optionChipLabel, active ? styles.optionChipLabelActive : null]}>
@@ -89,15 +88,17 @@ export function PudoCheckoutSection({
               <Text style={[styles.optionChipPrice, active ? styles.optionChipLabelActive : null]}>
                 {formatTierPrice(tier, subtotalZar)}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           )
         })}
       </View>
 
+      <View key={pudoLockerTier} collapsable={false}>
       {isDoor ? (
         <>
           <Text style={styles.fieldLabel}>Address line 1</Text>
           <TextInput
+            key="door-line1"
             value={shippingLine1}
             onChangeText={onShippingLine1Change}
             placeholder="Street address, building, or complex"
@@ -108,6 +109,7 @@ export function PudoCheckoutSection({
           />
           <Text style={styles.fieldLabel}>Address line 2</Text>
           <TextInput
+            key="door-line2"
             value={shippingLine2}
             onChangeText={onShippingLine2Change}
             placeholder="Apartment, suite, unit, floor"
@@ -120,6 +122,7 @@ export function PudoCheckoutSection({
             <View style={styles.fieldHalf}>
               <Text style={styles.fieldLabel}>Postal code</Text>
               <TextInput
+                key="door-postal"
                 value={shippingPostalCode}
                 onChangeText={(v) => onShippingPostalCodeChange(v.replace(/\D/g, '').slice(0, 4))}
                 placeholder="0000"
@@ -132,6 +135,7 @@ export function PudoCheckoutSection({
             <View style={styles.fieldHalf}>
               <Text style={styles.fieldLabel}>City</Text>
               <TextInput
+                key="door-city"
                 value={shippingCity}
                 onChangeText={onShippingCityChange}
                 placeholder="Cape Town"
@@ -144,6 +148,7 @@ export function PudoCheckoutSection({
           </View>
           <Text style={styles.fieldLabel}>Province</Text>
           <TextInput
+            key="door-province"
             value={shippingProvince}
             onChangeText={onShippingProvinceChange}
             placeholder="Western Cape"
@@ -157,23 +162,29 @@ export function PudoCheckoutSection({
         <>
           <Text style={styles.fieldLabel}>Locker name or code</Text>
           <TextInput
+            key="locker-name"
             value={pudoName}
             onChangeText={onPudoNameChange}
             placeholder="e.g. Mall locker name"
             placeholderTextColor={theme.mutedForegroundColor}
             style={styles.input}
+            autoCapitalize="words"
+            maxLength={120}
           />
           <Text style={styles.fieldLabel}>Locker address</Text>
           <TextInput
+            key="locker-address"
             value={pudoAddr}
             onChangeText={onPudoAddrChange}
             placeholder="Mall or Pudo point"
             placeholderTextColor={theme.mutedForegroundColor}
             style={[styles.input, styles.inputMultiline]}
             multiline
+            maxLength={200}
           />
         </>
       )}
+      </View>
     </>
   )
 }

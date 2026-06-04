@@ -1,7 +1,7 @@
-import { useContext, useMemo, type ReactNode } from 'react'
+import { useCallback, useContext, useMemo, type ReactNode } from 'react'
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { useRoute } from '@react-navigation/native'
+import { useFocusEffect, useRoute } from '@react-navigation/native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { AppContext, ThemeContext } from '../context'
 import { ProfilePageHeading, ProfileStackBackBar } from '../components'
@@ -31,7 +31,14 @@ export function Cart({ navigation }: any) {
   /** `Tabs` shell already applies top/horizontal safe insets; root `Stack` `Cart` does not. */
   const isProfileCart = route.name === 'ProfileCart'
   const insets = useSafeAreaInsets()
-  const { cartItems, updateCartItemQuantity, removeFromCart, clearCart } = useContext(AppContext)
+  const { cartItems, updateCartItemQuantity, removeFromCart, clearCart, markCartViewed } =
+    useContext(AppContext)
+
+  useFocusEffect(
+    useCallback(() => {
+      markCartViewed()
+    }, [markCartViewed]),
+  )
   const subtotal = useMemo(() => {
     return cartItems.reduce((sum, item) => {
       const price = parseMoneyToNumber(item.price)

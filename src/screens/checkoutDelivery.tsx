@@ -26,7 +26,7 @@ import {
   deliveryPrefillFromUser,
   validateCheckoutDelivery,
 } from '../checkoutFlow'
-import { defaultTierForCart } from '../pudoLockerSizes'
+import { defaultTierForCart, type PudoLockerTier } from '../pudoLockerSizes'
 import { parseMoneyToNumber } from '../money'
 import type { User } from '../../types'
 import { fetchSessionUser, getUserSessionToken, readStoredAuthPayload, redeemWonderCode } from '../utils'
@@ -157,12 +157,28 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
     }, [applyProfilePrefill]),
   )
 
+  const handlePudoLockerTierChange = useCallback((tier: PudoLockerTier) => {
+    Keyboard.dismiss()
+    setPudoLockerTier(tier)
+  }, [])
+
+  /** Prefill only the fields for the active delivery mode (avoids fighting locker inputs after door → locker). */
   useEffect(() => {
-    if (!lastProfileUserRef.current) return
-    if (pudoLockerTier === 'door' || pudoLockerTier === 'locker') {
-      applyProfilePrefill(lastProfileUserRef.current)
+    const user = lastProfileUserRef.current
+    if (!user) return
+    const p = deliveryPrefillFromUser(user)
+    const fill = (current: string, next: string) => (current.trim() ? current : next)
+    if (pudoLockerTier === 'locker') {
+      setPudoName((v) => fill(v, p.pudoName))
+      setPudoAddr((v) => fill(v, p.pudoAddr))
+    } else {
+      setShippingLine1((v) => fill(v, p.shippingLine1))
+      setShippingLine2((v) => fill(v, p.shippingLine2))
+      setShippingPostalCode((v) => fill(v, p.shippingPostalCode))
+      setShippingCity((v) => fill(v, p.shippingCity))
+      setShippingProvince((v) => fill(v, p.shippingProvince))
     }
-  }, [pudoLockerTier, applyProfilePrefill])
+  }, [pudoLockerTier])
 
   useEffect(() => {
     if (hasWholeSet && pudoLockerTier !== 'door') {
@@ -272,7 +288,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
           style={styles.flex}
           bottomOffset={keyboardAwareBottomOffset}
           extraKeyboardSpace={20}
-          keyboardShouldPersistTaps="handled"
+          keyboardShouldPersistTaps="always"
           keyboardDismissMode="on-drag"
           contentContainerStyle={[styles.scrollContent, { paddingBottom: scrollBottomPad }]}
           showsVerticalScrollIndicator={false}
@@ -331,7 +347,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
           <PudoCheckoutSection
             theme={theme}
             pudoLockerTier={pudoLockerTier}
-            onPudoLockerTierChange={setPudoLockerTier}
+            onPudoLockerTierChange={handlePudoLockerTierChange}
             pudoName={pudoName}
             onPudoNameChange={setPudoName}
             pudoAddr={pudoAddr}

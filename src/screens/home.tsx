@@ -21,7 +21,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { ProductTileImageWithHeart, WonderportAccentCard } from '../components'
-import { ThemeContext } from '../context'
+import { AppContext, ThemeContext } from '../context'
 import {
   getDailyRewardStatus,
   listDbCategories,
@@ -33,6 +33,7 @@ import { shouldShowDailyRewardsHomeAlert } from '../wonderBadgeNotifications'
 import { ShopifyProduct } from '../../types'
 import { formatMoney } from '../money'
 import { shopifyProductToSavePayload } from '../productSave'
+import { navigateOnRootStack } from '../rootNavigation'
 
 /** Home row chips — each maps to DB-backed lists (see load effect). */
 const HOME_CHIPS = ['New', 'Pops', 'Plushie', 'Brands'] as const
@@ -134,6 +135,7 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
   const { width } = useWindowDimensions()
   const cardW = (width - 32 - GRID_GAP) / 2
   const { theme } = useContext(ThemeContext)
+  const { showHomeCartBadge, markCartViewed } = useContext(AppContext)
   const styles = getStyles(theme)
   const frameFill = theme.frameInnerBackgroundColor || theme.tileBackgroundColor || '#FFFFFF'
   const heroGreeting = useMemo(() => 'Wonderport', [])
@@ -285,13 +287,33 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
   )
 
   const openCart = useCallback(() => {
-    const rootNav = navigation.getParent()?.getParent()
-    if (rootNav?.navigate) {
-      rootNav.navigate('Cart')
-      return
-    }
-    navigation.navigate('Cart')
-  }, [navigation])
+    markCartViewed()
+    navigateOnRootStack(navigation, 'Cart')
+  }, [markCartViewed, navigation])
+
+  const openBrandCollection = useCallback(
+    (collection: DbCategorySummary) => {
+      const slug = String(collection.handle || '').trim()
+      if (!slug) return
+      navigateOnRootStack(navigation, 'CategoryProducts', {
+        slug,
+        title: collection.title,
+        headerLabel: collection.title,
+      })
+    },
+    [navigation],
+  )
+
+  const refreshCategories = useCallback(() => {
+    listDbCategories()
+      .then((rows) => setDbCategories(Array.isArray(rows) ? rows : []))
+      .catch(() => setDbCategories([]))
+  }, [])
+
+  useEffect(() => {
+    if (activeCategory !== 'Brands') return
+    refreshCategories()
+  }, [activeCategory, refreshCategories])
 
   return (
     <View style={styles.container}>
@@ -299,6 +321,8 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.headerRow}>
           <Text style={styles.title}>{heroGreeting}</Text>
@@ -321,6 +345,11 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
               >
                 <FeatherIcon name="shopping-bag" size={24} color="#000000" />
               </TouchableOpacity>
+              {showHomeCartBadge ? (
+                <View style={styles.alertBadge}>
+                  <Text style={styles.alertBadgeText}>!</Text>
+                </View>
+              ) : null}
             </View>
             <View style={styles.iconBadgeWrap}>
               <TouchableOpacity
@@ -373,14 +402,11 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
                   <Pressable
                     key={String(c.shopifyId || c.handle)}
                     style={({ pressed }) => [styles.brandCard, pressed && styles.brandCardPressed]}
-                    onPress={() =>
-                      navigation.navigate('CategoryProducts', {
-                        slug: c.handle,
-                        title: c.title,
-                        headerLabel: c.title,
-                      })
-                    }
+                    onPress={() => openBrandCollection(c)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${c.title} brand`}
                   >
+                    <View pointerEvents="none">
                     <WonderportAccentCard
                       borderVariant="solid"
                       borderWidth={2}
@@ -441,6 +467,7 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
                         </View>
                       </View>
                     </WonderportAccentCard>
+                    </View>
                   </Pressable>
                 )
               })}
@@ -611,10 +638,12 @@ const getStyles = (theme: any) =>
       gap: 8,
       marginBottom: 12,
       alignItems: 'stretch',
+      zIndex: 2,
     },
     chipPressable: {
       flex: 1,
       minWidth: 0,
+      overflow: 'hidden',
     },
     chipCardOuter: {
       width: '100%',
@@ -763,6 +792,7 @@ const getStyles = (theme: any) =>
     brandsList: {
       gap: 14,
       marginTop: 10,
+      zIndex: 1,
     },
     brandCard: {
       width: '100%',
