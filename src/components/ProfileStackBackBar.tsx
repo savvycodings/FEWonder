@@ -17,6 +17,7 @@ const PREVIOUS_ROUTE_BACK_LABEL: Record<string, string> = {
   AdminOrderDetail: 'Orders',
   AdminUserOrders: 'Orders',
   AdminReportedMessages: 'Settings',
+  AdminNotificationsHub: 'Orders',
   Tabs: 'Home',
   Product: 'Product',
   Cart: 'Shopping cart',

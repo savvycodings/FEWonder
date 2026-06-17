@@ -1,11 +1,12 @@
 import { memo, useEffect, useRef, useState, type ReactElement } from 'react'
-import { View } from 'react-native'
+import { Image, View } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { SvgXml } from 'react-native-svg'
 import {
   WONDER_COIN_FRONT_SVG_MARKUP,
   WONDER_COIN_ROTATION_SVG_MARKUP,
 } from './wonderCoinFrames.generated'
+import { WONDER_GEM_IMAGE } from '../wonderGemAsset'
 
 /** Public URL path (e.g. web `<img src>`); animated coin uses bundled SVG strings instead. */
 export const WONDER_COIN_FRONT_SVG = '/homepageimgs/Coinrotation/CoinFRONT.svg'
@@ -152,3 +153,28 @@ export function WonderStaticCoin({
     </CoinSlot>
   )
 }
+
+/** Gems read larger than coins in the same slot — artwork has less edge padding after crop. */
+const GEM_SLOT_SCALE = 1.28
+
+export const WonderGemIcon = memo(function WonderGemIcon({
+  size = 20,
+  scale = GEM_SLOT_SCALE,
+}: {
+  size?: number
+  scale?: number
+}): ReactElement {
+  const base = Math.max(8, Math.round(size))
+  const display = Math.max(base, Math.round(base * scale))
+
+  return (
+    <CoinSlot size={display}>
+      <Image
+        source={WONDER_GEM_IMAGE}
+        style={{ width: display, height: display }}
+        resizeMode="contain"
+        accessibilityIgnoresInvertColors
+      />
+    </CoinSlot>
+  )
+})

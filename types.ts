@@ -71,6 +71,8 @@ export interface DailyRewardItem {
 
 export interface DailyRewardStatus {
   walletBalance: number
+  /** WonderGems balance (cosmetic currency for Wonder Store). */
+  gemBalance: number
   /** Wonder Store items already purchased (server-backed). */
   ownedStoreItemIds: string[]
   claimedCount: number
@@ -110,7 +112,7 @@ export interface WonderJumpLeaderboardEntry {
 
 /** Result of POST /auth/wonder-jump-chest/claim */
 export type WonderJumpChestClaimResult =
-  | { ok: true; wonderCoins: number; chestUnlocksAt: null }
+  | { ok: true; wonderGems: number; chestUnlocksAt: null }
   | { ok: false; error: string; chestUnlocksAt?: string | null; msRemaining?: number }
 
 export interface ShopifyMoney {

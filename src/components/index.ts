@@ -15,6 +15,8 @@ export type { ProductImageHeartAlign } from './ProductImageQuickActions'
 export { ProductTileImageWithHeart } from './ProductTileImageWithHeart'
 export { ProductImageSaveHeart } from './ProductImageSaveHeart'
 export type { ProductSavePayload } from './ProductImageSaveHeart'
+export { ProductSoldOutOverlay } from './ProductSoldOutOverlay'
+export { ProductRestockNotifier } from './ProductRestockNotifier'
 export { NotificationsModal } from './NotificationsModal'
 export {
   AVATAR_FRAME_SHOP,
@@ -34,7 +36,8 @@ export type { AvatarFrameId, BorderFrameId } from './AvatarFrame'
 export { AccountRowChevron } from './AccountRowChevron'
 export { ProfileStackBackBar, resolveProfileStackBackLabel } from './ProfileStackBackBar'
 export { ProfilePageHeading } from './ProfilePageHeading'
-export { WonderSpinningCoin, WonderStaticCoin } from './WonderCoin'
+export { WonderGemIcon, WonderSpinningCoin, WonderStaticCoin } from './WonderCoin'
+export { CheckoutWonderCoinsSection } from './CheckoutWonderCoinsSection'
 export { WonderWalletModal, showWonderWalletHelp, WONDER_WALLET_HELP_TEXT } from './WonderWalletModal'
 export {
   InsufficientWonderCoinsModal,

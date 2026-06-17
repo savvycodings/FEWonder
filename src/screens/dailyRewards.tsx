@@ -44,7 +44,7 @@ import {
   InsufficientWonderCoinsModal,
   isInsufficientWonderCoinsError,
   WonderBadgeImage,
-  WonderSpinningCoin,
+  WonderGemIcon,
   WonderStaticCoin,
   WonderWalletModal,
 } from '../components'
@@ -221,7 +221,7 @@ const ACCENT_ON_BADGE_TEXT = '#ffffff'
 const DAILY_STREAK_HELP_TITLE = 'Daily login streak'
 
 const DAILY_STREAK_HELP_TEXT =
-  'Log in every day and claim your reward here to keep your streak going.\n\nEarn Wonder coins and unlock special badges. Come back once a day so you don\'t miss out !\n\nAfter you finish all 7 days in a row, rewards start again from day 1 on your next visit.'
+  'Log in every day and claim your reward here to keep your streak going.\n\nEarn Wonder gems and unlock special badges. Come back once a day so you don\'t miss out !\n\nAfter you finish all 7 days in a row, rewards start again from day 1 on your next visit.'
 const THEME_STORE_OWNED_KEY = 'wonderport-theme-store-owned-ids'
 const THEME_STORE_ITEMS = [
   { id: 'midnight', name: 'Midnight', cost: 5, image: require('../../assets/dailyrewards/midnight.png') },
@@ -250,12 +250,16 @@ const REWARD_CONTENT_H_PAD = 32
 const WONDER_JUMP_CHARACTER_PREVIEW_PX = 56
 const TEMP_WHITE_PREVIEW_OWNER_KEY = 'wonderport-debug-white-preview-owner-user-id'
 /** Isolated so Wonder Store doesn’t re-render on every spin frame. */
-function RewardCarouselSpinningCoin({ color }: { color: string }): ReactElement {
-  return <WonderSpinningCoin size={72} fallbackColor={color} />
+function RewardCarouselGem({ size = 88 }: { size?: number }): ReactElement {
+  return <WonderGemIcon size={size} />
 }
 
 function RewardStaticCoin({ size = 20, color }: { size?: number; color: string }): ReactElement {
   return <WonderStaticCoin size={size} fallbackColor={color} />
+}
+
+function RewardStaticGem({ size = 18 }: { size?: number }): ReactElement {
+  return <WonderGemIcon size={size} scale={1} />
 }
 
 function WonderJumpCharacterPreview({ styleId }: { styleId: WonderJumpCharacterStyle }): ReactElement {
@@ -323,7 +327,7 @@ export function DailyRewards({ navigation, route }: any) {
       ? Math.max(1, Math.floor(rewardStatus.wonderJumpRank))
       : null
   const walletBalance = rewardStatus?.walletBalance || 0
-  const availableCoins = walletBalance
+  const availableGems = rewardStatus?.gemBalance ?? 0
 
   const openInsufficientCoinsModal = useCallback((itemCost?: number) => {
     setInsufficientCoinsModal({ visible: true, itemCost })
@@ -583,7 +587,7 @@ export function DailyRewards({ navigation, route }: any) {
       setStoreMessage('Log in to purchase from the Wonder Store.')
       return
     }
-    if (typeof options?.cost === 'number' && availableCoins < options.cost) {
+    if (typeof options?.cost === 'number' && availableGems < options.cost) {
       openInsufficientCoinsModal(options.cost)
       return
     }
@@ -644,7 +648,7 @@ export function DailyRewards({ navigation, route }: any) {
   async function handleBuyTheme(themeId: string, cost: number) {
     const id = normalizeThemeStoreId(themeId)
     if (isThemeStoreIdOwned(ownedThemeIds, id)) return
-    if (availableCoins < cost) {
+    if (availableGems < cost) {
       openInsufficientCoinsModal(cost)
       return
     }
@@ -660,7 +664,7 @@ export function DailyRewards({ navigation, route }: any) {
     setOwnedThemeIds(optimisticOwned)
     setRewardStatus((curr) =>
       curr
-        ? { ...curr, walletBalance: Math.max(0, (curr.walletBalance || 0) - cost) }
+        ? { ...curr, gemBalance: Math.max(0, (curr.gemBalance || 0) - cost) }
         : curr,
     )
     setStoreMessage('Theme purchased. Tap Equip to use this accent across the app.')
@@ -943,12 +947,12 @@ export function DailyRewards({ navigation, route }: any) {
                       fallbackColor={theme.brandAccent}
                     />
                   ) : (
-                    <RewardCarouselSpinningCoin color={theme.brandAccent} />
+                    <RewardCarouselGem />
                   )}
                 </View>
                 <View style={styles.rewardCardFooter}>
                   <Text style={[styles.rewardCardCoins, isDay7 ? styles.rewardCardCoinsDay7 : null]}>
-                    {isDay7 ? '7-day streak badge' : `+${reward.amount} coins`}
+                    {isDay7 ? '7-day streak badge' : `+${reward.amount} gems`}
                   </Text>
                   {isUnlocked ? (
                     <Pressable
@@ -985,8 +989,8 @@ export function DailyRewards({ navigation, route }: any) {
             accessibilityRole="button"
             accessibilityLabel="Open Wonder Wallet"
           >
-            <RewardStaticCoin size={22} color={theme.brandAccent} />
-            <Text style={styles.storeBalanceBadgeValue}>{availableCoins}</Text>
+            <RewardStaticGem size={18} />
+            <Text style={styles.storeBalanceBadgeValue}>{availableGems}</Text>
           </Pressable>
         </View>
 
@@ -1084,7 +1088,7 @@ export function DailyRewards({ navigation, route }: any) {
           <View style={styles.themeGrid}>
             {THEME_STORE_ITEMS.map((themeItem) => {
               const isOwned = isThemeStoreIdOwned(ownedThemeIds, themeItem.id)
-              const canBuy = availableCoins >= themeItem.cost
+              const canBuy = availableGems >= themeItem.cost
               const accentEquipped =
                 normalizeBrandAccentId(brandAccentId) === normalizeThemeStoreId(themeItem.id)
               return (
@@ -1094,7 +1098,7 @@ export function DailyRewards({ navigation, route }: any) {
                   </View>
                   <Text style={styles.themeName}>{themeItem.name}</Text>
                   <View style={styles.themeCostRow}>
-                    <RewardStaticCoin size={14} color={theme.brandAccent} />
+                    <RewardStaticGem size={18} />
                     <Text style={styles.themeCostValue}>{themeItem.cost}</Text>
                   </View>
                   <Pressable
@@ -1142,7 +1146,7 @@ export function DailyRewards({ navigation, route }: any) {
               const purchaseConfig = WONDER_JUMP_CHARACTER_STORE_CONFIG[option.id]
               const owned = purchaseConfig ? isStoreItemOwned(purchaseConfig.itemId) : true
               const busy = purchaseConfig ? purchasingItemId === purchaseConfig.itemId : false
-              const canAfford = purchaseConfig ? availableCoins >= purchaseConfig.cost : true
+              const canAfford = purchaseConfig ? availableGems >= purchaseConfig.cost : true
               return (
                 <View key={option.id} style={styles.characterCard}>
                   <View style={styles.characterPreviewPlate}>
@@ -1157,7 +1161,7 @@ export function DailyRewards({ navigation, route }: any) {
                   >
                     {purchaseConfig ? (
                       <View style={styles.characterPriceRow}>
-                        <RewardStaticCoin size={16} color={theme.brandAccent} />
+                        <RewardStaticGem size={20} />
                         <Text style={styles.characterPrice}>{purchaseConfig.cost}</Text>
                       </View>
                     ) : null}
@@ -1223,7 +1227,7 @@ export function DailyRewards({ navigation, route }: any) {
             const price = getAvatarFrameStorePrice(frame.id) ?? 0
             const owned = isStoreItemOwned(itemId)
             const busy = purchasingItemId === itemId
-            const canAfford = availableCoins >= price
+            const canAfford = availableGems >= price
             return (
               <AvatarFramePreviewTile
                 key={frame.id}
@@ -1279,12 +1283,13 @@ export function DailyRewards({ navigation, route }: any) {
     </ScrollView>
     <WonderWalletModal
       visible={showWalletModal}
-      balance={availableCoins}
+      balance={walletBalance}
+      gemBalance={availableGems}
       onClose={() => setShowWalletModal(false)}
     />
     <InsufficientWonderCoinsModal
       visible={insufficientCoinsModal.visible}
-      balance={availableCoins}
+      balance={availableGems}
       onClose={() => setInsufficientCoinsModal({ visible: false })}
     />
     </>

@@ -2,12 +2,12 @@ import { useContext, useMemo } from 'react'
 import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { ThemeContext } from '../context'
-import { WonderSpinningCoin } from './WonderCoin'
+import { WonderGemIcon, WonderSpinningCoin } from './WonderCoin'
 
-export const WONDER_WALLET_HELP_TITLE = 'Wonder coins'
+export const WONDER_WALLET_HELP_TITLE = 'Wonder Wallet'
 
 export const WONDER_WALLET_HELP_TEXT =
-  'Earn Wonder coins by claiming your daily login rewards, and by opening gift boxes in Sunset Keys while playing WonderJump.\n\nSpend them on cosmetics in the Wonder Store, like themes, avatar frames, and badges.'
+  'Wonder Gems — earn by claiming daily login rewards and opening gift boxes in WonderJump. Spend them on cosmetics in the Wonder Store (themes, avatar frames, and more).\n\nWonder Coins — earn 1 coin per R1 spent on merchandise when you checkout. Redeem at checkout: 10 coins = R1 off your order (shipping is not discounted).'
 
 export function showWonderWalletHelp() {
   Alert.alert(WONDER_WALLET_HELP_TITLE, WONDER_WALLET_HELP_TEXT)
@@ -16,12 +16,19 @@ export function showWonderWalletHelp() {
 type WonderWalletModalProps = {
   visible: boolean
   balance: number
+  gemBalance: number
   onClose: () => void
   /** When set, shows a primary action (e.g. jump to Wonder Store from Profile). */
   onWonderStorePress?: () => void
 }
 
-export function WonderWalletModal({ visible, balance, onClose, onWonderStorePress }: WonderWalletModalProps) {
+export function WonderWalletModal({
+  visible,
+  balance,
+  gemBalance,
+  onClose,
+  onWonderStorePress,
+}: WonderWalletModalProps) {
   const { theme } = useContext(ThemeContext)
   const styles = useMemo(() => getStyles(theme), [theme])
 
@@ -33,17 +40,32 @@ export function WonderWalletModal({ visible, balance, onClose, onWonderStorePres
             style={styles.walletHelpIconWrap}
             onPress={showWonderWalletHelp}
             accessibilityRole="button"
-            accessibilityLabel="How Wonder coins work"
+            accessibilityLabel="How Wonder Wallet works"
             hitSlop={8}
           >
             <FeatherIcon name="help-circle" size={18} color={theme.mutedForegroundColor} />
           </Pressable>
           <Text style={styles.walletModalTitle}>Wonder Wallet</Text>
-          <Text style={styles.walletModalSubtitle}>Your current Wonder Wallet balance.</Text>
+          <Text style={styles.walletModalSubtitle}>Your current Wonder Wallet balances.</Text>
 
           <View style={styles.walletModalBalanceRow}>
-            <WonderSpinningCoin size={20} fallbackColor={theme.textColor} />
-            <Text style={styles.walletModalBalanceValue}>{balance}</Text>
+            <View style={styles.walletModalIconSlot}>
+              <WonderGemIcon size={20} scale={1} />
+            </View>
+            <View style={styles.walletModalBalanceTextCol}>
+              <Text style={styles.walletModalBalanceLabel}>Wonder Gems</Text>
+              <Text style={styles.walletModalBalanceValue}>{gemBalance}</Text>
+            </View>
+          </View>
+
+          <View style={styles.walletModalBalanceRow}>
+            <View style={styles.walletModalIconSlot}>
+              <WonderSpinningCoin size={20} fallbackColor={theme.textColor} />
+            </View>
+            <View style={styles.walletModalBalanceTextCol}>
+              <Text style={styles.walletModalBalanceLabel}>Wonder Coins</Text>
+              <Text style={styles.walletModalBalanceValue}>{balance}</Text>
+            </View>
           </View>
 
           <View style={styles.walletModalButtons}>
@@ -112,8 +134,8 @@ function getStyles(theme: any) {
     },
     walletModalBalanceRow: {
       marginTop: 4,
-      marginBottom: 10,
-      alignSelf: 'center',
+      marginBottom: 6,
+      alignSelf: 'stretch',
       borderRadius: 12,
       backgroundColor: theme.sheetRowBackgroundColor || theme.appBackgroundColor || '#f4f6fb',
       borderWidth: 1,
@@ -122,8 +144,24 @@ function getStyles(theme: any) {
       paddingVertical: 12,
       flexDirection: 'row',
       alignItems: 'center',
+      gap: 10,
+    },
+    walletModalIconSlot: {
+      width: 22,
+      height: 22,
+      alignItems: 'center',
       justifyContent: 'center',
-      gap: 8,
+    },
+    walletModalBalanceTextCol: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    walletModalBalanceLabel: {
+      color: theme.mutedForegroundColor,
+      fontFamily: 'Geist-Regular',
+      fontSize: 13,
     },
     walletModalBalanceValue: {
       color: theme.textColor,

@@ -63,6 +63,7 @@ export function Profile({
   const cartQuantityTotal = cartItems.reduce((sum, item) => sum + (item.quantity || 1), 0)
   const [showWalletModal, setShowWalletModal] = useState(false)
   const [walletBalance, setWalletBalance] = useState(0)
+  const [gemBalance, setGemBalance] = useState(0)
   const [ordersPreview, setOrdersPreview] = useState<
     {
       id: string
@@ -102,6 +103,7 @@ export function Profile({
     try {
       const rewards = await getDailyRewardStatus(sessionToken)
       setWalletBalance(rewards.walletBalance || 0)
+      setGemBalance(rewards.gemBalance ?? 0)
     } catch (error) {
       console.log('Failed to load wallet balance', error)
     }
@@ -414,6 +416,7 @@ export function Profile({
       <WonderWalletModal
         visible={showWalletModal}
         balance={walletBalance}
+        gemBalance={gemBalance}
         onClose={() => setShowWalletModal(false)}
         onWonderStorePress={() => {
           setShowWalletModal(false)

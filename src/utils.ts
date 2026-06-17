@@ -38,6 +38,12 @@ export function normalizeDailyRewardStatus(status: DailyRewardStatus): void {
   if (!Array.isArray(status.ownedStoreItemIds)) {
     status.ownedStoreItemIds = []
   }
+  if (typeof status.walletBalance !== 'number' || !Number.isFinite(status.walletBalance)) {
+    status.walletBalance = 0
+  }
+  if (typeof status.gemBalance !== 'number' || !Number.isFinite(status.gemBalance)) {
+    status.gemBalance = 0
+  }
   if (typeof status.paidOrderCount !== 'number' || !Number.isFinite(status.paidOrderCount)) {
     status.paidOrderCount = 0
   }
@@ -803,9 +809,9 @@ export async function claimWonderJumpChest(sessionToken: string): Promise<Wonder
     data = { raw }
   }
   if (response.ok && data.ok === true) {
-    const wonderCoins =
-      typeof data.wonderCoins === 'number' && Number.isFinite(data.wonderCoins) ? data.wonderCoins : 0
-    return { ok: true, wonderCoins, chestUnlocksAt: null }
+    const wonderGems =
+      typeof data.wonderGems === 'number' && Number.isFinite(data.wonderGems) ? data.wonderGems : 0
+    return { ok: true, wonderGems, chestUnlocksAt: null }
   }
   if (response.status === 409) {
     return {
@@ -1241,6 +1247,8 @@ export async function listDbProducts(params?: {
   sort?: 'new'
   /** Collection `handle` from `collections` table — filters via `collection_products`. */
   collection?: string
+  /** When true, hide sold-out items (home feed). Search omits this to include sold-out matches. */
+  inStockOnly?: boolean
 }): Promise<ShopifyProduct[]> {
   if (!DOMAIN) {
     throw new Error('API domain is not configured. Set EXPO_PUBLIC_DEV_API_URL.')
@@ -1255,6 +1263,7 @@ export async function listDbProducts(params?: {
   if (query) url.searchParams.set('q', query)
   if (params?.sort === 'new') url.searchParams.set('sort', 'new')
   if (collection) url.searchParams.set('collection', collection)
+  if (params?.inStockOnly) url.searchParams.set('inStockOnly', '1')
 
   const response = await fetch(url.toString())
   const data = await response.json()

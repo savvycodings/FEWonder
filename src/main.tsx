@@ -28,6 +28,7 @@ import {
   AdminOrderDetail,
   AdminUserOrders,
   AdminReportedMessages,
+  AdminNotificationsHub,
   MyOrders,
   MyOrderDetail,
   ContactUs,
@@ -326,6 +327,7 @@ function ProfileStackScreen({
       <ProfileStack.Screen name="AdminOrderDetail" component={AdminOrderDetail} />
       <ProfileStack.Screen name="AdminUserOrders" component={AdminUserOrders} />
       <ProfileStack.Screen name="AdminReportedMessages" component={AdminReportedMessages} />
+      <ProfileStack.Screen name="AdminNotificationsHub" component={AdminNotificationsHub} />
     </ProfileStack.Navigator>
     </View>
   )

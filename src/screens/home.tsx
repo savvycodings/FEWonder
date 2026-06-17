@@ -180,16 +180,17 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
 
   const fetchProductsPage = useCallback(
     async (offset: number, pageSize: number): Promise<ShopifyProduct[]> => {
+      const homeFeed = { first: pageSize, offset, inStockOnly: true as const }
       if (activeCategory === 'New') {
-        return listDbProducts({ first: pageSize, offset, sort: 'new' })
+        return listDbProducts({ ...homeFeed, sort: 'new' })
       }
       const slug = matchCollectionHandle(activeCategory, dbCategories)
       if (slug) {
-        const rows = await listDbProducts({ first: pageSize, offset, collection: slug })
+        const rows = await listDbProducts({ ...homeFeed, collection: slug })
         if (rows.length) return rows
       }
       const q = CHIP_SEARCH_FALLBACK[activeCategory]
-      if (q) return listDbProducts({ first: pageSize, offset, query: q })
+      if (q) return listDbProducts({ ...homeFeed, query: q })
       return []
     },
     [activeCategory, dbCategories],

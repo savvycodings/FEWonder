@@ -16,7 +16,7 @@ import {
 import FeatherIcon from '@expo/vector-icons/Feather'
 import Ionicons from '@expo/vector-icons/Ionicons'
 import { ThemeContext, AppContext } from '../context'
-import { WonderportAccentCard } from '../components'
+import { WonderportAccentCard, ProductSoldOutOverlay, ProductRestockNotifier } from '../components'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { formatMoney, parseMoneyToNumber } from '../money'
 import { getDbProductByHandle } from '../utils'
@@ -72,7 +72,7 @@ function plainTextFromHtml(html: string | null | undefined, maxLen: number) {
 
 export function Product({ route, navigation }: any) {
   const { theme } = useContext(ThemeContext)
-  const { addToCart, savedItems, toggleSavedItem } = useContext(AppContext)
+  const { addToCart, savedItems, toggleSavedItem, sessionToken } = useContext(AppContext)
   const insets = useSafeAreaInsets()
   const { width } = useWindowDimensions()
   const styles = getStyles(theme)
@@ -359,6 +359,7 @@ export function Product({ route, navigation }: any) {
               <Text style={styles.heroPlaceholderText}>{product.title || 'Product'}</Text>
             </View>
           )}
+          {!inStock ? <ProductSoldOutOverlay /> : null}
           </View>
           {heroShowsLoadingOverlay ? (
             <View style={styles.heroImageLoadingOverlay} pointerEvents="none">
@@ -391,6 +392,14 @@ export function Product({ route, navigation }: any) {
               )
             })}
           </ScrollView>
+        ) : null}
+
+        {!inStock && product?.id ? (
+          <ProductRestockNotifier
+            productId={String(product.id)}
+            sessionToken={sessionToken || null}
+            theme={theme}
+          />
         ) : null}
 
         <WonderportAccentCard
@@ -572,6 +581,7 @@ const getStyles = (theme: any) => {
   heroGalleryClip: {
     flex: 1,
     overflow: 'hidden',
+    position: 'relative',
   },
   heroGalleryList: {
     flexGrow: 0,

@@ -114,6 +114,33 @@ export type CreateOrderPayload = {
   customerEftAccountName?: string
   customerEftBankName?: string
   customerEftAccountNumber?: string
+  wonderCoinsToRedeem?: number
+}
+
+export type OrderQuoteResult = {
+  subtotalCents: number
+  discountCents: number
+  wonderCoinsRedeemed: number
+  wonderCoinsEarned: number
+  shippingCents: number
+  totalCents: number
+  freeDelivery: boolean
+  maxRedeemableCoins: number
+  walletBalance: number
+  currency: string
+}
+
+export type QuoteOrderPayload = {
+  items: { productId: string; quantity: number; packaging?: 'single' | 'set' }[]
+  pudoLockerTier: 'locker' | 'door'
+  wonderCoinsToRedeem?: number
+}
+
+export async function quoteOrder(body: QuoteOrderPayload) {
+  return userFetch('/orders/quote', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }) as Promise<OrderQuoteResult>
 }
 
 export async function createOrder(body: CreateOrderPayload) {
@@ -123,6 +150,11 @@ export async function createOrder(body: CreateOrderPayload) {
   }) as Promise<{
     orderId: string
     referenceCode: string
+    subtotalCents: number
+    discountCents: number
+    wonderCoinsRedeemed: number
+    wonderCoinsEarned: number
+    shippingCents: number
     totalCents: number
     currencyCode: string
     paymentMethod: string

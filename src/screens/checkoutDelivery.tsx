@@ -13,7 +13,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { useFocusEffect, useRoute } from '@react-navigation/native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FLOATING_TAB_BAR_BOTTOM } from '../tabBarLayout'
-import { PaymentMethodModal, ProfilePageHeading, ProfileStackBackBar, PudoCheckoutSection } from '../components'
+import { PaymentMethodModal, ProfilePageHeading, ProfileStackBackBar, PudoCheckoutSection, CheckoutWonderCoinsSection } from '../components'
 import { AppContext, ThemeContext } from '../context'
 import { SHOW_YOCO_CHECKOUT } from '../../constants'
 import { getCartStockError } from '../productStock'
@@ -99,15 +99,14 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
   const [shippingPostalCode, setShippingPostalCode] = useState('')
   const [shippingCity, setShippingCity] = useState('')
   const [shippingProvince, setShippingProvince] = useState('')
-  const [customerEftName, setCustomerEftName] = useState('')
-  const [customerEftBank, setCustomerEftBank] = useState('')
-  const [customerEftAcct, setCustomerEftAcct] = useState('')
   const [formError, setFormError] = useState('')
   const [promoCode, setPromoCode] = useState('')
   const [promoBusy, setPromoBusy] = useState(false)
   const [promoError, setPromoError] = useState('')
   const [promoSuccess, setPromoSuccess] = useState('')
   const [paymentMethodModalOpen, setPaymentMethodModalOpen] = useState(false)
+  const [applyWonderCoins, setApplyWonderCoins] = useState(false)
+  const [wonderCoinsToRedeem, setWonderCoinsToRedeem] = useState(0)
   const lastProfileUserRef = useRef<Partial<User> | null>(null)
 
   const applyProfilePrefill = useCallback((user: Partial<User>) => {
@@ -122,9 +121,6 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
     setShippingLine2((v) => fill(v, p.shippingLine2))
     setShippingPostalCode((v) => fill(v, p.shippingPostalCode))
     setShippingCity((v) => fill(v, p.shippingCity))
-    setCustomerEftName((v) => fill(v, p.customerEftName))
-    setCustomerEftBank((v) => fill(v, p.customerEftBank))
-    setCustomerEftAcct((v) => fill(v, p.customerEftAcct))
   }, [])
 
   useEffect(() => {
@@ -218,9 +214,6 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
       contactEmail: contactEmail.trim().toLowerCase(),
       pudoLockerName: pudoName.trim(),
       pudoLockerAddress: pudoAddr.trim(),
-      customerEftAccountName: customerEftName.trim() || undefined,
-      customerEftBankName: customerEftBank.trim() || undefined,
-      customerEftAccountNumber: customerEftAcct.trim() || undefined,
     }
     if (pudoLockerTier === 'door') {
       base.shippingAddress = shippingLine1.trim()
@@ -268,6 +261,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
       items,
       delivery,
       paymentMethod: method,
+      wonderCoinsToRedeem: applyWonderCoins ? wonderCoinsToRedeem : 0,
     })
   }
 
@@ -365,31 +359,14 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
             subtotalZar={subtotalZar}
           />
 
-          <Text style={[styles.sectionLabel, styles.sectionLabelSpaced]}>Your bank (optional)</Text>
-          <Text style={styles.fieldLabel}>Account holder</Text>
-          <TextInput
-            value={customerEftName}
-            onChangeText={setCustomerEftName}
-            placeholder="Name on account"
-            placeholderTextColor={theme.mutedForegroundColor}
-            style={styles.input}
-          />
-          <Text style={styles.fieldLabel}>Bank name</Text>
-          <TextInput
-            value={customerEftBank}
-            onChangeText={setCustomerEftBank}
-            placeholder="e.g. FNB"
-            placeholderTextColor={theme.mutedForegroundColor}
-            style={styles.input}
-          />
-          <Text style={styles.fieldLabel}>Account number</Text>
-          <TextInput
-            value={customerEftAcct}
-            onChangeText={setCustomerEftAcct}
-            placeholder="Account number"
-            placeholderTextColor={theme.mutedForegroundColor}
-            style={styles.input}
-            keyboardType="number-pad"
+          <CheckoutWonderCoinsSection
+            theme={theme}
+            items={items}
+            pudoLockerTier={pudoLockerTier}
+            applyWonderCoins={applyWonderCoins}
+            wonderCoinsToRedeem={wonderCoinsToRedeem}
+            onApplyWonderCoinsChange={setApplyWonderCoins}
+            onWonderCoinsToRedeemChange={setWonderCoinsToRedeem}
           />
 
           {formError ? <Text style={styles.errorText}>{formError}</Text> : null}

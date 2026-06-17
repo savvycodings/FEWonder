@@ -1,18 +1,19 @@
 import { useContext, useMemo } from 'react'
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { ThemeContext } from '../context'
-import { WonderSpinningCoin } from './WonderCoin'
+import { WonderGemIcon } from './WonderCoin'
 
-export const INSUFFICIENT_WONDER_COINS_TITLE = 'Insufficient Wonder coins'
+export const INSUFFICIENT_WONDER_COINS_TITLE = 'Insufficient Wonder Gems'
 
 export const INSUFFICIENT_WONDER_COINS_BODY =
-  'Earn more by:\n• Claiming your daily login rewards\n• Claiming gift boxes in Sunset Keys by progressing through WonderJump'
+  'Earn more Wonder Gems by:\n• Claiming your daily login rewards\n• Opening gift boxes in Sunset Keys while playing WonderJump'
 
 export function isInsufficientWonderCoinsError(message: string): boolean {
   const m = String(message || '').toLowerCase()
   return (
     m.includes('not enough coin') ||
     m.includes('insufficient coin') ||
+    m.includes('not enough gem') ||
     m.includes('not enough wonder')
   )
 }
@@ -39,7 +40,7 @@ export function InsufficientWonderCoinsModal({
           <Text style={styles.body}>{INSUFFICIENT_WONDER_COINS_BODY}</Text>
 
           <View style={styles.balanceRow}>
-            <WonderSpinningCoin size={18} fallbackColor={theme.textColor} />
+            <WonderGemIcon size={24} />
             <Text style={styles.balanceValue}>{balance}</Text>
           </View>
 

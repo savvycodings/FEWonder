@@ -35,7 +35,7 @@ import { DailyRewardsMysteryGiftVisual } from '../components/DailyRewardsMystery
 import { ensureGiftboxSvgXml, giftboxSvgAssetUri, peekGiftboxSvgXml } from '../giftboxSvgAsset'
 import { ensureJetpackSvgXml, jetpackSvgAssetUri, peekJetpackSvgXml } from '../jetpackSvgAsset'
 import { loadWonderJumpCharacterStyle, type WonderJumpCharacterStyle } from '../wonderJumpCharacters'
-import { WonderSpinningCoin } from '../components/WonderCoin'
+import { WonderGemIcon } from '../components/WonderCoin'
 import { WonderJumpCharacterSvg } from '../components/WonderJumpCharacterSvg'
 import {
   claimWonderJumpChest,
@@ -264,7 +264,7 @@ const TROPICAL_CHEST_MIN_BLEND = 1
 const CHEST_SPAWN_P = 1 / 200
 const CHEST_PICKUP_W = 32
 const CHEST_PICKUP_H = 30
-const WONDER_JUMP_CHEST_REWARD_COINS = 4
+const WONDER_JUMP_CHEST_REWARD_GEMS = 4
 
 const CRAB_W = 26
 const CRAB_H = 20
@@ -5388,16 +5388,10 @@ export function WonderJump({
               </>
             ) : hubChestRevealPhase === 'success' ? (
               <>
-                <Text style={styles.wjChestModalTitle}>You earned {WONDER_JUMP_CHEST_REWARD_COINS} Wonder coins</Text>
+                <Text style={styles.wjChestModalTitle}>You earned {WONDER_JUMP_CHEST_REWARD_GEMS} Wonder gems</Text>
                 <View style={styles.wjChestModalCoinsRow}>
-                  <WonderSpinningCoin
-                    size={56}
-                    fallbackColor={WONDER_JUMP_MENU_ACCENT}
-                  />
-                  <WonderSpinningCoin
-                    size={56}
-                    fallbackColor={WONDER_JUMP_MENU_ACCENT}
-                  />
+                  <WonderGemIcon size={72} />
+                  <WonderGemIcon size={72} />
                 </View>
                 <Text style={styles.wjChestModalSub}>They are already in your wallet.</Text>
                 <Pressable onPress={closeHubChestRevealModal} style={[styles.wjChestModalButton, primaryButtonTone]}>
@@ -5407,7 +5401,7 @@ export function WonderJump({
             ) : hubChestRevealPhase === 'claiming' ? (
               <View style={styles.wjChestModalClaiming}>
                 <ActivityIndicator size="large" color={WONDER_JUMP_MENU_ACCENT} />
-                <Text style={styles.wjChestModalClaimingText}>Adding coins…</Text>
+                <Text style={styles.wjChestModalClaimingText}>Adding gems…</Text>
               </View>
             ) : (
               <Animated.View

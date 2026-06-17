@@ -54,6 +54,12 @@ export function AdminOrdersHub({ navigation }: any) {
         >
           <Text style={styles.manageButtonText}>Open reported messages</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.manageButton, styles.manageButtonSecondary]}
+          onPress={() => navigation.navigate('AdminNotificationsHub')}
+        >
+          <Text style={styles.manageButtonText}>Restock notifications</Text>
+        </TouchableOpacity>
       </View>
       <View style={styles.segmentRow}>
         <TouchableOpacity
@@ -122,6 +128,7 @@ const getStyles = (theme: any) =>
       paddingHorizontal: 12,
       paddingTop: 10,
       paddingBottom: 2,
+      gap: 8,
     },
     manageButton: {
       minHeight: 42,
@@ -131,6 +138,9 @@ const getStyles = (theme: any) =>
       backgroundColor: theme.tileBackgroundColor || '#1f1f1f',
       borderWidth: 1,
       borderColor: theme.brandAccent,
+    },
+    manageButtonSecondary: {
+      marginBottom: 4,
     },
     manageButtonText: {
       color: theme.brandAccent,

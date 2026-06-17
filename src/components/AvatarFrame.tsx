@@ -21,7 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useContext } from 'react'
 import { ThemeContext } from '../context'
 import { brandAccentRgba } from '../brandAccent'
-import { WonderStaticCoin } from './WonderCoin'
+import { WonderGemIcon } from './WonderCoin'
 
 const STORAGE_KEY = 'wonderport-avatar-frame-id'
 
@@ -863,7 +863,7 @@ export function AvatarFramePreviewTile({
       </View>
       <Text style={[styles.tileName, { color: textPrimary }]}>{meta?.name}</Text>
       <View style={styles.tilePriceRow}>
-        <WonderStaticCoin size={14} fallbackColor={accent} />
+        <WonderGemIcon size={18} scale={1} />
         <Text style={[styles.tilePrice, { color: accent }]}>{priceCoins}</Text>
       </View>
       <Pressable
