@@ -1,0 +1,3 @@
+# Local Android artifacts (regenerated on EAS; stale autolinking breaks Gradle)
+android/build/
+android/.gradle/

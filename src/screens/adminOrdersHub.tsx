@@ -7,10 +7,12 @@ import {
   TouchableOpacity,
   RefreshControl,
   Pressable,
+  Alert,
+  ActivityIndicator,
 } from 'react-native'
 import { ThemeContext } from '../context'
 import { ProfileStackBackBar } from '../components/ProfileStackBackBar'
-import { fetchAdminOrders } from '../ordersApi'
+import { adminSyncShopifyCatalog, fetchAdminOrders } from '../ordersApi'
 
 type Filter = 'yoco' | 'eft'
 
@@ -25,6 +27,7 @@ export function AdminOrdersHub({ navigation }: any) {
   const [orders, setOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [syncingShopify, setSyncingShopify] = useState(false)
 
   const load = useCallback(async () => {
     setError(null)
@@ -44,6 +47,17 @@ export function AdminOrdersHub({ navigation }: any) {
     load()
   }, [load])
 
+  const runShopifySync = async () => {
+    setSyncingShopify(true)
+    try {
+      await adminSyncShopifyCatalog()
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Sync failed')
+    } finally {
+      setSyncingShopify(false)
+    }
+  }
+
   return (
     <View style={styles.page}>
       <ProfileStackBackBar />
@@ -59,6 +73,17 @@ export function AdminOrdersHub({ navigation }: any) {
           onPress={() => navigation.navigate('AdminNotificationsHub')}
         >
           <Text style={styles.manageButtonText}>Restock notifications</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.manageButton, styles.syncButton, syncingShopify && styles.syncButtonDisabled]}
+          onPress={() => void runShopifySync()}
+          disabled={syncingShopify}
+        >
+          {syncingShopify ? (
+            <ActivityIndicator color={theme.brandAccent} size="small" />
+          ) : (
+            <Text style={styles.syncButtonText}>Sync</Text>
+          )}
         </TouchableOpacity>
       </View>
       <View style={styles.segmentRow}>
@@ -97,7 +122,10 @@ export function AdminOrdersHub({ navigation }: any) {
               <Text style={styles.ref}>{item.referenceCode}</Text>
               <Text style={styles.amount}>{centsLabel(item.totalCents, item.currencyCode)}</Text>
             </View>
-            <Text style={styles.status}>{item.status}</Text>
+            <Text style={styles.status}>
+              {item.status}
+              {item.soldAt ? ' · sold' : ''}
+            </Text>
             {item.pudoLockerTierLabel || item.pudoLockerName ? (
               <Text style={styles.pudoHint} numberOfLines={1}>
                 Pudo
@@ -138,6 +166,16 @@ const getStyles = (theme: any) =>
       backgroundColor: theme.tileBackgroundColor || '#1f1f1f',
       borderWidth: 1,
       borderColor: theme.brandAccent,
+      marginBottom: 8,
+    },
+    syncButton: {
+      borderColor: theme.mutedForegroundColor,
+    },
+    syncButtonDisabled: { opacity: 0.6 },
+    syncButtonText: {
+      fontFamily: theme.semiBoldFont,
+      fontSize: 13,
+      color: theme.textColor,
     },
     manageButtonSecondary: {
       marginBottom: 4,

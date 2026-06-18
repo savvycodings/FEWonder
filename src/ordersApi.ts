@@ -373,6 +373,33 @@ export async function acceptAdminEftPayment(orderId: string) {
   }>
 }
 
+/** Admin: pull catalog + stock from Shopify into the API database. */
+export async function adminSyncShopifyCatalog() {
+  return adminFetch('/admin/shopify/sync-catalog', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }) as Promise<{
+    ok: boolean
+    products: number
+    variants: number
+    message?: string
+    detail?: string
+  }>
+}
+
+/** Paid order only: mark as physically sold and reduce local + Shopify stock. */
+export async function markAdminOrderSold(orderId: string) {
+  return adminFetch(`/admin/orders/${encodeURIComponent(orderId)}/mark-sold`, {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }) as Promise<{
+    ok: boolean
+    alreadySold?: boolean
+    soldAt?: string
+    message?: string
+  }>
+}
+
 /** Paid order only: ask ShipLogic to create shipment / waybill (Pudo or door). */
 export async function adminBookCourier(orderId: string) {
   return adminFetch(`/admin/orders/${encodeURIComponent(orderId)}/book-courier`, {

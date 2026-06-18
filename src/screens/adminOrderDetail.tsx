@@ -16,7 +16,12 @@ import * as Clipboard from 'expo-clipboard'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { ThemeContext } from '../context'
 import { ProfileStackBackBar } from '../components/ProfileStackBackBar'
-import { acceptAdminEftPayment, adminBookCourier, fetchAdminOrderDetail } from '../ordersApi'
+import {
+  acceptAdminEftPayment,
+  adminBookCourier,
+  fetchAdminOrderDetail,
+  markAdminOrderSold,
+} from '../ordersApi'
 import { lockerTierDisplay, packagingLabel } from '../pudoLockerSizes'
 
 function centsLabel(cents: number, code: string) {
@@ -43,6 +48,7 @@ export function AdminOrderDetail({ route }: any) {
   const [proofModal, setProofModal] = useState(false)
   const [accepting, setAccepting] = useState(false)
   const [bookingCourier, setBookingCourier] = useState(false)
+  const [markingSold, setMarkingSold] = useState(false)
 
   const load = useCallback(async () => {
     if (!orderId) return
@@ -94,6 +100,18 @@ export function AdminOrderDetail({ route }: any) {
         },
       ]
     )
+  }
+
+  const runMarkSold = async () => {
+    setMarkingSold(true)
+    try {
+      await markAdminOrderSold(orderId)
+      await load()
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Could not mark sold')
+    } finally {
+      setMarkingSold(false)
+    }
   }
 
   const runBookCourier = async () => {
@@ -488,6 +506,28 @@ export function AdminOrderDetail({ route }: any) {
               <Text style={styles.eventDate}>{String(e.createdAt).slice(0, 19)}</Text>
             </View>
           ))}
+
+          {o.status === 'paid' ? (
+            <View style={styles.soldSection}>
+              {o.soldAt ? (
+                <Text style={styles.soldDone}>
+                  Sold · {String(o.soldAt).slice(0, 19).replace('T', ' ')}
+                </Text>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.soldBtn, markingSold && styles.acceptBtnDisabled]}
+                  disabled={markingSold}
+                  onPress={() => void runMarkSold()}
+                >
+                  {markingSold ? (
+                    <ActivityIndicator color="#111" />
+                  ) : (
+                    <Text style={styles.soldBtnText}>Sold</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : null}
         </>
       ) : null}
     </ScrollView>
@@ -529,6 +569,31 @@ const getStyles = (theme: any) =>
     },
     acceptBtnDisabled: { opacity: 0.6 },
     acceptBtnText: { fontFamily: theme.boldFont, color: '#111', fontSize: 14, textAlign: 'center' },
+    soldSection: {
+      marginTop: 28,
+      paddingTop: 20,
+      borderTopWidth: 1,
+      borderTopColor: theme.tileBorderColor || theme.borderColor,
+    },
+    soldBtn: {
+      paddingVertical: 16,
+      paddingHorizontal: 20,
+      borderRadius: 12,
+      backgroundColor: theme.brandAccent,
+      alignItems: 'center',
+    },
+    soldBtnText: {
+      fontFamily: theme.boldFont,
+      color: '#111',
+      fontSize: 16,
+      letterSpacing: 0.4,
+    },
+    soldDone: {
+      fontFamily: theme.boldFont,
+      fontSize: 15,
+      color: theme.brandAccent,
+      textAlign: 'center',
+    },
     modalBackdrop: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.92)',

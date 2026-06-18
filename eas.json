@@ -6,13 +6,25 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "node": "22.14.0",
+      "env": {
+        "NPM_CONFIG_NODE_LINKER": "hoisted"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "node": "22.14.0",
+      "env": {
+        "NPM_CONFIG_NODE_LINKER": "hoisted"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "node": "22.14.0",
+      "env": {
+        "NPM_CONFIG_NODE_LINKER": "hoisted"
+      }
     }
   },
   "submit": {

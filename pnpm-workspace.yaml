@@ -1,2 +1,5 @@
+packages:
+  - '.'
+
 allowBuilds:
   dtrace-provider: false
