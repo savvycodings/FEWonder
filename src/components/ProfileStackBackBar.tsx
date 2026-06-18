@@ -21,7 +21,7 @@ const PREVIOUS_ROUTE_BACK_LABEL: Record<string, string> = {
   Tabs: 'Home',
   Product: 'Product',
   Cart: 'Shopping cart',
-  CheckoutDelivery: 'Delivery & contact',
+  CheckoutDelivery: 'Checkout',
   CartCheckout: 'Checkout',
 }
 

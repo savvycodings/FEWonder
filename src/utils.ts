@@ -34,16 +34,23 @@ function dailyRewardsAuthHeaders(sessionToken: string): Record<string, string> {
   }
 }
 
+function coerceWalletInt(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.floor(value))
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number.parseInt(value, 10)
+    if (Number.isFinite(n)) return Math.max(0, n)
+  }
+  return 0
+}
+
 export function normalizeDailyRewardStatus(status: DailyRewardStatus): void {
   if (!Array.isArray(status.ownedStoreItemIds)) {
     status.ownedStoreItemIds = []
   }
-  if (typeof status.walletBalance !== 'number' || !Number.isFinite(status.walletBalance)) {
-    status.walletBalance = 0
-  }
-  if (typeof status.gemBalance !== 'number' || !Number.isFinite(status.gemBalance)) {
-    status.gemBalance = 0
-  }
+  status.walletBalance = coerceWalletInt(status.walletBalance)
+  status.gemBalance = coerceWalletInt(status.gemBalance)
   if (typeof status.paidOrderCount !== 'number' || !Number.isFinite(status.paidOrderCount)) {
     status.paidOrderCount = 0
   }
@@ -110,7 +117,34 @@ export async function readDailyRewardsCache(): Promise<DailyRewardStatus | null>
 
 export async function writeDailyRewardsCache(data: DailyRewardStatus): Promise<void> {
   try {
+    normalizeDailyRewardStatus(data)
     await AsyncStorage.setItem(DAILY_REWARDS_CACHE_KEY, JSON.stringify({ at: Date.now(), data }))
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Keep Wonder Wallet gem balance in sync after WonderJump chest / offline claims. */
+export async function applyWonderGemBalanceToCache(gemBalance: number): Promise<void> {
+  const gems = coerceWalletInt(gemBalance)
+  try {
+    const cached = await readDailyRewardsCache()
+    if (cached) {
+      cached.gemBalance = gems
+      await writeDailyRewardsCache(cached)
+      return
+    }
+    const raw = await AsyncStorage.getItem(DAILY_REWARDS_CACHE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw) as { at?: number; data?: DailyRewardStatus }
+      if (parsed?.data) {
+        parsed.data.gemBalance = gems
+        await AsyncStorage.setItem(
+          DAILY_REWARDS_CACHE_KEY,
+          JSON.stringify({ at: Date.now(), data: parsed.data }),
+        )
+      }
+    }
   } catch {
     /* ignore */
   }
@@ -604,7 +638,13 @@ export async function claimDailyReward(sessionToken: string): Promise<DailyRewar
 
   const status = data as DailyRewardStatus
   await persistDailyRewardStatus(status)
-  return status
+
+  try {
+    const fresh = await getDailyRewardStatus(sessionToken)
+    return fresh
+  } catch {
+    return status
+  }
 }
 
 /** Display-score bands aligned with WonderJump HUD / leaderboard (not raw height). */
@@ -809,8 +849,8 @@ export async function claimWonderJumpChest(sessionToken: string): Promise<Wonder
     data = { raw }
   }
   if (response.ok && data.ok === true) {
-    const wonderGems =
-      typeof data.wonderGems === 'number' && Number.isFinite(data.wonderGems) ? data.wonderGems : 0
+    const wonderGems = coerceWalletInt(data.wonderGems)
+    await applyWonderGemBalanceToCache(wonderGems)
     return { ok: true, wonderGems, chestUnlocksAt: null }
   }
   if (response.status === 409) {

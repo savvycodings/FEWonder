@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { Feather as FeatherIcon } from '@expo/vector-icons'
-import { ProductTileImageWithHeart, WonderportAccentCard } from '../components'
+import { ProductGridTile, productGridPriceLabel, WonderportAccentCard } from '../components'
 import { brandIpSelectionLabel, shouldShowBrandIpHub } from '../brandIpCatalog'
 import { resolveFeaturedBrandIps } from '../brandIpResolve'
 import {
@@ -20,7 +20,7 @@ import {
 } from '../brandIpFilter'
 import { ThemeContext } from '../context'
 import { ShopifyProduct } from '../../types'
-import { formatMoney } from '../money'
+import { shopifyProductToSavePayload } from '../productSave'
 import { getDbCategoryBySlug, listDbProducts } from '../utils'
 
 const GRID_GAP = 12
@@ -225,49 +225,20 @@ export function CategoryProducts({ route, navigation }: { route: any; navigation
         {displayedProducts.map((item) => {
           if (!item) return null
           const imageSource = item.featuredImageUrl ? { uri: item.featuredImageUrl } : undefined
-          const priceLabel =
-            item.price?.amount != null && item.price.amount !== ''
-              ? formatMoney(item.price)
-              : 'View details'
+          const priceLabel = productGridPriceLabel(item.price)
+          const savePayload = shopifyProductToSavePayload(item)
           return (
-            <View key={item.id || item.handle || item.title} style={[styles.card, { width: cardW }]}>
-              {imageSource ? (
-                <ProductTileImageWithHeart
-                  product={{
-                    title: item.title,
-                    price: priceLabel,
-                    image: imageSource,
-                    category: item.productType || undefined,
-                  }}
-                  source={imageSource}
-                  resizeMode="cover"
-                  imageTranslateY={0}
-                  wrapStyle={styles.media}
-                  imageStyle={styles.mediaImage}
-                  onPress={() => navigation.navigate('Product', { product: item })}
-                />
-              ) : (
-                <Pressable
-                  style={styles.media}
-                  onPress={() => navigation.navigate('Product', { product: item })}
-                >
-                  <View style={styles.placeholderWrap}>
-                    <Text style={[styles.placeholderText, { color: theme.textColor }]} numberOfLines={2}>
-                      {item.title}
-                    </Text>
-                  </View>
-                </Pressable>
-              )}
-              <Pressable
-                style={styles.footer}
-                onPress={() => navigation.navigate('Product', { product: item })}
-              >
-                <Text style={[styles.cardTitle, { color: theme.textColor }]} numberOfLines={2}>
-                  {item.title}
-                </Text>
-                <Text style={styles.cardPrice}>{priceLabel}</Text>
-              </Pressable>
-            </View>
+            <ProductGridTile
+              key={item.id || item.handle || item.title}
+              theme={theme}
+              cardWidth={cardW}
+              frameFill={frameFill}
+              title={item.title}
+              priceLabel={priceLabel}
+              savePayload={savePayload}
+              imageSource={imageSource}
+              onPress={() => navigation.navigate('Product', { product: item })}
+            />
           )
         })}
       </View>
@@ -503,7 +474,7 @@ function getStyles(theme: any) {
       fontSize: 12,
       textAlign: 'center',
     },
-    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_GAP },
+    grid: { flexDirection: 'row', flexWrap: 'wrap', gap: GRID_GAP, alignItems: 'stretch' },
     loadMoreButton: {
       alignSelf: 'center',
       marginTop: 8,
@@ -514,33 +485,6 @@ function getStyles(theme: any) {
     loadMoreText: {
       fontFamily: theme.semiBoldFont,
       fontSize: 15,
-    },
-    card: {
-      backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
-      borderRadius: 18,
-      paddingHorizontal: 4,
-      paddingTop: 8,
-      paddingBottom: 6,
-      borderWidth: 1,
-      borderColor: theme.tileBorderColor || theme.borderColor,
-      overflow: 'hidden',
-    },
-    media: { width: '100%', height: 230, borderRadius: 14, overflow: 'hidden' },
-    mediaImage: { width: '100%', height: '100%' },
-    placeholderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 12 },
-    placeholderText: { fontFamily: theme.semiBoldFont, fontSize: 13, textAlign: 'center' },
-    footer: { paddingHorizontal: 10, paddingTop: 8, paddingBottom: 8 },
-    cardTitle: { fontFamily: theme.boldFont, fontSize: 14, lineHeight: 18 },
-    cardPrice: {
-      marginTop: 8,
-      fontFamily: theme.boldFont,
-      fontSize: 13,
-      color: '#fff',
-      backgroundColor: theme.brandAccent,
-      alignSelf: 'flex-start',
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 999,
     },
   })
 }

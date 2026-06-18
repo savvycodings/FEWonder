@@ -235,7 +235,14 @@ export type MeteorCompositeProps = {
   zIndex?: number
 }
 
-export function MeteorComposite({
+function meteorCompositePropsEqual(prev: MeteorCompositeProps, next: MeteorCompositeProps): boolean {
+  if (prev.left !== next.left || prev.top !== next.top || prev.variant !== next.variant) return false
+  if (prev.flamePhase !== next.flamePhase) return false
+  if ((prev.zIndex ?? 4) !== (next.zIndex ?? 4)) return false
+  return (prev.flameAnimTick >> 1) === (next.flameAnimTick >> 1)
+}
+
+export const MeteorComposite = memo(function MeteorComposite({
   left,
   top,
   variant,
@@ -304,7 +311,7 @@ export function MeteorComposite({
       </View>
     </View>
   )
-}
+}, meteorCompositePropsEqual)
 
 /** For canvas / docs — human-readable variant stats. */
 export function meteorVariantCaption(variant: AsteroidVariant): string {

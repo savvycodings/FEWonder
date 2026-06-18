@@ -273,7 +273,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
     <View style={styles.page}>
       <SafeAreaView style={styles.safeTop} edges={['top', 'left', 'right']}>
         <ProfileStackBackBar onBack={() => navigation.goBack()} />
-        <ProfilePageHeading title="Delivery & contact" />
+        <ProfilePageHeading title="Checkout" />
       </SafeAreaView>
 
       <View style={styles.flex}>
@@ -362,6 +362,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
           <CheckoutWonderCoinsSection
             theme={theme}
             items={items}
+            subtotalZar={subtotalZar}
             pudoLockerTier={pudoLockerTier}
             applyWonderCoins={applyWonderCoins}
             wonderCoinsToRedeem={wonderCoinsToRedeem}

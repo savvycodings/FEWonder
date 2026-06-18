@@ -57,7 +57,7 @@ async function userFetch(path: string, init: RequestInit = {}) {
     data = { raw: text }
   }
   if (!res.ok) {
-    throw new Error(data?.error || res.statusText || 'Request failed')
+    throw new Error(parseApiError(data, res))
   }
   return data
 }
@@ -79,7 +79,7 @@ async function adminFetch(path: string, init: RequestInit = {}) {
     data = { raw: text }
   }
   if (!res.ok) {
-    throw new Error(data?.error || res.statusText || 'Request failed')
+    throw new Error(parseApiError(data, res))
   }
   return data
 }
@@ -94,6 +94,39 @@ export async function fetchEftInstructions() {
     bank: string
     branch: string
     message: string
+  }
+}
+
+function coerceOrderInt(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(0, Math.floor(value))
+  }
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number.parseInt(value, 10)
+    if (Number.isFinite(n)) return Math.max(0, n)
+  }
+  return 0
+}
+
+function parseApiError(data: any, res: Response): string {
+  const parts = [data?.error, data?.detail].filter((x) => typeof x === 'string' && x.trim())
+  if (parts.length) return parts.join(' — ')
+  if (res.statusText?.trim()) return res.statusText.trim()
+  return `Request failed (${res.status})`
+}
+
+function normalizeOrderQuote(data: any): OrderQuoteResult {
+  return {
+    subtotalCents: coerceOrderInt(data?.subtotalCents),
+    discountCents: coerceOrderInt(data?.discountCents),
+    wonderCoinsRedeemed: coerceOrderInt(data?.wonderCoinsRedeemed),
+    wonderCoinsEarned: coerceOrderInt(data?.wonderCoinsEarned),
+    shippingCents: coerceOrderInt(data?.shippingCents),
+    totalCents: coerceOrderInt(data?.totalCents),
+    freeDelivery: data?.freeDelivery === true,
+    maxRedeemableCoins: coerceOrderInt(data?.maxRedeemableCoins),
+    walletBalance: coerceOrderInt(data?.walletBalance),
+    currency: typeof data?.currency === 'string' ? data.currency : 'ZAR',
   }
 }
 
@@ -137,10 +170,30 @@ export type QuoteOrderPayload = {
 }
 
 export async function quoteOrder(body: QuoteOrderPayload) {
-  return userFetch('/orders/quote', {
+  const token = await getUserSessionToken()
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+
+  const res = await fetch(`${DOMAIN}/orders/quote`, {
     method: 'POST',
+    headers,
     body: JSON.stringify(body),
-  }) as Promise<OrderQuoteResult>
+  })
+  const text = await res.text()
+  let data: any = null
+  try {
+    data = text ? JSON.parse(text) : null
+  } catch {
+    data = { raw: text }
+  }
+  if (!res.ok) {
+    throw new Error(parseApiError(data, res))
+  }
+  return normalizeOrderQuote(data)
 }
 
 export async function createOrder(body: CreateOrderPayload) {

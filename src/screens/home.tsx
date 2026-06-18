@@ -20,7 +20,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { ProductTileImageWithHeart, WonderportAccentCard } from '../components'
+import { ProductGridTile, productGridPriceLabel, WonderportAccentCard } from '../components'
 import { AppContext, ThemeContext } from '../context'
 import {
   getDailyRewardStatus,
@@ -31,7 +31,6 @@ import {
 } from '../utils'
 import { shouldShowDailyRewardsHomeAlert } from '../wonderBadgeNotifications'
 import { ShopifyProduct } from '../../types'
-import { formatMoney } from '../money'
 import { shopifyProductToSavePayload } from '../productSave'
 import { navigateOnRootStack } from '../rootNavigation'
 
@@ -485,63 +484,20 @@ export function Home({ navigation, sessionToken }: { navigation: any; sessionTok
             <View style={styles.grid}>
               {products.map((item) => {
                 const src = getImageSource(item)
-                const priceLabel =
-                  item.price?.amount != null && item.price.amount !== ''
-                    ? formatMoney(item.price)
-                    : 'View details'
+                const priceLabel = productGridPriceLabel(item.price)
                 const savePayload = shopifyProductToSavePayload(item)
                 return (
-                  <WonderportAccentCard
+                  <ProductGridTile
                     key={item.id || item.handle || item.title}
-                    style={{ width: cardW }}
-                    borderVariant="solid"
-                    borderWidth={2}
-                    borderRadius={18}
-                    innerBackgroundColor={frameFill}
-                    contentStyle={styles.cardFrameInner}
-                  >
-                    {src ? (
-                      <ProductTileImageWithHeart
-                        product={savePayload}
-                        source={src}
-                        resizeMode="cover"
-                        imageTranslateY={0}
-                        wrapStyle={styles.media}
-                        imageStyle={styles.mediaImage}
-                        onPress={() => navigation.navigate('Product', { product: item })}
-                      />
-                    ) : (
-                      <Pressable
-                        style={styles.media}
-                        onPress={() => navigation.navigate('Product', { product: item })}
-                      >
-                        <View style={styles.mediaPlaceholder}>
-                          <Text
-                            style={styles.mediaPlaceholderText}
-                            numberOfLines={2}
-                            ellipsizeMode="tail"
-                          >
-                            {item.title}
-                          </Text>
-                        </View>
-                      </Pressable>
-                    )}
-                    <View style={styles.footerBand}>
-                      <Pressable
-                        style={styles.cardFooter}
-                        onPress={() => navigation.navigate('Product', { product: item })}
-                      >
-                        <Text style={styles.itemTitle} numberOfLines={2} ellipsizeMode="tail">
-                          {item.title}
-                        </Text>
-                        <View style={styles.priceRow}>
-                          <View style={styles.pricePill}>
-                            <Text style={styles.pricePillText}>{priceLabel}</Text>
-                          </View>
-                        </View>
-                      </Pressable>
-                    </View>
-                  </WonderportAccentCard>
+                    theme={theme}
+                    cardWidth={cardW}
+                    frameFill={frameFill}
+                    title={item.title}
+                    priceLabel={priceLabel}
+                    savePayload={savePayload}
+                    imageSource={src}
+                    onPress={() => navigation.navigate('Product', { product: item })}
+                  />
                 )
               })}
             </View>
@@ -711,78 +667,6 @@ const getStyles = (theme: any) =>
       color: theme.brandAccent,
       fontFamily: theme.boldFont,
       fontSize: 15,
-    },
-    cardFrameInner: {
-      flexDirection: 'column',
-      alignSelf: 'stretch',
-      paddingHorizontal: 4,
-      paddingTop: 4,
-      paddingBottom: 4,
-    },
-    media: {
-      position: 'relative',
-      width: '100%',
-      height: 250,
-      paddingTop: 6,
-      overflow: 'hidden',
-      backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
-      borderRadius: 14,
-    },
-    mediaImage: {
-      width: '100%',
-      height: '100%',
-    },
-    mediaPlaceholder: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 10,
-    },
-    mediaPlaceholderText: {
-      color: theme.headingColor || theme.textColor,
-      fontFamily: theme.semiBoldFont,
-      fontSize: 13,
-      lineHeight: 18,
-      textAlign: 'center',
-    },
-    footerBand: {
-      flexGrow: 1,
-      minHeight: 1,
-    },
-    cardFooter: {
-      flex: 1,
-      flexDirection: 'column',
-      alignItems: 'stretch',
-      justifyContent: 'flex-start',
-      paddingHorizontal: 10,
-      paddingTop: 8,
-      paddingBottom: 8,
-    },
-    priceRow: {
-      flexDirection: 'row',
-      justifyContent: 'flex-start',
-      alignItems: 'center',
-      marginTop: 8,
-    },
-    itemTitle: {
-      color: theme.headingColor || theme.textColor,
-      fontFamily: theme.boldFont,
-      fontSize: 14,
-      lineHeight: 18,
-      letterSpacing: -0.15,
-    },
-    pricePill: {
-      backgroundColor: theme.brandAccent,
-      borderRadius: 999,
-      paddingVertical: 7,
-      paddingHorizontal: 12,
-      flexShrink: 0,
-    },
-    pricePillText: {
-      color: HOME_ACCENT_ON_BADGE_TEXT,
-      fontFamily: theme.boldFont,
-      fontSize: 13,
-      lineHeight: 16,
     },
     loadingText: {
       color: theme.mutedForegroundColor,

@@ -1,4 +1,4 @@
-import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   ActivityIndicator,
   Animated,
@@ -218,8 +218,6 @@ type GameState = {
   jetpackAnimTick: number
   /** Global UI animation tick for hover/shake effects. */
   uiAnimTick: number
-  /** Display-rate tick for meteor flame (matches design canvas RAF). */
-  flameAnimTick: number
   /** Jetpack pickups collected this run (each pickup counts once). */
   jetpacksUsedThisRun: number
   /** Set when entering game over; cleared on menu / new run. */
@@ -1854,7 +1852,6 @@ function createInitialState(
     jetpackEndGraceMs: 0,
     jetpackAnimTick: 0,
     uiAnimTick: 0,
-    flameAnimTick: 0,
     jetpacksUsedThisRun: 0,
     deathCause: null,
     startBiome,
@@ -2132,10 +2129,14 @@ function getSandStylePlatformFace(surface: PlatformSurfaceKind): ReactNode {
   return cached
 }
 
+/** Shared grass face JSX — identical for every grass platform (faceSeed unused). */
+let GRASS_PLATFORM_FACE_JSX: ReactNode | null = null
+
 /** Dirt + grass/mycelium cap paths in the 100×14 viewBox. Callers wrap these in an <Svg> or <G transform>. */
 function renderPlatformFaceShapes(surface: PlatformSurfaceKind, _faceSeed = 0) {
   if (surface === 'grass') {
-    return (
+    if (GRASS_PLATFORM_FACE_JSX) return GRASS_PLATFORM_FACE_JSX
+    GRASS_PLATFORM_FACE_JSX = (
       <>
         <Path
           d="M0,4.95 L0,13.2 L5.7,13.95 L12.4,12.8 L19.8,13.65 L27.9,12.35 L36.7,13.9 L45.3,12.25 L54.3,13.7 L63.4,12.05 L72.5,13.35 L81.1,12.15 L89.9,13.25 L96.1,12.4 L100,12.9 L100,4.95 Z"
@@ -2219,6 +2220,7 @@ function renderPlatformFaceShapes(surface: PlatformSurfaceKind, _faceSeed = 0) {
         ))}
       </>
     )
+    return GRASS_PLATFORM_FACE_JSX
   }
   return getSandStylePlatformFace(surface)
 }
@@ -2695,6 +2697,52 @@ const MergedPlatformFace = memo(function MergedPlatformFace({
   )
 })
 
+function jumpPlatformRowPropsEqual(
+  prev: {
+    left: number
+    top: number
+    width: number
+    shellHeight: number
+    graphicKind: GrasslandPlatformKind
+    surface: PlatformSurfaceKind
+    faceSeed: number
+    isBouncy: boolean
+    isFalling: boolean
+    topMushrooms?: PlatformTopMushroom[]
+    topPalmTree?: PlatformTopPalmTree
+    topFlowers?: PlatformTopFlower[]
+  },
+  next: {
+    left: number
+    top: number
+    width: number
+    shellHeight: number
+    graphicKind: GrasslandPlatformKind
+    surface: PlatformSurfaceKind
+    faceSeed: number
+    isBouncy: boolean
+    isFalling: boolean
+    topMushrooms?: PlatformTopMushroom[]
+    topPalmTree?: PlatformTopPalmTree
+    topFlowers?: PlatformTopFlower[]
+  },
+): boolean {
+  return (
+    prev.left === next.left &&
+    prev.top === next.top &&
+    prev.width === next.width &&
+    prev.shellHeight === next.shellHeight &&
+    prev.graphicKind === next.graphicKind &&
+    prev.surface === next.surface &&
+    prev.faceSeed === next.faceSeed &&
+    prev.isBouncy === next.isBouncy &&
+    prev.isFalling === next.isFalling &&
+    prev.topMushrooms === next.topMushrooms &&
+    prev.topPalmTree === next.topPalmTree &&
+    prev.topFlowers === next.topFlowers
+  )
+}
+
 const JumpPlatformRow = memo(function JumpPlatformRow({
   left,
   top,
@@ -2773,7 +2821,7 @@ const JumpPlatformRow = memo(function JumpPlatformRow({
       {isBouncy ? <DoodleSpringPad platformWidth={width} /> : null}
     </View>
   )
-})
+}, jumpPlatformRowPropsEqual)
 
 /** Gift art uses shared `giftboxSvgAsset` (same cache as `GiftboxAnimationPreview` / tropical dock). */
 const WonderJumpGiftboxFromAsset = memo(function WonderJumpGiftboxFromAsset({
@@ -2898,6 +2946,21 @@ const WonderJumpChestPickupView = memo(function WonderJumpChestPickupView({
   )
 })
 
+const CRAB_CLAWS_A = ['M2 11 L0 7 L2 5 L4 7 Z', 'M24 11 L26 7 L24 5 L22 7 Z']
+const CRAB_CLAWS_B = ['M2 10 L0 6 L2 4 L4 6 Z', 'M24 10 L26 6 L24 4 L22 6 Z']
+const CRAB_LEGS_A = [
+  { x: 4, y: 15, w: 3, h: 2 },
+  { x: 8, y: 17, w: 3, h: 2 },
+  { x: 15, y: 17, w: 3, h: 2 },
+  { x: 19, y: 15, w: 3, h: 2 },
+]
+const CRAB_LEGS_B = [
+  { x: 3, y: 16, w: 3, h: 2 },
+  { x: 8, y: 15, w: 3, h: 2 },
+  { x: 15, y: 15, w: 3, h: 2 },
+  { x: 20, y: 16, w: 3, h: 2 },
+]
+
 const CrabView = memo(function CrabView({
   left,
   top,
@@ -2920,28 +2983,8 @@ const CrabView = memo(function CrabView({
   const shellDark = '#b10000'
   const outline = '#000000'
   const eye = '#f4f4f4'
-  const clawsFrameA = [
-    'M2 11 L0 7 L2 5 L4 7 Z',
-    'M24 11 L26 7 L24 5 L22 7 Z',
-  ]
-  const clawsFrameB = [
-    'M2 10 L0 6 L2 4 L4 6 Z',
-    'M24 10 L26 6 L24 4 L22 6 Z',
-  ]
-  const legsFrameA = [
-    { x: 4, y: 15, w: 3, h: 2 },
-    { x: 8, y: 17, w: 3, h: 2 },
-    { x: 15, y: 17, w: 3, h: 2 },
-    { x: 19, y: 15, w: 3, h: 2 },
-  ]
-  const legsFrameB = [
-    { x: 3, y: 16, w: 3, h: 2 },
-    { x: 8, y: 15, w: 3, h: 2 },
-    { x: 15, y: 15, w: 3, h: 2 },
-    { x: 20, y: 16, w: 3, h: 2 },
-  ]
-  const claws = legFrame === 0 ? clawsFrameA : clawsFrameB
-  const legs = legFrame === 0 ? legsFrameA : legsFrameB
+  const claws = legFrame === 0 ? CRAB_CLAWS_A : CRAB_CLAWS_B
+  const legs = legFrame === 0 ? CRAB_LEGS_A : CRAB_LEGS_B
   return (
     <View
       pointerEvents="none"
@@ -3179,6 +3222,16 @@ const WonderJumpPlayerStack = memo(function WonderJumpPlayerStack({
   )
 })
 
+const CLOUD_SPECK_OFFSETS: ReadonlyArray<readonly [number, number]> = [
+  [0.18, 0.38],
+  [0.42, 0.52],
+  [0.66, 0.34],
+  [0.28, 0.62],
+  [0.52, 0.48],
+  [0.78, 0.56],
+]
+const CLOUD_HATCH_INDICES = [0, 1, 2] as const
+
 const GrasslandCloud = memo(function GrasslandCloud({ left, top, width }: { left: number; top: number; width: number }) {
   const h = 40
   return (
@@ -3208,14 +3261,7 @@ const GrasslandCloud = memo(function GrasslandCloud({ left, top, width }: { left
         ]}
       />
       <View style={[wjWorldStyles.cloudShadowBase, { width: width * 0.72 }]} />
-      {[
-        [0.18, 0.38],
-        [0.42, 0.52],
-        [0.66, 0.34],
-        [0.28, 0.62],
-        [0.52, 0.48],
-        [0.78, 0.56],
-      ].map(([fx, fy], i) => (
+      {CLOUD_SPECK_OFFSETS.map(([fx, fy], i) => (
         <View
           key={`sp-${i}`}
           style={[
@@ -3227,7 +3273,7 @@ const GrasslandCloud = memo(function GrasslandCloud({ left, top, width }: { left
           ]}
         />
       ))}
-      {[0, 1, 2].map((i) => (
+      {CLOUD_HATCH_INDICES.map((i) => (
         <View
           key={`ln-${i}`}
           style={[
@@ -3487,7 +3533,6 @@ export function WonderJump({
       jetpackEndGraceMs: 0,
       jetpackAnimTick: 0,
       uiAnimTick: 0,
-      flameAnimTick: 0,
       jetpacksUsedThisRun: 0,
       deathCause: null,
       startBiome: biome,
@@ -3501,6 +3546,20 @@ export function WonderJump({
   })
   /** Authoritative playing snapshot between React renders (throttled setState while running). */
   const playingSimSnapRef = useRef<GameState | null>(null)
+  /** Display-rate meteor flame tick — not in React state (avoids full-tree commits every RAF). */
+  const flameAnimTickRef = useRef(0)
+  const handleLeftPressIn = useCallback(() => {
+    inputRef.current.leftPressed = true
+  }, [])
+  const handleLeftPressOut = useCallback(() => {
+    inputRef.current.leftPressed = false
+  }, [])
+  const handleRightPressIn = useCallback(() => {
+    inputRef.current.rightPressed = true
+  }, [])
+  const handleRightPressOut = useCallback(() => {
+    inputRef.current.rightPressed = false
+  }, [])
   const prevRunModeForProgressSyncRef = useRef<RunMode>(gameState.mode)
   const sessionTokenRef = useRef<string | undefined>(sessionToken)
   const wonderJumpChestDockedRef = useRef(false)
@@ -4324,7 +4383,6 @@ export function WonderJump({
             jetpackEndGraceMs,
             jetpackAnimTick,
             uiAnimTick,
-            flameAnimTick: previous.flameAnimTick,
             jetpacksUsedThisRun,
             deathCause,
             startBiome: previous.startBiome,
@@ -4349,7 +4407,6 @@ export function WonderJump({
           jetpackEndGraceMs,
           jetpackAnimTick,
           uiAnimTick,
-          flameAnimTick: previous.flameAnimTick,
           jetpacksUsedThisRun,
           deathCause: null,
           startBiome: previous.startBiome,
@@ -4391,8 +4448,7 @@ export function WonderJump({
       }
 
       if (next.mode === 'playing') {
-        next = { ...next, flameAnimTick: prevSnap.flameAnimTick + 1 }
-        playingSimSnapRef.current = next
+        flameAnimTickRef.current += 1
       }
 
       if (stepped && (next.mode === 'playing' || next.mode === 'gameOver')) {
@@ -4430,8 +4486,7 @@ export function WonderJump({
         }
       }
 
-      const flameAdvanced = next.mode === 'playing' && next.flameAnimTick !== prevSnap.flameAnimTick
-      if (stepped || next.mode !== 'playing' || flameAdvanced) {
+      if (stepped || next.mode !== 'playing') {
         if (next.mode === 'gameOver') {
           setBestScore((current) => Math.max(current, displayRunScore(next.heightScore)))
         }
@@ -4635,17 +4690,20 @@ export function WonderJump({
         : gameState.mode === 'paused'
           ? 'paused'
           : null
-  const panelEntryStyle = {
-    opacity: panelEntryAnim,
-    transform: [
-      {
-        scale: panelEntryAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0.96, 1],
-        }),
-      },
-    ],
-  }
+  const panelEntryStyle = useMemo(
+    () => ({
+      opacity: panelEntryAnim,
+      transform: [
+        {
+          scale: panelEntryAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0.96, 1],
+          }),
+        },
+      ],
+    }),
+    [panelEntryAnim],
+  )
 
   const gameOverRunScore = displayRunScore(gameState.heightScore)
   const gameOverHighScore = Math.max(bestScore, gameOverRunScore)
@@ -4670,6 +4728,7 @@ export function WonderJump({
     inputRef.current.leftPressed = false
     inputRef.current.rightPressed = false
     playingSimSnapRef.current = null
+    flameAnimTickRef.current = 0
     jetpackFxLatchRef.current = false
     void loadWonderJumpCharacterStyle().then((style) => {
       setRunCharacterLocked(style)
@@ -4682,6 +4741,7 @@ export function WonderJump({
     inputRef.current.leftPressed = false
     inputRef.current.rightPressed = false
     playingSimSnapRef.current = null
+    flameAnimTickRef.current = 0
     jetpackFxLatchRef.current = false
     void loadWonderJumpCharacterStyle().then((style) => {
       setRunCharacterLocked(style)
@@ -4904,7 +4964,7 @@ export function WonderJump({
     [playWidth, cam]
   )
 
-  const screenShellStyle = useMemo(() => [styles.screen], [])
+  const screenShellStyle = useMemo(() => [styles.screen], [styles.screen])
   const activeWonderJumpCharacter: WonderJumpCharacterStyle =
     gameState.mode === 'playing' || gameState.mode === 'paused' ? runCharacterLocked : characterStyle
   const gameTileShellStyle = useMemo(
@@ -5038,7 +5098,7 @@ export function WonderJump({
             top={Math.round(asteroid.y)}
             variant={asteroid.variant}
             flamePhase={asteroid.flamePhase}
-            flameAnimTick={gameState.flameAnimTick}
+            flameAnimTick={flameAnimTickRef.current}
           />
         ))}
 
@@ -5317,21 +5377,13 @@ export function WonderJump({
           <View style={styles.touchLayer} pointerEvents="box-none">
             <Pressable
               style={styles.touchHalf}
-              onPressIn={() => {
-                inputRef.current.leftPressed = true
-              }}
-              onPressOut={() => {
-                inputRef.current.leftPressed = false
-              }}
+              onPressIn={handleLeftPressIn}
+              onPressOut={handleLeftPressOut}
             />
             <Pressable
               style={styles.touchHalf}
-              onPressIn={() => {
-                inputRef.current.rightPressed = true
-              }}
-              onPressOut={() => {
-                inputRef.current.rightPressed = false
-              }}
+              onPressIn={handleRightPressIn}
+              onPressOut={handleRightPressOut}
             />
           </View>
         ) : null}
@@ -5339,23 +5391,15 @@ export function WonderJump({
           <View style={styles.dpadLayer} pointerEvents="box-none">
             <Pressable
               style={styles.dpadBubble}
-              onPressIn={() => {
-                inputRef.current.leftPressed = true
-              }}
-              onPressOut={() => {
-                inputRef.current.leftPressed = false
-              }}
+              onPressIn={handleLeftPressIn}
+              onPressOut={handleLeftPressOut}
             >
               <Text style={styles.dpadArrow}>{'<'}</Text>
             </Pressable>
             <Pressable
               style={styles.dpadBubble}
-              onPressIn={() => {
-                inputRef.current.rightPressed = true
-              }}
-              onPressOut={() => {
-                inputRef.current.rightPressed = false
-              }}
+              onPressIn={handleRightPressIn}
+              onPressOut={handleRightPressOut}
             >
               <Text style={styles.dpadArrow}>{'>'}</Text>
             </Pressable>
