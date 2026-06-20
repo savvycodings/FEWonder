@@ -1,14 +1,14 @@
 import { memo, useEffect, useState, type ReactElement } from 'react'
 import { Image, View, type ImageSourcePropType } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { WebView } from 'react-native-webview'
+import { SvgUri } from 'react-native-svg'
 import type { WonderBadgeId } from '../wonderBadgesCatalog'
 import { wonderBadgeImageSource } from '../wonderBadgeImageSource'
 import { BRAND_ACCENT_LIME_HEX } from '../brandAccent'
 
 /**
  * Raster badge in a fixed square; `resizeMode="contain"` keeps different source dimensions
- * visually consistent. Uses bundled `require()` sources so profile + store work on native.
+ * visually consistent. WonderJump SVGs load from the production API static path via SvgUri.
  */
 export const WonderBadgeImage = memo(function WonderBadgeImage({
   badgeId,
@@ -51,18 +51,11 @@ export const WonderBadgeImage = memo(function WonderBadgeImage({
 
   const media =
     source.kind === 'svg' ? (
-      <WebView
-        originWhitelist={['*']}
-        source={{
-          html: `<!doctype html><html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><style>html,body{margin:0;padding:0;background:transparent;overflow:hidden;}img{width:100vw;height:100vh;object-fit:contain;display:block;}</style></head><body><img src="${source.uri}" alt="badge"/></body></html>`,
-          baseUrl: source.uri,
-        }}
-        style={{ ...mediaSize, backgroundColor: 'transparent' }}
-        scrollEnabled={false}
-        bounces={false}
-        overScrollMode="never"
-        javaScriptEnabled={false}
-        domStorageEnabled={false}
+      <SvgUri
+        uri={source.uri}
+        width={size}
+        height={size}
+        preserveAspectRatio="xMidYMid meet"
         onError={() => setFailed(true)}
       />
     ) : (

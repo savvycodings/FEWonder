@@ -14,8 +14,30 @@ import {
 } from '../types'
 
 /** Client cache so Daily Rewards streak UI can render immediately; refreshed on each fetch. */
-export const DAILY_REWARDS_CACHE_KEY = 'wonderport-daily-rewards-cache-v1'
+export const DAILY_REWARDS_CACHE_KEY = 'wonderport-daily-rewards-cache-v2'
+const DAILY_REWARDS_CACHE_LEGACY_KEY = 'wonderport-daily-rewards-cache-v1'
 const DAILY_REWARDS_CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+type WonderWalletChangedListener = () => void
+const wonderWalletChangedListeners = new Set<WonderWalletChangedListener>()
+
+/** Subscribe to wallet balance updates (claims, store purchases, chest, redeem codes). */
+export function subscribeWonderWalletChanged(listener: WonderWalletChangedListener): () => void {
+  wonderWalletChangedListeners.add(listener)
+  return () => {
+    wonderWalletChangedListeners.delete(listener)
+  }
+}
+
+function notifyWonderWalletChanged(): void {
+  for (const listener of wonderWalletChangedListeners) {
+    try {
+      listener()
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 /** IANA timezone from the device (sent on daily-rewards requests for local-day rules). */
 export function getDeviceIanaTimeZone(): string {
@@ -34,7 +56,7 @@ function dailyRewardsAuthHeaders(sessionToken: string): Record<string, string> {
   }
 }
 
-function coerceWalletInt(value: unknown): number {
+export function coerceWalletInt(value: unknown): number {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.max(0, Math.floor(value))
   }
@@ -101,7 +123,13 @@ async function persistDailyRewardStatus(status: DailyRewardStatus): Promise<void
 
 export async function readDailyRewardsCache(): Promise<DailyRewardStatus | null> {
   try {
-    const raw = await AsyncStorage.getItem(DAILY_REWARDS_CACHE_KEY)
+    let raw = await AsyncStorage.getItem(DAILY_REWARDS_CACHE_KEY)
+    if (!raw) {
+      raw = await AsyncStorage.getItem(DAILY_REWARDS_CACHE_LEGACY_KEY)
+      if (raw) {
+        await AsyncStorage.removeItem(DAILY_REWARDS_CACHE_LEGACY_KEY)
+      }
+    }
     if (!raw) return null
     const parsed = JSON.parse(raw) as { at?: number; data?: DailyRewardStatus }
     if (!parsed?.data?.rewards?.length) return null
@@ -109,6 +137,7 @@ export async function readDailyRewardsCache(): Promise<DailyRewardStatus | null>
       return null
     const data = parsed.data
     normalizeDailyRewardStatus(data)
+    await enrichWonderJumpRankFromLeaderboard(data)
     return data
   } catch {
     return null
@@ -124,30 +153,55 @@ export async function writeDailyRewardsCache(data: DailyRewardStatus): Promise<v
   }
 }
 
-/** Keep Wonder Wallet gem balance in sync after WonderJump chest / offline claims. */
-export async function applyWonderGemBalanceToCache(gemBalance: number): Promise<void> {
-  const gems = coerceWalletInt(gemBalance)
+/** Drop cached wallet balances so the next fetch reflects server truth. */
+export async function invalidateWonderWalletCache(): Promise<void> {
+  try {
+    await AsyncStorage.multiRemove([DAILY_REWARDS_CACHE_KEY, DAILY_REWARDS_CACHE_LEGACY_KEY])
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Keep Wonder Wallet balances in sync after server-side wallet mutations. */
+export async function applyWonderWalletToCache(patch: {
+  gemBalance?: number
+  walletBalance?: number
+}): Promise<void> {
+  const gems =
+    patch.gemBalance !== undefined ? coerceWalletInt(patch.gemBalance) : undefined
+  const coins =
+    patch.walletBalance !== undefined ? coerceWalletInt(patch.walletBalance) : undefined
+  if (gems === undefined && coins === undefined) return
   try {
     const cached = await readDailyRewardsCache()
     if (cached) {
-      cached.gemBalance = gems
+      if (gems !== undefined) cached.gemBalance = gems
+      if (coins !== undefined) cached.walletBalance = coins
       await writeDailyRewardsCache(cached)
+      notifyWonderWalletChanged()
       return
     }
     const raw = await AsyncStorage.getItem(DAILY_REWARDS_CACHE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as { at?: number; data?: DailyRewardStatus }
       if (parsed?.data) {
-        parsed.data.gemBalance = gems
+        if (gems !== undefined) parsed.data.gemBalance = gems
+        if (coins !== undefined) parsed.data.walletBalance = coins
         await AsyncStorage.setItem(
           DAILY_REWARDS_CACHE_KEY,
           JSON.stringify({ at: Date.now(), data: parsed.data }),
         )
+        notifyWonderWalletChanged()
       }
     }
   } catch {
     /* ignore */
   }
+}
+
+/** Keep Wonder Wallet gem balance in sync after WonderJump chest / offline claims. */
+export async function applyWonderGemBalanceToCache(gemBalance: number): Promise<void> {
+  await applyWonderWalletToCache({ gemBalance })
 }
 
 export function getEventSource({
@@ -638,9 +692,11 @@ export async function claimDailyReward(sessionToken: string): Promise<DailyRewar
 
   const status = data as DailyRewardStatus
   await persistDailyRewardStatus(status)
+  notifyWonderWalletChanged()
 
   try {
     const fresh = await getDailyRewardStatus(sessionToken)
+    notifyWonderWalletChanged()
     return fresh
   } catch {
     return status
@@ -851,6 +907,7 @@ export async function claimWonderJumpChest(sessionToken: string): Promise<Wonder
   if (response.ok && data.ok === true) {
     const wonderGems = coerceWalletInt(data.wonderGems)
     await applyWonderGemBalanceToCache(wonderGems)
+    notifyWonderWalletChanged()
     return { ok: true, wonderGems, chestUnlocksAt: null }
   }
   if (response.status === 409) {
@@ -892,12 +949,14 @@ export async function purchaseWonderStoreItem(
     // "Already purchased" is a valid owned state; return fresh status so UI can switch to Equip.
     const status = data as DailyRewardStatus
     await persistDailyRewardStatus(status)
+    notifyWonderWalletChanged()
     return status
   }
 
   if (response.status === 402 && data?.rewards?.length) {
     const status = data as DailyRewardStatus
     await persistDailyRewardStatus(status)
+    notifyWonderWalletChanged()
     throw new Error(String(data?.error || 'Not enough coins'))
   }
 
@@ -907,6 +966,7 @@ export async function purchaseWonderStoreItem(
 
   const status = data as DailyRewardStatus
   await persistDailyRewardStatus(status)
+  notifyWonderWalletChanged()
   return status
 }
 
@@ -935,8 +995,12 @@ export async function redeemWonderCode(
     throw new Error(data?.error || 'Unable to redeem code')
   }
 
+  const wonderCoins = coerceWalletInt(data?.wonderCoins)
+  await applyWonderWalletToCache({ walletBalance: wonderCoins })
+  notifyWonderWalletChanged()
+
   return {
-    wonderCoins: Number(data?.wonderCoins) || 0,
+    wonderCoins,
     message: String(data?.message || 'Code redeemed.'),
   }
 }

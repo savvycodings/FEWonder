@@ -485,7 +485,7 @@ function Tabs({
           component={ChatTabScreen}
           options={{
             headerShown: false,
-            tabBarHideOnKeyboard: false,
+            tabBarHideOnKeyboard: true,
             tabBarIcon: ({ color, size }) => (
               <FeatherIcon
                 name="message-circle"

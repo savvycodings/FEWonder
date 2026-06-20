@@ -170,6 +170,11 @@ export type QuoteOrderPayload = {
 }
 
 export async function quoteOrder(body: QuoteOrderPayload) {
+  if (!DOMAIN?.trim()) {
+    throw new Error(
+      'API domain is not configured. Set EXPO_PUBLIC_PROD_API_URL for production builds.',
+    )
+  }
   const token = await getUserSessionToken()
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

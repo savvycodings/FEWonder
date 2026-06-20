@@ -23,7 +23,9 @@
       "autoIncrement": true,
       "node": "22.14.0",
       "env": {
-        "NPM_CONFIG_NODE_LINKER": "hoisted"
+        "NPM_CONFIG_NODE_LINKER": "hoisted",
+        "EXPO_PUBLIC_ENV": "PRODUCTION",
+        "EXPO_PUBLIC_PROD_API_URL": "https://bewonder-production.up.railway.app"
       }
     }
   },

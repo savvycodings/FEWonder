@@ -277,7 +277,7 @@ export function DailyRewards({ navigation, route }: any) {
   const [loadingRewards, setLoadingRewards] = useState(true)
   const [claimingReward, setClaimingReward] = useState(false)
   const [rewardsError, setRewardsError] = useState('')
-  const [showAllBadges, setShowAllBadges] = useState(false)
+  const [showAllBadges, setShowAllBadges] = useState(true)
   const [showWalletModal, setShowWalletModal] = useState(false)
   const [insufficientCoinsModal, setInsufficientCoinsModal] = useState<{
     visible: boolean

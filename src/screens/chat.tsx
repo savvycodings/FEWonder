@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { KeyboardStickyView } from 'react-native-keyboard-controller'
 import EventSource from 'react-native-sse'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
@@ -30,15 +31,6 @@ import {
 import { formatMoney } from '../money'
 import { ShopifyProduct } from '../../types'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Animated, {
-  Easing,
-  KeyboardState,
-  useAnimatedKeyboard,
-  useAnimatedReaction,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated'
 import * as ImagePicker from 'expo-image-picker'
 import {
   AvatarFrameWrapper,
@@ -57,7 +49,7 @@ const ACCENT_ON_BADGE_TEXT = '#ffffff'
 const COMPOSER_BAR_HEIGHT = 58
 
 /** Keep composer slightly above keyboard on all devices. */
-const KEYBOARD_GAP = 6
+const KEYBOARD_GAP = 4
 
 /** Small cushion above the composer row inside the scroll area (list + composer lift together). */
 const LIST_SCROLL_TAIL = 8
@@ -67,21 +59,6 @@ const CHAT_TAB_CLEARANCE_GAP = 7
 
 /** Small guaranteed breathing room above the floating tab pill. */
 const COMPOSER_TAB_CLEARANCE_GUARD = 0
-
-/**
- * Pulls composer toward the visible keyboard (more negative = tighter).
- * Halved keyboard–dock gap vs prior -16/-10 step.
- */
-const KEYBOARD_FRAME_NUDGE = 0
-
-/**
- * Keyboard lift: timing + easing keeps motion fluid and in-family with OS keyboard (~280ms),
- * without spring overshoot / micro-jitter from stiff springs.
- */
-const CHAT_LIFT_TIMING = {
-  duration: 280,
-  easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-}
 
 /**
  * Composer link menu — same family as the attach chip (`#3a3a3a`). Dark surfaces use light
@@ -105,34 +82,6 @@ function communityMessagesEqual(a: CommunityMessage[], b: CommunityMessage[]): b
     if (fx !== fy) return false
   }
   return true
-}
-
-/**
- * Composer `bottom` in screen space: idle above tab bar, or `keyboardHeight + gap` when typing.
- * Uses keyboard state so closing does not snap from ~gap px to the idle inset (common Reanimated pitfall).
- */
-function composerDockBottomFromKeyboard(
-  kb: number,
-  keyboardState: KeyboardState,
-  closedBottom: number,
-  gap: number,
-  frameNudge: number
-) {
-  'worklet'
-  const lift = kb + frameNudge
-  if (keyboardState === KeyboardState.CLOSED) {
-    return closedBottom
-  }
-  if (keyboardState === KeyboardState.CLOSING) {
-    return Math.max(closedBottom, lift + gap)
-  }
-  if (keyboardState === KeyboardState.OPENING && kb < 1) {
-    return closedBottom
-  }
-  if (kb < 1 && keyboardState !== KeyboardState.OPEN) {
-    return closedBottom
-  }
-  return lift + gap
 }
 
 /** Stored value is product `handle` (new); legacy messages may use `title`. */
@@ -198,6 +147,10 @@ export function Chat({
   } | null>(null)
   const listRef = useRef<FlatList<CommunityMessage> | null>(null)
   const { frameId: avatarFrameId, refresh: refreshAvatarFrame } = useEquippedAvatarFrame()
+
+  const scrollMessagesToEnd = useCallback((animated = true) => {
+    setTimeout(() => listRef.current?.scrollToEnd({ animated }), 50)
+  }, [])
 
   const openCommunityUserProfile = useCallback(
     (peer: CommunityMessage['user']) => {
@@ -535,44 +488,27 @@ export function Chat({
     return Math.max(measured, fallback) + COMPOSER_TAB_CLEARANCE_GUARD
   }, [tabBarHeight, insets.bottom])
 
-  const keyboard = useAnimatedKeyboard()
-  const chatLiftY = useSharedValue(0)
-
-  useAnimatedReaction(
-    () => {
-      const kb = keyboard.height.value
-      const st = keyboard.state.value
-      const dockBottom = composerDockBottomFromKeyboard(
-        kb,
-        st,
-        closedComposerBottom,
-        KEYBOARD_GAP,
-        KEYBOARD_FRAME_NUDGE
-      )
-      return -(dockBottom - closedComposerBottom)
-    },
-    (targetY) => {
-      chatLiftY.value = withTiming(targetY, CHAT_LIFT_TIMING)
-    },
-    [closedComposerBottom]
+  /** Cancel shell tab-bar padding when keyboard opens so composer sits ~KEYBOARD_GAP above keys. */
+  const composerStickyOffset = useMemo(
+    () => ({
+      closed: 0,
+      opened: closedComposerBottom - KEYBOARD_GAP,
+    }),
+    [closedComposerBottom],
   )
-
-  const chatGroupLiftStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: chatLiftY.value }],
-  }))
-
-  const menuAnchorBottom = closedComposerBottom + COMPOSER_BAR_HEIGHT + 6
+  const listBottomPad = useMemo(
+    () =>
+      COMPOSER_BAR_HEIGHT +
+      LIST_SCROLL_TAIL +
+      (pendingImage || pendingReferenceItem ? 72 : 0) +
+      (reportMode ? 88 : 0),
+    [pendingImage, pendingReferenceItem, reportMode],
+  )
+  const menuAnchorBottom = COMPOSER_BAR_HEIGHT + 6
 
   return (
     <Pressable style={[styles.container, pageBg]} onPress={() => setActiveOwnMessageId(null)}>
-      <View style={[styles.chatShell, pageBg]}>
-      <Animated.View
-        style={[
-          styles.chatKeyboardGroup,
-          chatGroupLiftStyle,
-          { paddingBottom: closedComposerBottom },
-        ]}
-      >
+      <View style={[styles.chatShell, pageBg, { paddingBottom: closedComposerBottom }]}>
       <View style={styles.chatMain}>
       {loading ? (
         <View style={styles.loadingWrap}>
@@ -584,7 +520,11 @@ export function Chat({
           style={styles.messagesList}
           data={messages}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.listContent, styles.listScrollPad, styles.listContentTop]}
+          contentContainerStyle={[
+            styles.listContent,
+            styles.listContentTop,
+            { paddingBottom: listBottomPad },
+          ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           removeClippedSubviews={false}
@@ -785,6 +725,7 @@ export function Chat({
       )}
       </View>
 
+      <KeyboardStickyView offset={composerStickyOffset} style={styles.composerStickyWrap}>
       {(pendingImage || pendingReferenceItem) ? (
         <View style={styles.pendingThumbnailRow}>
           {pendingImage ? (
@@ -859,6 +800,7 @@ export function Chat({
             placeholderTextColor="#888888"
             value={input}
             onChangeText={setInput}
+            onFocus={() => scrollMessagesToEnd(true)}
           />
           <TouchableOpacity style={styles.sendButton} onPress={onSend} disabled={sending}>
             <FeatherIcon name="send" size={16} color={ACCENT_ON_BADGE_TEXT} style={styles.sendIcon} />
@@ -897,7 +839,7 @@ export function Chat({
         </>
       ) : null}
 
-      </Animated.View>
+      </KeyboardStickyView>
 
       </View>
 
@@ -1045,22 +987,18 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       position: 'relative',
       zIndex: 1,
     },
-    chatKeyboardGroup: {
-      flex: 1,
-      minHeight: 0,
+    composerStickyWrap: {
       width: '100%',
-      flexDirection: 'column',
       position: 'relative',
-      zIndex: 1,
-    },
-    composerDock: {
-      marginHorizontal: 12,
       zIndex: 3,
     },
     chatMain: {
       flex: 1,
       minHeight: 0,
       width: '100%',
+    },
+    composerDock: {
+      marginHorizontal: 12,
     },
     messagesList: {
       flex: 1,
@@ -1078,9 +1016,6 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
     },
     listContentTop: {
       paddingTop: 8,
-    },
-    listScrollPad: {
-      paddingBottom: 12 + LIST_SCROLL_TAIL,
     },
     messageShell: {
       width: '100%',

@@ -22,7 +22,7 @@ import {
 import { ProfileHeroBannerBackground } from '../components/ProfileHeroBannerBackground'
 import { AppContext, ThemeContext } from '../context'
 import { User } from '../../types'
-import { getDailyRewardStatus, getProfileHero } from '../utils'
+import { getDailyRewardStatus, getProfileHero, coerceWalletInt, subscribeWonderWalletChanged } from '../utils'
 import { fetchMyOrders } from '../ordersApi'
 import { ProfileHeroBadgeStrip } from '../profileHeroBadgeStrip'
 import {
@@ -102,12 +102,18 @@ export function Profile({
     if (!sessionToken) return
     try {
       const rewards = await getDailyRewardStatus(sessionToken)
-      setWalletBalance(rewards.walletBalance || 0)
-      setGemBalance(rewards.gemBalance ?? 0)
+      setWalletBalance(coerceWalletInt(rewards.walletBalance))
+      setGemBalance(coerceWalletInt(rewards.gemBalance))
     } catch (error) {
       console.log('Failed to load wallet balance', error)
     }
   }, [sessionToken])
+
+  useEffect(() => {
+    return subscribeWonderWalletChanged(() => {
+      void loadWalletBalance()
+    })
+  }, [loadWalletBalance])
 
   const loadOrdersPreview = useCallback(async () => {
     if (!sessionToken) return
