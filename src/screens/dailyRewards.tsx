@@ -1798,6 +1798,9 @@ function buildDailyRewardStyles(theme: any) {
     alignItems: 'stretch',
     gap: 6,
   },
+  characterMetaRowEnd: {
+    justifyContent: 'flex-end',
+  },
   characterPriceRow: {
     flexDirection: 'row',
     alignItems: 'center',

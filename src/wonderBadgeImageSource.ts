@@ -1,13 +1,12 @@
 import type { ImageSourcePropType } from 'react-native'
 import { DOMAIN } from '../constants'
 import type { WonderBadgeId } from './wonderBadgesCatalog'
-import { wonderJumpBadgeBundledSvgUri } from './wonderJumpBadgeSvgAsset'
 
 export type WonderBadgeImageSource =
   | { kind: 'image'; source: ImageSourcePropType }
   | { kind: 'svg'; uri: string }
 
-/** Remote fallback when bundled SVG URI is unavailable (e.g. web dev). */
+/** Remote SVG from Railway static hosting (WonderJump badges). */
 function wonderBadgeRemoteSvgUri(fileName: string): string {
   const fromDomain = String(DOMAIN || '').trim().replace(/\/+$/, '')
   const prod = String(process.env.EXPO_PUBLIC_PROD_API_URL || '').trim().replace(/\/+$/, '')
@@ -17,12 +16,7 @@ function wonderBadgeRemoteSvgUri(fileName: string): string {
   return base ? `${base}${path}` : path
 }
 
-function wonderJumpSvgSource(badgeId: WonderBadgeId, fileName: string): WonderBadgeImageSource {
-  const bundled = wonderJumpBadgeBundledSvgUri(badgeId)
-  return { kind: 'svg', uri: bundled || wonderBadgeRemoteSvgUri(fileName) }
-}
-
-/** Mixed source strategy: bundled raster badges + bundled WonderJump SVG badges. */
+/** Mixed source strategy: bundled raster badges + remote WonderJump SVG badges. */
 export function wonderBadgeImageSource(id: WonderBadgeId): WonderBadgeImageSource {
   switch (id) {
     case 'badge:day7':
@@ -40,16 +34,16 @@ export function wonderBadgeImageSource(id: WonderBadgeId): WonderBadgeImageSourc
     case 'badge:heart':
       return { kind: 'image', source: require('../public/homepageimgs/badges/Heartbadge.png') }
     case 'badge:wj_top100':
-      return wonderJumpSvgSource(id, 'Top100.svg')
+      return { kind: 'svg', uri: wonderBadgeRemoteSvgUri('Top100.svg') }
     case 'badge:wj_top50':
-      return wonderJumpSvgSource(id, 'Top50.svg')
+      return { kind: 'svg', uri: wonderBadgeRemoteSvgUri('Top50.svg') }
     case 'badge:wj_top10':
-      return wonderJumpSvgSource(id, 'Top10.svg')
+      return { kind: 'svg', uri: wonderBadgeRemoteSvgUri('Top10.svg') }
     case 'badge:wj_top3':
-      return wonderJumpSvgSource(id, 'Top3.svg')
+      return { kind: 'svg', uri: wonderBadgeRemoteSvgUri('Top3.svg') }
     case 'badge:wj_top2':
-      return wonderJumpSvgSource(id, 'Top2.svg')
+      return { kind: 'svg', uri: wonderBadgeRemoteSvgUri('Top2.svg') }
     case 'badge:wj_top1':
-      return wonderJumpSvgSource(id, 'Top1.svg')
+      return { kind: 'svg', uri: wonderBadgeRemoteSvgUri('Top1.svg') }
   }
 }
