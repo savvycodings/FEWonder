@@ -1,22 +1,9 @@
 import type { ImageSourcePropType } from 'react-native'
-import { DOMAIN } from '../constants'
 import type { WonderBadgeId } from './wonderBadgesCatalog'
 
-export type WonderBadgeImageSource =
-  | { kind: 'image'; source: ImageSourcePropType }
-  | { kind: 'svg'; uri: string }
+export type WonderBadgeImageSource = { kind: 'image'; source: ImageSourcePropType }
 
-/** Remote SVG from Railway static hosting (WonderJump badges). */
-function wonderBadgeRemoteSvgUri(fileName: string): string {
-  const fromDomain = String(DOMAIN || '').trim().replace(/\/+$/, '')
-  const prod = String(process.env.EXPO_PUBLIC_PROD_API_URL || '').trim().replace(/\/+$/, '')
-  const dev = String(process.env.EXPO_PUBLIC_DEV_API_URL || '').trim().replace(/\/+$/, '')
-  const base = fromDomain || prod || dev
-  const path = `/homepageimgs/badges/${fileName}`
-  return base ? `${base}${path}` : path
-}
-
-/** Mixed source strategy: bundled raster badges + remote WonderJump SVG badges. */
+/** Bundled raster badges (daily, order, heart, WonderJump). */
 export function wonderBadgeImageSource(id: WonderBadgeId): WonderBadgeImageSource {
   switch (id) {
     case 'badge:day7':
@@ -34,16 +21,16 @@ export function wonderBadgeImageSource(id: WonderBadgeId): WonderBadgeImageSourc
     case 'badge:heart':
       return { kind: 'image', source: require('../public/homepageimgs/badges/Heartbadge.png') }
     case 'badge:wj_top100':
-      return { kind: 'svg', uri: wonderBadgeRemoteSvgUri('Top100.svg') }
+      return { kind: 'image', source: require('../public/homepageimgs/badges/Top100.png') }
     case 'badge:wj_top50':
-      return { kind: 'svg', uri: wonderBadgeRemoteSvgUri('Top50.svg') }
+      return { kind: 'image', source: require('../public/homepageimgs/badges/Top50.png') }
     case 'badge:wj_top10':
-      return { kind: 'svg', uri: wonderBadgeRemoteSvgUri('Top10.svg') }
+      return { kind: 'image', source: require('../public/homepageimgs/badges/Top10.png') }
     case 'badge:wj_top3':
-      return { kind: 'svg', uri: wonderBadgeRemoteSvgUri('Top3.svg') }
+      return { kind: 'image', source: require('../public/homepageimgs/badges/Top3.png') }
     case 'badge:wj_top2':
-      return { kind: 'svg', uri: wonderBadgeRemoteSvgUri('Top2.svg') }
+      return { kind: 'image', source: require('../public/homepageimgs/badges/Top2.png') }
     case 'badge:wj_top1':
-      return { kind: 'svg', uri: wonderBadgeRemoteSvgUri('Top1.svg') }
+      return { kind: 'image', source: require('../public/homepageimgs/badges/Top1.png') }
   }
 }

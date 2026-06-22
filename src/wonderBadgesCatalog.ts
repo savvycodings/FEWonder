@@ -62,32 +62,32 @@ export const WONDER_BADGE_CATALOG: Record<WonderBadgeId, WonderBadgeCatalogEntry
     acquire: 'Community badge for kindness on Wonderport.',
   },
   'badge:wj_top100': {
-    file: 'Top100.svg',
+    file: 'Top100.png',
     label: 'WonderJump top 100',
     acquire: 'Reach top 100 on the WonderJump leaderboard.',
   },
   'badge:wj_top50': {
-    file: 'Top50.svg',
+    file: 'Top50.png',
     label: 'WonderJump top 50',
     acquire: 'Reach top 50 on the WonderJump leaderboard.',
   },
   'badge:wj_top10': {
-    file: 'Top10.svg',
+    file: 'Top10.png',
     label: 'WonderJump top 10',
     acquire: 'Reach top 10 on the WonderJump leaderboard.',
   },
   'badge:wj_top3': {
-    file: 'Top3.svg',
+    file: 'Top3.png',
     label: 'WonderJump top 3',
     acquire: 'Reach top 3 on the WonderJump leaderboard.',
   },
   'badge:wj_top2': {
-    file: 'Top2.svg',
+    file: 'Top2.png',
     label: 'WonderJump top 2',
     acquire: 'Reach rank #2 on the WonderJump leaderboard.',
   },
   'badge:wj_top1': {
-    file: 'Top1.svg',
+    file: 'Top1.png',
     label: 'WonderJump champion',
     acquire: 'Reach rank #1 on the WonderJump leaderboard.',
   },

@@ -1,14 +1,13 @@
 import { memo, useEffect, useState, type ReactElement } from 'react'
 import { Image, View, type ImageSourcePropType } from 'react-native'
 import FeatherIcon from '@expo/vector-icons/Feather'
-import { SvgUri } from 'react-native-svg'
 import type { WonderBadgeId } from '../wonderBadgesCatalog'
 import { wonderBadgeImageSource } from '../wonderBadgeImageSource'
 import { BRAND_ACCENT_LIME_HEX } from '../brandAccent'
 
 /**
  * Raster badge in a fixed square; `resizeMode="contain"` keeps different source dimensions
- * visually consistent. WonderJump SVGs load from the production API static path via SvgUri.
+ * visually consistent across device sizes.
  */
 export const WonderBadgeImage = memo(function WonderBadgeImage({
   badgeId,
@@ -18,7 +17,7 @@ export const WonderBadgeImage = memo(function WonderBadgeImage({
 }: {
   badgeId: WonderBadgeId
   size: number
-  /** Slight zoom for SVG assets with extra transparent padding (e.g. profile showcase). */
+  /** Slight zoom for assets with extra transparent padding (e.g. profile showcase). */
   visualScale?: number
   fallbackColor?: string
 }): ReactElement {
@@ -49,26 +48,17 @@ export const WonderBadgeImage = memo(function WonderBadgeImage({
     )
   }
 
-  const media =
-    source.kind === 'svg' ? (
-      <SvgUri
-        uri={source.uri}
-        width={size}
-        height={size}
-        preserveAspectRatio="xMidYMid meet"
-        onError={() => setFailed(true)}
-      />
-    ) : (
-      <Image
-        accessibilityIgnoresInvertColors
-        accessibilityRole="image"
-        accessibilityLabel="Badge"
-        source={source.source as ImageSourcePropType}
-        style={mediaSize}
-        resizeMode="contain"
-        onError={() => setFailed(true)}
-      />
-    )
+  const media = (
+    <Image
+      accessibilityIgnoresInvertColors
+      accessibilityRole="image"
+      accessibilityLabel="Badge"
+      source={source.source as ImageSourcePropType}
+      style={mediaSize}
+      resizeMode="contain"
+      onError={() => setFailed(true)}
+    />
+  )
 
   return (
     <View style={frameStyle}>
