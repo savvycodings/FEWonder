@@ -22,6 +22,9 @@
     "production": {
       "autoIncrement": true,
       "node": "22.14.0",
+      "android": {
+        "buildType": "app-bundle"
+      },
       "env": {
         "NPM_CONFIG_NODE_LINKER": "hoisted",
         "EXPO_PUBLIC_ENV": "PRODUCTION",

@@ -12,7 +12,11 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
-import { KeyboardStickyView } from 'react-native-keyboard-controller'
+import Reanimated, { useAnimatedStyle } from 'react-native-reanimated'
+import {
+  useKeyboardState,
+  useReanimatedKeyboardAnimation,
+} from 'react-native-keyboard-controller'
 import EventSource from 'react-native-sse'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
@@ -488,33 +492,38 @@ export function Chat({
     return Math.max(measured, fallback) + COMPOSER_TAB_CLEARANCE_GUARD
   }, [tabBarHeight, insets.bottom])
 
-  /** Cancel shell tab-bar padding when keyboard opens so composer sits ~KEYBOARD_GAP above keys. */
-  const composerStickyOffset = useMemo(
+  /**
+   * Single source of truth for space below the composer.
+   * - iOS: window does NOT resize on keyboard, so lift continuously off keyboard height.
+   *   `keyboardHeightAnim` is negative when open, hence `-value`.
+   * - Android: `adjustResize` already shrinks the window, so only swap the static
+   *   tab-bar clearance for a small gap once the keyboard is visible.
+   */
+  const { height: keyboardHeightAnim } = useReanimatedKeyboardAnimation()
+  const keyboardVisible = useKeyboardState((s) => s.isVisible)
+  const isIOS = Platform.OS === 'ios'
+  const androidBottomClearance = keyboardVisible ? KEYBOARD_GAP : closedComposerBottom
+  const columnStyle = useAnimatedStyle(
     () => ({
-      closed: 0,
-      opened: closedComposerBottom - KEYBOARD_GAP,
+      paddingBottom: isIOS
+        ? Math.max(closedComposerBottom, -keyboardHeightAnim.value + KEYBOARD_GAP)
+        : androidBottomClearance,
     }),
-    [closedComposerBottom],
+    [closedComposerBottom, isIOS, androidBottomClearance],
   )
-  const listBottomPad = useMemo(
-    () =>
-      COMPOSER_BAR_HEIGHT +
-      LIST_SCROLL_TAIL +
-      (pendingImage || pendingReferenceItem ? 72 : 0) +
-      (reportMode ? 88 : 0),
-    [pendingImage, pendingReferenceItem, reportMode],
-  )
+
   const menuAnchorBottom = COMPOSER_BAR_HEIGHT + 6
 
   return (
     <Pressable style={[styles.container, pageBg]} onPress={() => setActiveOwnMessageId(null)}>
-      <View style={[styles.chatShell, pageBg, { paddingBottom: closedComposerBottom }]}>
-      <View style={styles.chatMain}>
+      <View style={[styles.chatShell, pageBg]}>
+      <Reanimated.View style={[styles.chatColumn, columnStyle]}>
       {loading ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator color={theme.brandAccent} />
         </View>
       ) : (
+        <View style={styles.chatMain}>
         <FlatList
           ref={listRef}
           style={styles.messagesList}
@@ -523,7 +532,7 @@ export function Chat({
           contentContainerStyle={[
             styles.listContent,
             styles.listContentTop,
-            { paddingBottom: listBottomPad },
+            { paddingBottom: LIST_SCROLL_TAIL },
           ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
@@ -722,10 +731,10 @@ export function Chat({
             </View>
           }
         />
+        </View>
       )}
-      </View>
 
-      <KeyboardStickyView offset={composerStickyOffset} style={styles.composerStickyWrap}>
+      <View style={styles.composerBar}>
       {(pendingImage || pendingReferenceItem) ? (
         <View style={styles.pendingThumbnailRow}>
           {pendingImage ? (
@@ -839,8 +848,9 @@ export function Chat({
         </>
       ) : null}
 
-      </KeyboardStickyView>
+      </View>
 
+      </Reanimated.View>
       </View>
 
       {showReferencePicker ? (
@@ -987,10 +997,16 @@ const getStyles = (theme: any, insets: { top: number; bottom: number }) => {
       position: 'relative',
       zIndex: 1,
     },
-    composerStickyWrap: {
+    chatColumn: {
+      flex: 1,
+      minHeight: 0,
       width: '100%',
-      position: 'relative',
+    },
+    composerBar: {
+      width: '100%',
       zIndex: 3,
+      backgroundColor: pageBg,
+      paddingTop: 4,
     },
     chatMain: {
       flex: 1,
