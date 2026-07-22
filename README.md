@@ -3,7 +3,7 @@
 Living document for the **backend developer**: what the mobile app expects, how the **current server** behaves, and **schema / route gaps** to resolve—without changing DB files from this repo’s perspective (coordinate migrations in `server` separately).
 
 ---
-
+s
 ## Expo client stack (how we call the API)
 
 | Piece | Detail |
