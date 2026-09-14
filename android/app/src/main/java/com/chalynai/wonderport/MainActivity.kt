@@ -1,4 +1,4 @@
-package com.brrrkyle.wonderport
+package com.chalynai.wonderport
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

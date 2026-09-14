@@ -3,3 +3,8 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
+
+# macOS EAS/Xcode scripts break on Windows CRLF
+ios/.xcode.env text eol=lf
+ios/Podfile text eol=lf
+**/*.sh text eol=lf

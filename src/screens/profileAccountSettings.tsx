@@ -1,6 +1,7 @@
 import { useContext, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,7 +16,7 @@ import FeatherIcon from '@expo/vector-icons/Feather'
 import { ThemeContext } from '../context'
 import { PasswordInput, ProfileStackBackBar } from '../components'
 import { User } from '../../types'
-import { changePassword, updateProfileDetails } from '../utils'
+import { changePassword, deleteUserAccount, updateProfileDetails } from '../utils'
 import {
   clampProfileDisplayNameInput,
   isProfileDisplayNameValid,
@@ -29,9 +30,10 @@ type Props = {
   user: User
   sessionToken: string
   onUserUpdated: (user: User) => Promise<void>
+  onLogout: () => Promise<void>
 }
 
-export function ProfileAccountSettings({ user, sessionToken, onUserUpdated }: Props) {
+export function ProfileAccountSettings({ user, sessionToken, onUserUpdated, onLogout }: Props) {
   const { theme } = useContext(ThemeContext)
   const styles = getStyles(theme)
   const [fullName, setFullName] = useState(user.fullName || '')
@@ -46,6 +48,10 @@ export function ProfileAccountSettings({ user, sessionToken, onUserUpdated }: Pr
   const [passwordBusy, setPasswordBusy] = useState(false)
   const [passwordError, setPasswordError] = useState('')
   const [passwordSuccess, setPasswordSuccess] = useState('')
+  const [showDeleteForm, setShowDeleteForm] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   function closePasswordForm() {
     setShowPasswordForm(false)
@@ -100,14 +106,51 @@ export function ProfileAccountSettings({ user, sessionToken, onUserUpdated }: Pr
       setCurrentPassword('')
       setNewPassword('')
       setConfirmNewPassword('')
-      setCurrentPassword('')
-      setNewPassword('')
-      setConfirmNewPassword('')
       setPasswordSuccess('Password updated.')
     } catch (e: any) {
       setPasswordError(e?.message || 'Could not change password.')
     } finally {
       setPasswordBusy(false)
+    }
+  }
+
+  function closeDeleteForm() {
+    setShowDeleteForm(false)
+    setDeletePassword('')
+    setDeleteError('')
+  }
+
+  function promptDeleteAccount() {
+    Alert.alert(
+      'Delete account?',
+      'This permanently removes your profile, cart, saved items, rewards balances, and chat messages. Order records may be kept for fulfilment. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          style: 'destructive',
+          onPress: () => {
+            setDeleteError('')
+            setDeletePassword('')
+            setShowDeleteForm(true)
+          },
+        },
+      ],
+    )
+  }
+
+  async function onConfirmDeleteAccount() {
+    if (!deletePassword || deleteBusy) return
+    setDeleteError('')
+    setDeleteBusy(true)
+    try {
+      await deleteUserAccount({ sessionToken, password: deletePassword })
+      closeDeleteForm()
+      await onLogout()
+    } catch (e: any) {
+      setDeleteError(e?.message || 'Could not delete account.')
+    } finally {
+      setDeleteBusy(false)
     }
   }
 
@@ -238,6 +281,52 @@ export function ProfileAccountSettings({ user, sessionToken, onUserUpdated }: Pr
                 <ActivityIndicator color={theme.tintTextColor} />
               ) : (
                 <Text style={styles.saveText}>Update password</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {!showDeleteForm ? (
+          <Pressable
+            style={[styles.actionRow, styles.deleteActionRow]}
+            onPress={promptDeleteAccount}
+            accessibilityRole="button"
+            accessibilityLabel="Delete account"
+          >
+            <FeatherIcon name="trash-2" size={18} color="#ef4444" />
+            <Text style={styles.deleteActionText}>Delete account</Text>
+            <FeatherIcon name="chevron-right" size={18} color="rgba(255,255,255,0.45)" />
+          </Pressable>
+        ) : (
+          <View style={[styles.card, styles.deleteCard]}>
+            <View style={styles.passwordCardHeader}>
+              <Text style={styles.deleteCardTitle}>Delete account</Text>
+              <Pressable onPress={closeDeleteForm} hitSlop={10} accessibilityRole="button" disabled={deleteBusy}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+            </View>
+            <Text style={styles.sectionHint}>
+              Type the same password you use to sign in to confirm deletion.
+            </Text>
+            <Text style={styles.label}>Account password</Text>
+            <PasswordInput
+              value={deletePassword}
+              onChangeText={setDeletePassword}
+              placeholder="Same as your sign-in password"
+              placeholderTextColor={theme.mutedForegroundColor}
+              style={styles.input}
+            />
+            {deleteError ? <Text style={styles.errorText}>{deleteError}</Text> : null}
+            <TouchableOpacity
+              style={[styles.deleteButton, (!deletePassword || deleteBusy) && styles.saveButtonDisabled]}
+              onPress={onConfirmDeleteAccount}
+              disabled={!deletePassword || deleteBusy}
+              activeOpacity={0.9}
+            >
+              {deleteBusy ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.deleteButtonText}>Delete my account</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -375,6 +464,36 @@ const getStyles = (theme: any) => {
       color: '#22c55e',
       fontFamily: theme.mediumFont,
       marginBottom: 8,
+    },
+    deleteActionRow: {
+      borderColor: 'rgba(239, 68, 68, 0.35)',
+    },
+    deleteActionText: {
+      flex: 1,
+      color: '#ef4444',
+      fontFamily: theme.semiBoldFont,
+      fontSize: 14,
+    },
+    deleteCard: {
+      borderColor: 'rgba(239, 68, 68, 0.35)',
+    },
+    deleteCardTitle: {
+      color: '#ef4444',
+      fontFamily: 'Montserrat_700Bold',
+      fontSize: 16,
+    },
+    deleteButton: {
+      minHeight: 42,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: '#ef4444',
+      marginTop: 2,
+    },
+    deleteButtonText: {
+      color: '#ffffff',
+      fontFamily: theme.boldFont,
+      fontSize: 14,
     },
   })
 }

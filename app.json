@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "WPH",
+    "name": "Wonderport",
     "slug": "wonderport",
     "scheme": "wonderport",
     "version": "1.0.0",
@@ -17,14 +17,18 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.brrrkyle.wonderport"
+      "bundleIdentifier": "com.chalynai.wonderport",
+      "infoPlist": {
+        "CFBundleDisplayName": "Wonderport",
+        "NSPhotoLibraryUsageDescription": "Wonderport uses your photo library so you can set a profile picture, share images in community chat, and upload EFT payment proof."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.brrrkyle.wonderport",
+      "package": "com.chalynai.wonderport",
       "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
@@ -33,13 +37,19 @@
     "plugins": [
       "expo-font",
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Wonderport uses your photo library so you can set a profile picture, share images in community chat, and upload EFT payment proof."
+        }
+      ]
     ],
     "extra": {
       "eas": {
-        "projectId": "ff44b50e-3de6-46c1-bf8c-eb04b84496fa"
+        "projectId": "0efaba92-5a74-430b-b99f-b139552c1003"
       }
     },
-    "owner": "brrrkyle"
+    "owner": "chalynai"
   }
 }

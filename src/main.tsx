@@ -292,6 +292,7 @@ function ProfileStackScreen({
             user={user}
             sessionToken={sessionToken}
             onUserUpdated={onUserUpdated}
+            onLogout={onLogout}
           />
         )}
       </ProfileStack.Screen>
@@ -386,7 +387,10 @@ function Tabs({
           tabBarLabelStyle: {
             fontFamily: theme.mediumFont,
             fontSize: 11,
+            lineHeight: 12,
             marginBottom: 2,
+            ...(Platform.OS === 'android' ? { includeFontPadding: false } : null),
+            ...(Platform.OS !== 'web' ? { transform: [{ translateY: -1 }] } : null),
           },
           tabBarContentContainerStyle: {
             paddingHorizontal: 4,

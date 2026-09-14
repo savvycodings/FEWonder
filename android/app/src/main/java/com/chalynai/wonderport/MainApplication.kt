@@ -1,4 +1,4 @@
-package com.brrrkyle.wonderport
+package com.chalynai.wonderport
 
 import android.app.Application
 import android.content.res.Configuration

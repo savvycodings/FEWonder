@@ -596,17 +596,19 @@ const getStyles = (theme: any) =>
       marginBottom: 12,
       alignItems: 'stretch',
       zIndex: 2,
+      overflow: 'visible',
     },
     chipPressable: {
       flex: 1,
       minWidth: 0,
-      overflow: 'hidden',
+      overflow: 'visible',
     },
     chipCardOuter: {
       width: '100%',
     },
     chipAnimWrap: {
       width: '100%',
+      overflow: 'visible',
     },
     chipPlainOuter: {
       width: '100%',

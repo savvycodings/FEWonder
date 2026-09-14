@@ -550,6 +550,34 @@ export async function changePassword(payload: {
   }
 }
 
+export async function deleteUserAccount(payload: {
+  sessionToken: string
+  password: string
+}): Promise<void> {
+  const response = await fetch(`${DOMAIN}/auth/delete-account`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${payload.sessionToken}`,
+    },
+    body: JSON.stringify({ password: payload.password }),
+  })
+  const raw = await response.text()
+  let data: { error?: string; message?: string } = {}
+  try {
+    data = raw ? JSON.parse(raw) : {}
+  } catch {
+    throw new Error(
+      response.status === 404
+        ? 'Account deletion is not available on the server yet. Please try again after the API is updated.'
+        : 'Unable to delete account (invalid server response).',
+    )
+  }
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to delete account')
+  }
+}
+
 export async function requestForgotPasswordOtp(email: string): Promise<{ devHint?: string }> {
   const response = await fetch(`${DOMAIN}/auth/forgot-password/request`, {
     method: 'POST',
