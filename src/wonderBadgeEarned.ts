@@ -1,6 +1,35 @@
 import type { DailyRewardStatus } from '../types'
 import { WONDER_BADGE_IDS, type WonderBadgeId } from './wonderBadgesCatalog'
 
+/**
+ * WonderJump badges are exclusive tiers — only the single matching badge for your rank.
+ * Rank 1 → top1 only; 2 → top2 only; 3 → top3 only;
+ * 4–10 → top10; 11–50 → top50; 51–100 → top100.
+ */
+export function isWonderJumpBadgeEarnedForRank(
+  id: WonderBadgeId,
+  rank: number | null,
+): boolean {
+  if (rank === null || !Number.isFinite(rank) || rank < 1) return false
+  const r = Math.floor(rank)
+  switch (id) {
+    case 'badge:wj_top1':
+      return r === 1
+    case 'badge:wj_top2':
+      return r === 2
+    case 'badge:wj_top3':
+      return r === 3
+    case 'badge:wj_top10':
+      return r >= 4 && r <= 10
+    case 'badge:wj_top50':
+      return r >= 11 && r <= 50
+    case 'badge:wj_top100':
+      return r >= 51 && r <= 100
+    default:
+      return false
+  }
+}
+
 /** Matches server `userEarnsProfileBadge` / Daily Rewards badge equip rules. */
 export function isWonderBadgeEarned(id: WonderBadgeId, status: DailyRewardStatus): boolean {
   const claimedCount = Math.max(0, Math.floor(status.claimedCount || 0))
@@ -32,17 +61,12 @@ export function isWonderBadgeEarned(id: WonderBadgeId, status: DailyRewardStatus
     case 'badge:order10':
       return paid >= 10
     case 'badge:wj_top100':
-      return rank !== null && rank <= 100
     case 'badge:wj_top50':
-      return rank !== null && rank <= 50
     case 'badge:wj_top10':
-      return rank !== null && rank <= 10
     case 'badge:wj_top3':
-      return rank !== null && rank <= 3
     case 'badge:wj_top2':
-      return rank !== null && rank <= 2
     case 'badge:wj_top1':
-      return rank !== null && rank <= 1
+      return isWonderJumpBadgeEarnedForRank(id, rank)
     default:
       return false
   }

@@ -60,7 +60,7 @@ import {
   migrateWonderBadgeSlotId,
   type WonderBadgeId,
 } from '../wonderBadgesCatalog'
-import { listEarnedWonderBadgeIds } from '../wonderBadgeEarned'
+import { isWonderJumpBadgeEarnedForRank, listEarnedWonderBadgeIds } from '../wonderBadgeEarned'
 import { markWonderBadgesSeen } from '../wonderBadgeNotifications'
 import {
   WONDER_JUMP_CHARACTER_OPTIONS,
@@ -185,22 +185,14 @@ function wonderBadgeCardMeta(
     case 'badge:wj_top3':
     case 'badge:wj_top2':
     case 'badge:wj_top1': {
-      const targetById: Record<string, number> = {
-        'badge:wj_top100': 100,
-        'badge:wj_top50': 50,
-        'badge:wj_top10': 10,
-        'badge:wj_top3': 3,
-        'badge:wj_top2': 2,
-        'badge:wj_top1': 1,
-      }
-      const target = targetById[id]
       const rank = typeof wonderJumpRank === 'number' && wonderJumpRank > 0 ? Math.floor(wonderJumpRank) : null
+      const earned = isWonderJumpBadgeEarnedForRank(id, rank)
       return {
-        earned: rank !== null && rank <= target,
+        earned,
         label: entry.label,
         caption: entry.acquire,
         progressLabel: rank === null ? 'Unranked' : `Rank #${rank}`,
-        fillRatio: rank !== null && rank <= target ? 1 : 0,
+        fillRatio: earned ? 1 : 0,
       }
     }
     default:

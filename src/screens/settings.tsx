@@ -1,11 +1,12 @@
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native'
-import { useContext } from 'react'
+import { useContext, useMemo } from 'react'
 import { useNavigation } from '@react-navigation/native'
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { ProfilePageHeading, ProfileStackBackBar } from '../components'
 import { ThemeContext } from '../context'
 import { User } from '../../types'
 import { brandAccentRgba } from '../brandAccent'
+import { canSeeAdminSettings } from '../adminAllowlist'
 
 /** Keep code paths available for future use, but hidden in UI for now. */
 const SHOW_THEME_SECTION = false
@@ -22,6 +23,7 @@ type SettingsProps = {
 export function Settings({ user, sessionToken, onUserUpdated, onLogout }: SettingsProps) {
   const navigation = useNavigation<any>()
   const { theme } = useContext(ThemeContext)
+  const showAdminSection = useMemo(() => canSeeAdminSettings(user.email), [user.email])
 
   const styles = getStyles(theme)
 
@@ -99,15 +101,19 @@ export function Settings({ user, sessionToken, onUserUpdated, onLogout }: Settin
       {SHOW_THEME_SECTION ? (
         <View />
       ) : null}
-      <View style={styles.titleContainer}>
-        <Text style={styles.mainText}>Admin</Text>
-      </View>
-      <Pressable
-        style={styles.chatChoiceButton}
-        onPress={() => navigation.navigate('AdminOrdersLogin')}
-      >
-        <Text style={styles.chatTypeText}>View orders (Yoco / EFT)</Text>
-      </Pressable>
+      {showAdminSection ? (
+        <>
+          <View style={styles.titleContainer}>
+            <Text style={styles.mainText}>Admin</Text>
+          </View>
+          <Pressable
+            style={styles.chatChoiceButton}
+            onPress={() => navigation.navigate('AdminOrdersLogin')}
+          >
+            <Text style={styles.chatTypeText}>View orders (Yoco / EFT)</Text>
+          </Pressable>
+        </>
+      ) : null}
       {SHOW_CHAT_MODEL_SECTION ? (
         <View />
       ) : null}

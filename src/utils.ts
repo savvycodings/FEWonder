@@ -625,6 +625,32 @@ export async function resetPasswordWithOtp(payload: {
   }
 }
 
+/** Returns true if a password account already exists for this email. */
+export async function checkEmailExists(email: string): Promise<boolean> {
+  const normalized = email.trim().toLowerCase()
+  const response = await fetch(
+    `${DOMAIN}/auth/check-email?email=${encodeURIComponent(normalized)}`,
+  )
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to check email')
+  }
+  return data?.exists === true
+}
+
+/** Returns true if a password account already exists for this phone number. */
+export async function checkPhoneExists(phone: string): Promise<boolean> {
+  const normalized = phone.trim()
+  const response = await fetch(
+    `${DOMAIN}/auth/check-phone?phone=${encodeURIComponent(normalized)}`,
+  )
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data?.error || 'Unable to check phone')
+  }
+  return data?.exists === true
+}
+
 export async function requestAuthEmailCode(
   email: string,
   purpose: 'signin' | 'signup',

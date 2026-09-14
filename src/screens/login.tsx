@@ -6,7 +6,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { PasswordInput } from '../components'
 import { ThemeContext } from '../context'
-import { loginUser } from '../utils'
+import { checkEmailExists, checkPhoneExists, loginUser } from '../utils'
 import type { SignupDraft } from './signupVerifyEmail'
 import {
   isProfileDisplayNameValid,
@@ -102,7 +102,25 @@ export function Login({ onAuthSuccess }: Props) {
         eftBankAccountNumber: eftBankAccountNumber.trim(),
         eftBankBranch: eftBankBranch.trim(),
       }
-      navigation.navigate('SignupVerifyEmail', { draft })
+      setLoading(true)
+      try {
+        const emailTaken = await checkEmailExists(normalizedEmail)
+        if (emailTaken) {
+          setError('An account already exists for this email. Please sign in instead.')
+          return
+        }
+        const phoneTaken = await checkPhoneExists(normalizedPhone)
+        if (phoneTaken) {
+          setError('An account already exists with this phone number. Please sign in instead.')
+          return
+        }
+        navigation.navigate('SignupVerifyEmail', { draft })
+      } catch {
+        // Network fail — fall through to OTP screen; server still guards register.
+        navigation.navigate('SignupVerifyEmail', { draft })
+      } finally {
+        setLoading(false)
+      }
       return
     }
 
