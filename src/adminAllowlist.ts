@@ -7,6 +7,8 @@ export const ADMIN_SETTINGS_EMAILS = [
   'chalyn.smit101@gmail.com',
   'zkkylenoome@gmail.com',
   'lindsayhoar476@gmail.com',
+  'info@wonderporthobbies.com',
+  'deanp1908@gmail.com',
 ] as const
 
 export function canSeeAdminSettings(email: string | null | undefined): boolean {

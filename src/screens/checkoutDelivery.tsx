@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from 'react-native'
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller'
@@ -29,10 +30,19 @@ import {
 import { defaultTierForCart, type PudoLockerTier } from '../pudoLockerSizes'
 import { parseMoneyToNumber } from '../money'
 import type { User } from '../../types'
-import { fetchSessionUser, getUserSessionToken, readStoredAuthPayload, redeemWonderCode } from '../utils'
+import { fetchSessionUser, readStoredAuthPayload, redeemWonderCode } from '../utils'
+import { getUserSessionToken, quoteOrder } from '../ordersApi'
 import { brandAccentRgba } from '../brandAccent'
 
 const ACCENT_ON_BADGE_TEXT = '#ffffff'
+const FIRST_ORDER_PROMO_CODE = 'WONDER15'
+
+function normalizeCheckoutPromoCode(raw: string): string {
+  return String(raw || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '')
+}
 
 function cartItemsAllZar(items: { price?: { currencyCode?: string } | null }[]): boolean {
   if (!items.length) return false
@@ -101,6 +111,8 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
   const [shippingProvince, setShippingProvince] = useState('')
   const [formError, setFormError] = useState('')
   const [promoCode, setPromoCode] = useState('')
+  const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null)
+  const [promoSavingsCents, setPromoSavingsCents] = useState(0)
   const [promoBusy, setPromoBusy] = useState(false)
   const [promoError, setPromoError] = useState('')
   const [promoSuccess, setPromoSuccess] = useState('')
@@ -182,29 +194,66 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
   }, [hasWholeSet, pudoLockerTier])
 
   async function onApplyPromoCode() {
+    if (appliedPromoCode) return
+    Keyboard.dismiss()
     const trimmed = promoCode.trim()
     if (!trimmed) {
       setPromoError('Enter a code.')
       setPromoSuccess('')
+      Alert.alert('Redeem code', 'Enter a code.')
       return
     }
-    const token = await getUserSessionToken()
-    if (!token) {
-      Alert.alert('Sign in required', 'Please sign in to redeem a code.')
-      return
-    }
+
     setPromoBusy(true)
     setPromoError('')
     setPromoSuccess('')
     try {
+      const token = await getUserSessionToken()
+      if (!token) {
+        Alert.alert('Sign in required', 'Please sign in to redeem a code.')
+        return
+      }
+
+      const normalized = normalizeCheckoutPromoCode(trimmed)
+      if (normalized === FIRST_ORDER_PROMO_CODE) {
+        const quote = await quoteOrder({
+          items,
+          pudoLockerTier,
+          wonderCoinsToRedeem: applyWonderCoins ? wonderCoinsToRedeem : 0,
+          promoCode: FIRST_ORDER_PROMO_CODE,
+        })
+        if (!quote.promoCode || quote.promoDiscountCents <= 0) {
+          setAppliedPromoCode(null)
+          setPromoSavingsCents(0)
+          const msg = quote.promoError || 'Promo code could not be applied.'
+          setPromoError(msg)
+          Alert.alert('Promo code', msg)
+          return
+        }
+        setAppliedPromoCode(FIRST_ORDER_PROMO_CODE)
+        setPromoCode(FIRST_ORDER_PROMO_CODE)
+        setPromoSavingsCents(quote.promoDiscountCents)
+        setPromoSuccess('')
+        return
+      }
+
       const result = await redeemWonderCode(token, trimmed)
       setPromoSuccess(result.message)
       setPromoCode('')
+      Alert.alert('Code redeemed', result.message)
     } catch (e: any) {
-      setPromoError(e?.message || 'Could not redeem code.')
+      setAppliedPromoCode(null)
+      setPromoSavingsCents(0)
+      const msg = e?.message || 'Could not redeem code.'
+      setPromoError(msg)
+      Alert.alert('Redeem code', msg)
     } finally {
       setPromoBusy(false)
     }
+  }
+
+  function formatPromoSavings(cents: number): string {
+    return `R${(Math.max(0, cents) / 100).toFixed(2)}`
   }
 
   function buildDeliveryDetails(): CheckoutDeliveryDetails {
@@ -262,6 +311,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
       delivery,
       paymentMethod: method,
       wonderCoinsToRedeem: applyWonderCoins ? wonderCoinsToRedeem : 0,
+      promoCode: appliedPromoCode || undefined,
     })
   }
 
@@ -291,6 +341,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
             <TextInput
               value={promoCode}
               onChangeText={(t) => {
+                if (appliedPromoCode) return
                 setPromoCode(t)
                 setPromoError('')
               }}
@@ -299,21 +350,33 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
               style={[styles.input, styles.promoInput]}
               autoCapitalize="characters"
               autoCorrect={false}
-              editable={!promoBusy}
+              editable={!promoBusy && !appliedPromoCode}
             />
-            <Pressable
-              style={[styles.promoApplyBtn, promoBusy && styles.promoApplyBtnDisabled]}
+            <TouchableOpacity
+              style={[
+                styles.promoApplyBtn,
+                (promoBusy || appliedPromoCode) && styles.promoApplyBtnDisabled,
+                appliedPromoCode ? styles.promoAppliedBtn : null,
+              ]}
               onPress={() => void onApplyPromoCode()}
-              disabled={promoBusy}
+              disabled={promoBusy || Boolean(appliedPromoCode)}
+              activeOpacity={0.85}
             >
               {promoBusy ? (
                 <ActivityIndicator color={ACCENT_ON_BADGE_TEXT} size="small" />
               ) : (
-                <Text style={styles.promoApplyText}>Apply</Text>
+                <Text style={styles.promoApplyText}>
+                  {appliedPromoCode ? 'Applied' : 'Apply'}
+                </Text>
               )}
-            </Pressable>
+            </TouchableOpacity>
           </View>
           {promoError ? <Text style={styles.errorText}>{promoError}</Text> : null}
+          {appliedPromoCode && promoSavingsCents > 0 ? (
+            <Text style={styles.savingsText}>
+              {`You've saved ${formatPromoSavings(promoSavingsCents)}`}
+            </Text>
+          ) : null}
           {promoSuccess ? <Text style={styles.successText}>{promoSuccess}</Text> : null}
 
           <Text style={styles.sectionLabel}>Contact</Text>
@@ -366,8 +429,14 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
             pudoLockerTier={pudoLockerTier}
             applyWonderCoins={applyWonderCoins}
             wonderCoinsToRedeem={wonderCoinsToRedeem}
+            promoCode={appliedPromoCode}
             onApplyWonderCoinsChange={setApplyWonderCoins}
             onWonderCoinsToRedeemChange={setWonderCoinsToRedeem}
+            onQuoteChange={(quote) => {
+              if (quote?.promoDiscountCents && quote.promoDiscountCents > 0) {
+                setPromoSavingsCents(quote.promoDiscountCents)
+              }
+            }}
           />
 
           {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
@@ -453,14 +522,24 @@ function getStyles(theme: any) {
       paddingHorizontal: 14,
     },
     promoApplyBtnDisabled: { opacity: 0.7 },
+    promoAppliedBtn: {
+      backgroundColor: theme.brandAccent,
+      opacity: 1,
+    },
     promoApplyText: {
       color: ACCENT_ON_BADGE_TEXT,
       fontFamily: theme.semiBoldFont,
       fontSize: 14,
     },
     errorText: {
-      color: '#f87171',
+      color: theme.brandAccent || '#E32828',
       fontFamily: theme.mediumFont,
+      fontSize: 13,
+      marginTop: 8,
+    },
+    savingsText: {
+      color: theme.brandAccent || '#E32828',
+      fontFamily: theme.semiBoldFont,
       fontSize: 13,
       marginTop: 8,
     },

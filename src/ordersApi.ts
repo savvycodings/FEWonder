@@ -116,6 +116,14 @@ function parseApiError(data: any, res: Response): string {
 }
 
 function normalizeOrderQuote(data: any): OrderQuoteResult {
+  const promoCode =
+    typeof data?.promoCode === 'string' && data.promoCode.trim()
+      ? data.promoCode.trim().toUpperCase()
+      : null
+  const promoError =
+    typeof data?.promoError === 'string' && data.promoError.trim()
+      ? data.promoError.trim()
+      : null
   return {
     subtotalCents: coerceOrderInt(data?.subtotalCents),
     discountCents: coerceOrderInt(data?.discountCents),
@@ -127,6 +135,9 @@ function normalizeOrderQuote(data: any): OrderQuoteResult {
     maxRedeemableCoins: coerceOrderInt(data?.maxRedeemableCoins),
     walletBalance: coerceOrderInt(data?.walletBalance),
     currency: typeof data?.currency === 'string' ? data.currency : 'ZAR',
+    promoCode,
+    promoDiscountCents: coerceOrderInt(data?.promoDiscountCents),
+    promoError,
   }
 }
 
@@ -148,6 +159,7 @@ export type CreateOrderPayload = {
   customerEftBankName?: string
   customerEftAccountNumber?: string
   wonderCoinsToRedeem?: number
+  promoCode?: string | null
 }
 
 export type OrderQuoteResult = {
@@ -161,12 +173,16 @@ export type OrderQuoteResult = {
   maxRedeemableCoins: number
   walletBalance: number
   currency: string
+  promoCode: string | null
+  promoDiscountCents: number
+  promoError: string | null
 }
 
 export type QuoteOrderPayload = {
   items: { productId: string; quantity: number; packaging?: 'single' | 'set' }[]
   pudoLockerTier: 'locker' | 'door'
   wonderCoinsToRedeem?: number
+  promoCode?: string | null
 }
 
 export async function quoteOrder(body: QuoteOrderPayload) {
@@ -183,11 +199,26 @@ export async function quoteOrder(body: QuoteOrderPayload) {
     headers.Authorization = `Bearer ${token}`
   }
 
-  const res = await fetch(`${DOMAIN}/orders/quote`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  })
+  const controller = new AbortController()
+  const timeoutMs = 12000
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  let res: Response
+  try {
+    res = await fetch(`${DOMAIN}/orders/quote`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    })
+  } catch (e: any) {
+    if (e?.name === 'AbortError') {
+      throw new Error('Order totals timed out. Check your connection and try again.')
+    }
+    throw e
+  } finally {
+    clearTimeout(timeoutId)
+  }
+
   const text = await res.text()
   let data: any = null
   try {

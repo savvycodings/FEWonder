@@ -26,6 +26,7 @@ type CheckoutWonderCoinsSectionProps = {
   pudoLockerTier: PudoLockerTier
   applyWonderCoins: boolean
   wonderCoinsToRedeem: number
+  promoCode?: string | null
   onApplyWonderCoinsChange: (value: boolean) => void
   onWonderCoinsToRedeemChange: (value: number) => void
   onQuoteChange?: (quote: OrderQuoteResult | null) => void
@@ -53,6 +54,16 @@ function CheckoutOrderSummaryCard({
         <Text style={styles.summaryLabel}>Subtotal</Text>
         <Text style={styles.summaryValue}>{formatZar(quote.subtotalCents)}</Text>
       </View>
+      {quote.promoDiscountCents > 0 ? (
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>
+            {`${quote.promoCode || 'WONDER15'} (−15%)`}
+          </Text>
+          <Text style={[styles.summaryValue, styles.discountValue]}>
+            −{formatZar(quote.promoDiscountCents)}
+          </Text>
+        </View>
+      ) : null}
       {quote.discountCents > 0 ? (
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>WonderCoins discount</Text>
@@ -87,6 +98,7 @@ export function CheckoutWonderCoinsSection({
   pudoLockerTier,
   applyWonderCoins,
   wonderCoinsToRedeem,
+  promoCode = null,
   onApplyWonderCoinsChange,
   onWonderCoinsToRedeemChange,
   onQuoteChange,
@@ -135,6 +147,7 @@ export function CheckoutWonderCoinsSection({
         items,
         pudoLockerTier,
         wonderCoinsToRedeem: coins,
+        promoCode: promoCode || undefined,
       })
       setServerQuote(result)
       setWalletBalanceHint(result.walletBalance)
@@ -151,6 +164,7 @@ export function CheckoutWonderCoinsSection({
     items,
     loadWalletBalanceHint,
     onQuoteChange,
+    promoCode,
     pudoLockerTier,
     wonderCoinsToRedeem,
   ])
@@ -169,9 +183,11 @@ export function CheckoutWonderCoinsSection({
         pudoLockerTier,
         wonderCoinsToRedeem: applyWonderCoins ? wonderCoinsToRedeem : 0,
         walletBalance: serverQuote?.walletBalance ?? walletBalanceHint,
+        promoCode,
       }),
     [
       applyWonderCoins,
+      promoCode,
       pudoLockerTier,
       serverQuote?.walletBalance,
       subtotalZar,

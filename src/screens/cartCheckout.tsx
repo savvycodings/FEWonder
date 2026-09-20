@@ -52,6 +52,7 @@ type CheckoutRouteParams = {
   delivery?: CheckoutDeliveryDetails
   paymentMethod?: 'eft' | 'yoco'
   wonderCoinsToRedeem?: number
+  promoCode?: string
 }
 
 export function CartCheckout({ navigation }: { navigation: any }) {
@@ -175,6 +176,7 @@ export function CartCheckout({ navigation }: { navigation: any }) {
         customerEftBankName: delivery.customerEftBankName,
         customerEftAccountNumber: delivery.customerEftAccountNumber,
         wonderCoinsToRedeem: Math.max(0, Math.floor(Number(params.wonderCoinsToRedeem) || 0)),
+        promoCode: params.promoCode || undefined,
       })
       // Match product.tsx: open payment UI before clearing cart. Clearing first made `cartItems`
       // empty so we hit `return null` below and never rendered the EFT / Yoco modals.

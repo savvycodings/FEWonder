@@ -3,6 +3,8 @@ import type { PudoLockerTier } from './pudoLockerSizes'
 import { qualifiesForFreeDeliveryZar, shippingZarForTier } from './pudoLockerSizes'
 
 const WONDER_COINS_PER_RAND_VALUE = 10
+const FIRST_ORDER_PROMO_CODE = 'WONDER15'
+const FIRST_ORDER_PROMO_PERCENT = 15
 
 function discountCentsFromPoints(points: number): number {
   const p = Math.max(0, Math.floor(points))
@@ -23,26 +25,44 @@ function maxRedeemablePoints(balance: number, subtotalCents: number): number {
   return Math.min(bal, pointsFromDiscountCents(sub))
 }
 
+function normalizePromoCode(raw: string | null | undefined): string {
+  return String(raw || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, '')
+}
+
 /** Client-side checkout totals when the quote API is unavailable (uses cart subtotal in ZAR). */
 export function estimateCheckoutQuote(params: {
   subtotalZar: number
   pudoLockerTier: PudoLockerTier
   wonderCoinsToRedeem?: number
   walletBalance?: number
+  promoCode?: string | null
 }): OrderQuoteResult {
   const subtotalCents = Math.max(0, Math.round(params.subtotalZar * 100))
   const freeDelivery = qualifiesForFreeDeliveryZar(params.subtotalZar)
   const shippingCents = Math.round(shippingZarForTier(params.pudoLockerTier, params.subtotalZar) * 100)
   const walletBalance = Math.max(0, Math.floor(params.walletBalance ?? 0))
-  const maxRedeemableCoins = maxRedeemablePoints(walletBalance, subtotalCents)
+
+  const normalizedPromo = normalizePromoCode(params.promoCode)
+  let promoCode: string | null = null
+  let promoDiscountCents = 0
+  if (normalizedPromo === FIRST_ORDER_PROMO_CODE) {
+    promoDiscountCents = Math.floor((subtotalCents * FIRST_ORDER_PROMO_PERCENT) / 100)
+    if (promoDiscountCents > 0) promoCode = FIRST_ORDER_PROMO_CODE
+  }
+  const merchandiseAfterPromo = Math.max(0, subtotalCents - promoDiscountCents)
+
+  const maxRedeemableCoins = maxRedeemablePoints(walletBalance, merchandiseAfterPromo)
 
   let requested = Math.max(0, Math.floor(params.wonderCoinsToRedeem ?? 0))
   const wonderCoinsRedeemed = Math.min(requested, maxRedeemableCoins)
   let discountCents = discountCentsFromPoints(wonderCoinsRedeemed)
-  if (discountCents > subtotalCents) discountCents = subtotalCents
+  if (discountCents > merchandiseAfterPromo) discountCents = merchandiseAfterPromo
 
   const settledPoints = pointsFromDiscountCents(discountCents)
-  const subtotalAfterDiscount = subtotalCents - discountCents
+  const subtotalAfterDiscount = merchandiseAfterPromo - discountCents
   const totalCents = subtotalAfterDiscount + shippingCents
   const wonderCoinsEarned = Math.floor(subtotalAfterDiscount / 100)
 
@@ -57,5 +77,8 @@ export function estimateCheckoutQuote(params: {
     maxRedeemableCoins,
     walletBalance,
     currency: 'ZAR',
+    promoCode,
+    promoDiscountCents,
+    promoError: null,
   }
 }
