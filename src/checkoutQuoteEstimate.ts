@@ -5,6 +5,19 @@ import { qualifiesForFreeDeliveryZar, shippingZarForTier } from './pudoLockerSiz
 const WONDER_COINS_PER_RAND_VALUE = 10
 const FIRST_ORDER_PROMO_CODE = 'WONDER15'
 const FIRST_ORDER_PROMO_PERCENT = 15
+const INFLUENCER_PROMO_PERCENT = 10
+
+/** Offline display-only list — server ENV is authoritative for real discounts. */
+const OFFLINE_INFLUENCER_CODES = new Set([
+  'AMANITA10',
+  'LEYLA10',
+  'MOMWITHME10',
+  'PRETTY10',
+  'GEEKY10',
+  'SICHENGII10',
+  'NINA10',
+  'BLOB10',
+])
 
 function discountCentsFromPoints(points: number): number {
   const p = Math.max(0, Math.floor(points))
@@ -51,6 +64,9 @@ export function estimateCheckoutQuote(params: {
   if (normalizedPromo === FIRST_ORDER_PROMO_CODE) {
     promoDiscountCents = Math.floor((subtotalCents * FIRST_ORDER_PROMO_PERCENT) / 100)
     if (promoDiscountCents > 0) promoCode = FIRST_ORDER_PROMO_CODE
+  } else if (OFFLINE_INFLUENCER_CODES.has(normalizedPromo)) {
+    promoDiscountCents = Math.floor((subtotalCents * INFLUENCER_PROMO_PERCENT) / 100)
+    if (promoDiscountCents > 0) promoCode = normalizedPromo
   }
   const merchandiseAfterPromo = Math.max(0, subtotalCents - promoDiscountCents)
 

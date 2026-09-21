@@ -57,7 +57,14 @@ function CheckoutOrderSummaryCard({
       {quote.promoDiscountCents > 0 ? (
         <View style={styles.summaryRow}>
           <Text style={styles.summaryLabel}>
-            {`${quote.promoCode || 'WONDER15'} (−15%)`}
+            {(() => {
+              const code = quote.promoCode || 'Promo'
+              const pct =
+                quote.subtotalCents > 0
+                  ? Math.round((quote.promoDiscountCents * 100) / quote.subtotalCents)
+                  : 0
+              return pct > 0 ? `${code} (−${pct}%)` : code
+            })()}
           </Text>
           <Text style={[styles.summaryValue, styles.discountValue]}>
             −{formatZar(quote.promoDiscountCents)}

@@ -35,7 +35,6 @@ import { getUserSessionToken, quoteOrder } from '../ordersApi'
 import { brandAccentRgba } from '../brandAccent'
 
 const ACCENT_ON_BADGE_TEXT = '#ffffff'
-const FIRST_ORDER_PROMO_CODE = 'WONDER15'
 
 function normalizeCheckoutPromoCode(raw: string): string {
   return String(raw || '')
@@ -215,28 +214,32 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
       }
 
       const normalized = normalizeCheckoutPromoCode(trimmed)
-      if (normalized === FIRST_ORDER_PROMO_CODE) {
-        const quote = await quoteOrder({
-          items,
-          pudoLockerTier,
-          wonderCoinsToRedeem: applyWonderCoins ? wonderCoinsToRedeem : 0,
-          promoCode: FIRST_ORDER_PROMO_CODE,
-        })
-        if (!quote.promoCode || quote.promoDiscountCents <= 0) {
-          setAppliedPromoCode(null)
-          setPromoSavingsCents(0)
-          const msg = quote.promoError || 'Promo code could not be applied.'
-          setPromoError(msg)
-          Alert.alert('Promo code', msg)
-          return
-        }
-        setAppliedPromoCode(FIRST_ORDER_PROMO_CODE)
-        setPromoCode(FIRST_ORDER_PROMO_CODE)
+
+      // Try checkout % promo first (WONDER15 / influencer codes — server ENV is source of truth).
+      const quote = await quoteOrder({
+        items,
+        pudoLockerTier,
+        wonderCoinsToRedeem: applyWonderCoins ? wonderCoinsToRedeem : 0,
+        promoCode: normalized,
+      })
+      if (quote.promoCode && quote.promoDiscountCents > 0) {
+        setAppliedPromoCode(quote.promoCode)
+        setPromoCode(quote.promoCode)
         setPromoSavingsCents(quote.promoDiscountCents)
         setPromoSuccess('')
         return
       }
 
+      // Known checkout promo that failed eligibility — surface that error (do not fall through to wallet).
+      if (quote.promoError && quote.promoError !== 'Invalid promo code.') {
+        setAppliedPromoCode(null)
+        setPromoSavingsCents(0)
+        setPromoError(quote.promoError)
+        Alert.alert('Promo code', quote.promoError)
+        return
+      }
+
+      // Wallet redeem codes (e.g. WP-COMICCON) — grants WonderCoins, not a cart %.
       const result = await redeemWonderCode(token, trimmed)
       setPromoSuccess(result.message)
       setPromoCode('')
