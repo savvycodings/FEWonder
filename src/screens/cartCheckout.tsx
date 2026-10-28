@@ -196,7 +196,16 @@ export function CartCheckout({ navigation }: { navigation: any }) {
         setYocoModalOpen(true)
       }
     } catch (e: any) {
-      Alert.alert('Checkout', e?.message || 'Could not start checkout', [
+      const raw = String(e?.message || '').trim()
+      const lower = raw.toLowerCase()
+      const sessionExpired =
+        lower === 'unauthorized' ||
+        lower.includes('session expired') ||
+        lower.includes('not signed in')
+      const message = sessionExpired
+        ? 'Session expired. Please sign in again from Profile, then try checkout.'
+        : raw || 'Could not start checkout'
+      Alert.alert(sessionExpired ? 'Sign in required' : 'Checkout', message, [
         { text: 'OK', onPress: () => navigation.goBack() },
       ])
     } finally {

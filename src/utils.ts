@@ -342,6 +342,15 @@ export async function readStoredAuthPayload(): Promise<AuthPayload | null> {
   }
 }
 
+/** Clears the local session (used when /auth/me says the token is dead). */
+export async function clearStoredAuthPayload(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem('wonderport-auth')
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Refreshes the current user from the server (includes phone, delivery fields, etc.). */
 export async function fetchSessionUser(sessionToken: string): Promise<User> {
   if (!DOMAIN) {

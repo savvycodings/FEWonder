@@ -30,7 +30,12 @@ import {
 import { defaultTierForCart, type PudoLockerTier } from '../pudoLockerSizes'
 import { parseMoneyToNumber } from '../money'
 import type { User } from '../../types'
-import { fetchSessionUser, readStoredAuthPayload, redeemWonderCode } from '../utils'
+import {
+  clearStoredAuthPayload,
+  fetchSessionUser,
+  readStoredAuthPayload,
+  redeemWonderCode,
+} from '../utils'
 import { getUserSessionToken, quoteOrder } from '../ordersApi'
 import { brandAccentRgba } from '../brandAccent'
 
@@ -279,7 +284,26 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
     return base
   }
 
-  function onContinueToPayment() {
+  async function ensureValidCheckoutSession(): Promise<boolean> {
+    const token = await getUserSessionToken()
+    if (!token) {
+      Alert.alert('Sign in required', 'Please sign in from Profile to purchase.')
+      return false
+    }
+    try {
+      await fetchSessionUser(token)
+      return true
+    } catch {
+      await clearStoredAuthPayload()
+      Alert.alert(
+        'Session expired',
+        'Please sign in again from Profile, then return to checkout.',
+      )
+      return false
+    }
+  }
+
+  async function onContinueToPayment() {
     Keyboard.dismiss()
     setFormError('')
     const delivery = buildDeliveryDetails()
@@ -302,6 +326,8 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
         return
       }
     }
+    const ok = await ensureValidCheckoutSession()
+    if (!ok) return
     setPaymentMethodModalOpen(true)
   }
 
@@ -446,7 +472,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
         </KeyboardAwareScrollView>
 
         <View style={[styles.footer, { paddingBottom: footerBottomPad }]}>
-          <Pressable style={styles.continueBtn} onPress={onContinueToPayment}>
+          <Pressable style={styles.continueBtn} onPress={() => void onContinueToPayment()}>
             <Text style={styles.continueText}>Continue to payment</Text>
           </Pressable>
         </View>
