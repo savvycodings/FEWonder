@@ -36,6 +36,7 @@ import {
 import { finalizeYocoCheckout, parseYocoReturnRoute, yocoOutcomeAlert } from '../yocoCheckout'
 import { brandAccentRgba } from '../brandAccent'
 import { getCartStockError } from '../productStock'
+import { findCollectStore, formatCollectStoreLabel } from '../collectStores'
 
 const ACCENT_ON_BADGE_TEXT = '#ffffff'
 const HOME_MONTSERRAT_BOLD = 'Montserrat_700Bold' as const
@@ -93,6 +94,28 @@ export function CartCheckout({ navigation }: { navigation: any }) {
   const [yocoOrderId, setYocoOrderId] = useState<string | null>(null)
   const [yocoSyncing, setYocoSyncing] = useState(false)
   const yocoHandledRef = useRef(false)
+  const collectMetaRef = useRef<{
+    referenceCode: string
+    collectStoreName: string
+    collectorName: string
+  } | null>(null)
+
+  function goAfterPaid(referenceCode: string) {
+    if (from === 'cart') clearCart()
+    if (delivery?.pudoLockerTier === 'collect') {
+      const storeFromKey = findCollectStore(delivery.collectStoreKey || '')
+      navigation.replace('CollectOrderSuccess', {
+        referenceCode,
+        collectStoreName:
+          collectMetaRef.current?.collectStoreName ||
+          (storeFromKey ? formatCollectStoreLabel(storeFromKey) : 'Store'),
+        collectStoreAddress: storeFromKey?.address || '',
+        collectorName: collectMetaRef.current?.collectorName || delivery.collectorName || '',
+      })
+      return
+    }
+    navigation.navigate('Tabs')
+  }
 
   async function dropIncompleteOrder(orderId: string | null) {
     if (!orderId) return
@@ -161,12 +184,14 @@ export function CartCheckout({ navigation }: { navigation: any }) {
       const created = await createOrder({
         paymentMethod: method,
         items: lineItems,
-        deliveryMethod: 'pudo',
+        deliveryMethod: delivery.pudoLockerTier === 'collect' ? 'collect' : 'pudo',
         pudoLockerTier: delivery.pudoLockerTier,
         contactPhone: delivery.contactPhone,
         contactEmail: delivery.contactEmail,
         pudoLockerName: delivery.pudoLockerName,
         pudoLockerAddress: delivery.pudoLockerAddress,
+        collectStoreKey: delivery.collectStoreKey,
+        collectorName: delivery.collectorName,
         shippingAddress: delivery.shippingAddress,
         shippingAddressLine2: delivery.shippingAddressLine2,
         shippingPostalCode: delivery.shippingPostalCode,
@@ -178,6 +203,20 @@ export function CartCheckout({ navigation }: { navigation: any }) {
         wonderCoinsToRedeem: Math.max(0, Math.floor(Number(params.wonderCoinsToRedeem) || 0)),
         promoCode: params.promoCode || undefined,
       })
+      collectMetaRef.current =
+        delivery?.pudoLockerTier === 'collect'
+          ? {
+              referenceCode: created.referenceCode,
+              collectStoreName:
+                (created as any).collectStoreName ||
+                (() => {
+                  const s = findCollectStore(delivery.collectStoreKey || '')
+                  return s ? formatCollectStoreLabel(s) : 'Store'
+                })(),
+              collectorName:
+                (created as any).collectorName || delivery.collectorName || '',
+            }
+          : null
       // Match product.tsx: open payment UI before clearing cart. Clearing first made `cartItems`
       // empty so we hit `return null` below and never rendered the EFT / Yoco modals.
       if (method === 'eft') {
@@ -233,8 +272,13 @@ export function CartCheckout({ navigation }: { navigation: any }) {
     try {
       await uploadEftProof(eftOrderId, asset.base64!, mime)
       Alert.alert('Uploaded', 'We received your proof of payment.')
+      const ref = eftReference || collectMetaRef.current?.referenceCode || ''
       resetEftCheckoutState()
-      navigation.navigate('Tabs')
+      if (delivery?.pudoLockerTier === 'collect' && ref) {
+        goAfterPaid(ref)
+      } else {
+        navigation.navigate('Tabs')
+      }
     } catch (e: any) {
       Alert.alert('Upload', e?.message || 'Upload failed')
     } finally {
@@ -254,8 +298,10 @@ export function CartCheckout({ navigation }: { navigation: any }) {
         leaveCheckout = false
         const copy = yocoOutcomeAlert(outcome)
         if (copy) Alert.alert(copy.title, copy.message)
-        if (from === 'cart') clearCart()
-        navigation.navigate('Tabs')
+        const ref =
+          collectMetaRef.current?.referenceCode ||
+          ''
+        goAfterPaid(ref || 'WP-ORDER')
       } else if (
         outcome === 'failed' ||
         outcome === 'cancelled' ||

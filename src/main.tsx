@@ -29,6 +29,8 @@ import {
   AdminUserOrders,
   AdminReportedMessages,
   AdminNotificationsHub,
+  AdminInStoreCollections,
+  CollectOrderSuccess,
   MyOrders,
   MyOrderDetail,
   ContactUs,
@@ -329,6 +331,7 @@ function ProfileStackScreen({
       <ProfileStack.Screen name="AdminUserOrders" component={AdminUserOrders} />
       <ProfileStack.Screen name="AdminReportedMessages" component={AdminReportedMessages} />
       <ProfileStack.Screen name="AdminNotificationsHub" component={AdminNotificationsHub} />
+      <ProfileStack.Screen name="AdminInStoreCollections" component={AdminInStoreCollections} />
     </ProfileStack.Navigator>
     </View>
   )
@@ -613,6 +616,7 @@ export function Main() {
       <Stack.Screen name="Cart" component={Cart} />
       <Stack.Screen name="CheckoutDelivery" component={CheckoutDelivery} />
       <Stack.Screen name="CartCheckout" component={CartCheckout} />
+      <Stack.Screen name="CollectOrderSuccess" component={CollectOrderSuccess} />
       <Stack.Screen name="Product" component={Product} />
       <Stack.Screen
         name="CategoryProducts"

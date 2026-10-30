@@ -45,6 +45,8 @@ export type CheckoutDeliveryDetails = {
   contactEmail: string
   pudoLockerName: string
   pudoLockerAddress: string
+  collectStoreKey?: string
+  collectorName?: string
   shippingAddress?: string
   shippingAddressLine2?: string
   shippingPostalCode?: string
@@ -73,7 +75,14 @@ export function validateCheckoutDelivery(
   if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
     return 'Enter a valid email address for order updates.'
   }
-  if (details.pudoLockerTier === 'door') {
+  if (details.pudoLockerTier === 'collect') {
+    if (!String(details.collectStoreKey || '').trim()) {
+      return 'Select a store for collection.'
+    }
+    if (String(details.collectorName || '').trim().length < 2) {
+      return 'Enter the collector name.'
+    }
+  } else if (details.pudoLockerTier === 'door') {
     const addrErr = validateShippingAddressInput({
       line1: details.shippingAddress || '',
       line2: details.shippingAddressLine2 || '',
@@ -86,7 +95,7 @@ export function validateCheckoutDelivery(
     return 'Enter your Pudo locker name and address.'
   }
   if (hasWholeSet && !tierAllowedForCart(details.pudoLockerTier, true)) {
-    return 'Whole set orders require door delivery (R110).'
+    return 'Whole set orders require door delivery or in-store collect.'
   }
   return null
 }

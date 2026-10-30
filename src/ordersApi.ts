@@ -144,12 +144,14 @@ function normalizeOrderQuote(data: any): OrderQuoteResult {
 export type CreateOrderPayload = {
   paymentMethod: 'yoco' | 'eft'
   items: { productId: string; quantity: number; packaging?: 'single' | 'set' }[]
-  deliveryMethod?: 'pudo'
-  pudoLockerTier: 'locker' | 'door'
+  deliveryMethod?: 'pudo' | 'collect'
+  pudoLockerTier: 'locker' | 'door' | 'collect'
   contactPhone: string
   contactEmail?: string
   pudoLockerName?: string
   pudoLockerAddress?: string
+  collectStoreKey?: string
+  collectorName?: string
   shippingAddress?: string
   shippingAddressLine2?: string
   shippingPostalCode?: string
@@ -180,7 +182,7 @@ export type OrderQuoteResult = {
 
 export type QuoteOrderPayload = {
   items: { productId: string; quantity: number; packaging?: 'single' | 'set' }[]
-  pudoLockerTier: 'locker' | 'door'
+  pudoLockerTier: 'locker' | 'door' | 'collect'
   wonderCoinsToRedeem?: number
   promoCode?: string | null
 }
@@ -248,6 +250,9 @@ export async function createOrder(body: CreateOrderPayload) {
     currencyCode: string
     paymentMethod: string
     status: string
+    collectStoreName?: string | null
+    collectorName?: string | null
+    pudoLockerTier?: string
   }>
 }
 
@@ -303,6 +308,24 @@ export async function fetchMyOrders() {
       createdAt: string
       /** First purchased line item image (when stored on the order). */
       previewImageUrl?: string | null
+      itemTitles?: string[]
+    }[]
+  }>
+}
+
+/** Paid Collect orders still awaiting in-store pickup. */
+export async function fetchMyAwaitingCollections() {
+  return userFetch('/orders/mine/awaiting-collection') as Promise<{
+    orders: {
+      id: string
+      referenceCode: string
+      collectStoreName?: string | null
+      collectorName?: string | null
+      currencyCode: string
+      totalCents: number
+      createdAt: string
+      previewImageUrl?: string | null
+      itemTitles?: string[]
     }[]
   }>
 }
@@ -371,6 +394,77 @@ export type AdminCommunityReport = {
   reporterEmail: string | null
   reportedName: string | null
   reportedEmail: string | null
+}
+
+export async function fetchAdminCollections(opts?: {
+  q?: string
+  status?: 'awaiting' | 'collected' | 'all'
+  limit?: number
+  offset?: number
+}) {
+  const params = new URLSearchParams()
+  if (opts?.q) params.set('q', opts.q)
+  if (opts?.status) params.set('status', opts.status)
+  params.set('limit', String(opts?.limit ?? 50))
+  params.set('offset', String(opts?.offset ?? 0))
+  const q = `?${params.toString()}`
+  return adminFetch(`/admin/orders/collections${q}`) as Promise<{
+    orders: {
+      id: string
+      referenceCode: string
+      collectStatus: string
+      collectStoreKey: string | null
+      collectStoreName: string | null
+      collectorName: string | null
+      totalCents: number
+      currencyCode: string
+      contactEmail: string | null
+      contactPhone: string | null
+      customerName: string | null
+      updatedAt: string
+      collectedAt: string | null
+    }[]
+  }>
+}
+
+export async function fetchAdminCollectionByReference(referenceCode: string) {
+  return adminFetch(
+    `/admin/orders/collections/${encodeURIComponent(referenceCode.trim())}`,
+  ) as Promise<{
+    order: {
+      id: string
+      referenceCode: string
+      status: string
+      collectStatus: string
+      collectStoreKey: string | null
+      collectStoreName: string | null
+      collectorName: string | null
+      totalCents: number
+      subtotalCents: number
+      shippingCents: number
+      currencyCode: string
+      contactEmail: string | null
+      contactPhone: string | null
+      customerName: string | null
+      updatedAt: string
+      collectedAt: string | null
+      paymentMethod: string
+      lines: {
+        title: string
+        quantity: number
+        unitPriceCents: number
+        lineTotalCents: number
+        packaging: string | null
+      }[]
+    }
+  }>
+}
+
+export async function adminMarkCollectionCollected(referenceCode: string) {
+  return adminFetch(
+    `/admin/orders/collections/${encodeURIComponent(referenceCode.trim())}/mark-collected`,
+    { method: 'POST' },
+  ) as Promise<{ ok: boolean; referenceCode: string; collectStatus: string }>
 }
 
 export async function fetchAdminOrders(paymentMethod: 'yoco' | 'eft' | 'all', limit = 50, offset = 0) {

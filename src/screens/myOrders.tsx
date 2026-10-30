@@ -88,7 +88,11 @@ export function MyOrders({ navigation }: any) {
                         <FeatherIcon name="package" size={18} color={theme.brandAccent} />
                       </View>
                     )}
-                    <Text style={styles.ref}>{item.referenceCode}</Text>
+                    <Text style={styles.ref} numberOfLines={2}>
+                      {(Array.isArray(item.itemTitles) && item.itemTitles.length
+                        ? item.itemTitles.join(', ')
+                        : item.referenceCode)}
+                    </Text>
                   </View>
                   <Text style={styles.total}>{formatTotal(item.totalCents, item.currencyCode)}</Text>
                 </View>

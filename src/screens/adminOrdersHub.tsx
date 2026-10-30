@@ -75,6 +75,12 @@ export function AdminOrdersHub({ navigation }: any) {
           <Text style={styles.manageButtonText}>Restock notifications</Text>
         </TouchableOpacity>
         <TouchableOpacity
+          style={[styles.manageButton, styles.manageButtonSecondary]}
+          onPress={() => navigation.navigate('AdminInStoreCollections')}
+        >
+          <Text style={styles.manageButtonText}>In-store collections</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.manageButton, styles.syncButton, syncingShopify && styles.syncButtonDisabled]}
           onPress={() => void runShopifySync()}
           disabled={syncingShopify}

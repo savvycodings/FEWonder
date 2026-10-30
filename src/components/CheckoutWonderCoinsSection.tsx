@@ -35,21 +35,14 @@ type CheckoutWonderCoinsSectionProps = {
 function CheckoutOrderSummaryCard({
   theme,
   quote,
-  isEstimate,
   styles,
 }: {
   theme: any
   quote: OrderQuoteResult
-  isEstimate: boolean
   styles: ReturnType<typeof getStyles>
 }) {
   return (
     <View style={styles.summaryCard}>
-      {isEstimate ? (
-        <Text style={styles.estimateNote}>
-          Estimated totals — final amounts confirmed when you pay.
-        </Text>
-      ) : null}
       <View style={styles.summaryRow}>
         <Text style={styles.summaryLabel}>Subtotal</Text>
         <Text style={styles.summaryValue}>{formatZar(quote.subtotalCents)}</Text>
@@ -204,7 +197,6 @@ export function CheckoutWonderCoinsSection({
   )
 
   const displayQuote = serverQuote ?? fallbackQuote
-  const isEstimate = serverQuote == null && subtotalZar > 0
   const walletBalance = serverQuote?.walletBalance ?? walletBalanceHint
   const maxRedeemable = displayQuote.maxRedeemableCoins
 
@@ -291,7 +283,6 @@ export function CheckoutWonderCoinsSection({
         <CheckoutOrderSummaryCard
           theme={theme}
           quote={displayQuote}
-          isEstimate={isEstimate}
           styles={styles}
         />
       ) : quoteBusy ? (
@@ -383,13 +374,6 @@ function getStyles(theme: any) {
       backgroundColor: theme.sheetRowBackgroundColor || theme.appBackgroundColor,
       padding: 12,
       gap: 6,
-    },
-    estimateNote: {
-      fontFamily: theme.regularFont,
-      fontSize: 11,
-      color: theme.mutedForegroundColor,
-      marginBottom: 4,
-      lineHeight: 15,
     },
     summaryRow: {
       flexDirection: 'row',

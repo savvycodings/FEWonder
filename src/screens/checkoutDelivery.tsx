@@ -113,6 +113,8 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
   const [shippingPostalCode, setShippingPostalCode] = useState('')
   const [shippingCity, setShippingCity] = useState('')
   const [shippingProvince, setShippingProvince] = useState('')
+  const [collectStoreKey, setCollectStoreKey] = useState('')
+  const [collectorName, setCollectorName] = useState('')
   const [formError, setFormError] = useState('')
   const [promoCode, setPromoCode] = useState('')
   const [appliedPromoCode, setAppliedPromoCode] = useState<string | null>(null)
@@ -182,7 +184,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
     if (pudoLockerTier === 'locker') {
       setPudoName((v) => fill(v, p.pudoName))
       setPudoAddr((v) => fill(v, p.pudoAddr))
-    } else {
+    } else if (pudoLockerTier === 'door') {
       setShippingLine1((v) => fill(v, p.shippingLine1))
       setShippingLine2((v) => fill(v, p.shippingLine2))
       setShippingPostalCode((v) => fill(v, p.shippingPostalCode))
@@ -192,7 +194,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
   }, [pudoLockerTier])
 
   useEffect(() => {
-    if (hasWholeSet && pudoLockerTier !== 'door') {
+    if (hasWholeSet && pudoLockerTier === 'locker') {
       setPudoLockerTier('door')
     }
   }, [hasWholeSet, pudoLockerTier])
@@ -220,7 +222,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
 
       const normalized = normalizeCheckoutPromoCode(trimmed)
 
-      // Try checkout % promo first (WONDER15 / influencer codes — server ENV is source of truth).
+      // Try checkout % promo first (WONDER15 / influencer codes; server ENV is source of truth).
       const quote = await quoteOrder({
         items,
         pudoLockerTier,
@@ -235,7 +237,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
         return
       }
 
-      // Known checkout promo that failed eligibility — surface that error (do not fall through to wallet).
+      // Known checkout promo that failed eligibility; surface that error (do not fall through to wallet).
       if (quote.promoError && quote.promoError !== 'Invalid promo code.') {
         setAppliedPromoCode(null)
         setPromoSavingsCents(0)
@@ -244,7 +246,7 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
         return
       }
 
-      // Wallet redeem codes (e.g. WP-COMICCON) — grants WonderCoins, not a cart %.
+      // Wallet redeem codes (e.g. WP-COMICCON); grants WonderCoins, not a cart %.
       const result = await redeemWonderCode(token, trimmed)
       setPromoSuccess(result.message)
       setPromoCode('')
@@ -272,7 +274,12 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
       pudoLockerName: pudoName.trim(),
       pudoLockerAddress: pudoAddr.trim(),
     }
-    if (pudoLockerTier === 'door') {
+    if (pudoLockerTier === 'collect') {
+      base.collectStoreKey = collectStoreKey.trim()
+      base.collectorName = collectorName.trim()
+      base.pudoLockerName = ''
+      base.pudoLockerAddress = ''
+    } else if (pudoLockerTier === 'door') {
       base.shippingAddress = shippingLine1.trim()
       base.shippingAddressLine2 = shippingLine2.trim()
       base.shippingPostalCode = shippingPostalCode.trim()
@@ -447,6 +454,10 @@ export function CheckoutDelivery({ navigation }: { navigation: any }) {
             onShippingCityChange={setShippingCity}
             shippingProvince={shippingProvince}
             onShippingProvinceChange={setShippingProvince}
+            collectStoreKey={collectStoreKey}
+            onCollectStoreKeyChange={setCollectStoreKey}
+            collectorName={collectorName}
+            onCollectorNameChange={setCollectorName}
             hasWholeSet={hasWholeSet}
             subtotalZar={subtotalZar}
           />

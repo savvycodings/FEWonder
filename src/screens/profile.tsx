@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import {
+  Alert,
   Platform,
   ScrollView,
   StyleSheet,
@@ -12,6 +13,7 @@ import {
 import FeatherIcon from '@expo/vector-icons/Feather'
 import { useFocusEffect } from '@react-navigation/native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import * as Clipboard from 'expo-clipboard'
 import {
   AccountRowChevron,
   AvatarFrameWrapper,
@@ -23,7 +25,7 @@ import { ProfileHeroBannerBackground } from '../components/ProfileHeroBannerBack
 import { AppContext, ThemeContext } from '../context'
 import { User } from '../../types'
 import { getDailyRewardStatus, getProfileHero, coerceWalletInt, subscribeWonderWalletChanged } from '../utils'
-import { fetchMyOrders } from '../ordersApi'
+import { fetchMyAwaitingCollections, fetchMyOrders } from '../ordersApi'
 import { ProfileHeroBadgeStrip } from '../profileHeroBadgeStrip'
 import {
   PROFILE_HERO_BADGE_GAP,
@@ -73,6 +75,15 @@ export function Profile({
       totalCents: number
       currencyCode: string
       previewImageUrl?: string | null
+      itemTitles?: string[]
+    }[]
+  >([])
+  const [awaitingCollections, setAwaitingCollections] = useState<
+    {
+      id: string
+      referenceCode: string
+      previewImageUrl?: string | null
+      itemTitles?: string[]
     }[]
   >([])
   const [orderTotalCount, setOrderTotalCount] = useState(0)
@@ -116,17 +127,40 @@ export function Profile({
   }, [loadWalletBalance])
 
   const loadOrdersPreview = useCallback(async () => {
-    if (!sessionToken) return
+    if (!sessionToken) {
+      setOrdersPreview([])
+      setOrderTotalCount(0)
+      setAwaitingCollections([])
+      return
+    }
     try {
-      const { orders } = await fetchMyOrders()
+      const [{ orders }, awaiting] = await Promise.all([
+        fetchMyOrders(),
+        fetchMyAwaitingCollections().catch(() => ({ orders: [] as any[] })),
+      ])
       const list = orders || []
       setOrderTotalCount(list.length)
       setOrdersPreview(list.slice(0, 4))
+      setAwaitingCollections(
+        (awaiting.orders || []).filter(
+          (o) =>
+            Boolean(String(o?.id || '').trim()) &&
+            Boolean(String(o?.referenceCode || '').trim()),
+        ),
+      )
     } catch {
       setOrdersPreview([])
       setOrderTotalCount(0)
+      setAwaitingCollections([])
     }
   }, [sessionToken])
+
+  async function copyCollectReference(code: string) {
+    const ref = String(code || '').trim()
+    if (!ref) return
+    await Clipboard.setStringAsync(ref)
+    Alert.alert('Copied', 'Order number copied.')
+  }
 
   const refreshHeroPrefs = useCallback(async () => {
     try {
@@ -378,6 +412,53 @@ export function Profile({
         ))}
       </View>
 
+      {awaitingCollections.length > 0 ? (
+        <>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>In-store collection</Text>
+          </View>
+          {awaitingCollections.map((order) => {
+            const titles = (order.itemTitles || []).filter(Boolean)
+            return (
+              <Pressable
+                key={order.id}
+                style={styles.collectCard}
+                onPress={() => void copyCollectReference(order.referenceCode)}
+              >
+                <View style={styles.collectHeaderRow}>
+                  <Text style={styles.collectCode}>{order.referenceCode}</Text>
+                  <Text style={styles.collectCopyHint}>Tap to copy</Text>
+                </View>
+                <View style={styles.collectBodyRow}>
+                  <View style={styles.orderThumb}>
+                    {order.previewImageUrl ? (
+                      <Image
+                        source={{ uri: order.previewImageUrl }}
+                        style={styles.orderThumbImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <FeatherIcon name="package" size={20} color={theme.brandAccent} />
+                    )}
+                  </View>
+                  <View style={styles.orderTextWrap}>
+                    {titles.length ? (
+                      titles.map((title, i) => (
+                        <Text key={`${order.id}-t-${i}`} style={styles.collectItemName} numberOfLines={2}>
+                          {title}
+                        </Text>
+                      ))
+                    ) : (
+                      <Text style={styles.collectItemName}>Items on this order</Text>
+                    )}
+                  </View>
+                </View>
+              </Pressable>
+            )
+          })}
+        </>
+      ) : null}
+
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>My orders</Text>
       </View>
@@ -385,37 +466,43 @@ export function Profile({
         {ordersPreview.length === 0 ? (
           <Text style={styles.orderEmpty}>No orders yet. Buy something with EFT or card (Yoco) to see it here.</Text>
         ) : (
-          ordersPreview.map((order, index) => (
-            <Pressable
-              key={order.id}
-              style={[styles.orderRow, index !== ordersPreview.length - 1 ? styles.rowGap : null]}
-              onPress={() => navigation.navigate('ProfileMyOrderDetail', { orderId: order.id })}
-            >
-              <View style={styles.orderThumb}>
-                {order.previewImageUrl ? (
-                  <Image
-                    source={{ uri: order.previewImageUrl }}
-                    style={styles.orderThumbImage}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <FeatherIcon name="package" size={20} color={theme.brandAccent} />
-                )}
-              </View>
-              <View style={styles.orderTextWrap}>
-                <Text style={styles.orderName}>{order.referenceCode}</Text>
-                <View style={styles.orderMetaRow}>
-                  <Text style={styles.orderMeta}>{order.paymentMethod?.toUpperCase()}</Text>
-                  <View style={styles.statusPill}>
-                    <Text style={styles.statusText}>{order.status}</Text>
+          ordersPreview.map((order, index) => {
+            const titles = (order.itemTitles || []).filter(Boolean)
+            const titleLabel = titles.length ? titles.join(', ') : order.referenceCode
+            return (
+              <Pressable
+                key={order.id}
+                style={[styles.orderRow, index !== ordersPreview.length - 1 ? styles.rowGap : null]}
+                onPress={() => navigation.navigate('ProfileMyOrderDetail', { orderId: order.id })}
+              >
+                <View style={styles.orderThumb}>
+                  {order.previewImageUrl ? (
+                    <Image
+                      source={{ uri: order.previewImageUrl }}
+                      style={styles.orderThumbImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <FeatherIcon name="package" size={20} color={theme.brandAccent} />
+                  )}
+                </View>
+                <View style={styles.orderTextWrap}>
+                  <Text style={styles.orderName} numberOfLines={2}>
+                    {titleLabel}
+                  </Text>
+                  <View style={styles.orderMetaRow}>
+                    <Text style={styles.orderMeta}>{order.paymentMethod?.toUpperCase()}</Text>
+                    <View style={styles.statusPill}>
+                      <Text style={styles.statusText}>{order.status}</Text>
+                    </View>
                   </View>
                 </View>
-              </View>
-              <Text style={styles.orderTotal}>
-                {(order.totalCents / 100).toFixed(2)} {order.currencyCode}
-              </Text>
-            </Pressable>
-          ))
+                <Text style={styles.orderTotal}>
+                  {(order.totalCents / 100).toFixed(2)} {order.currencyCode}
+                </Text>
+              </Pressable>
+            )
+          })
         )}
       </View>
 
@@ -749,6 +836,45 @@ const getStyles = (theme: any) => {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  collectCard: {
+    width: '100%',
+    alignSelf: 'stretch',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 20,
+    backgroundColor: theme.tileBackgroundColor || theme.secondaryBackgroundColor,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: theme.tileBorderColor || theme.borderColor,
+  },
+  collectHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  collectCode: {
+    color: textPrimary,
+    fontFamily: 'Geist-Bold',
+    fontSize: 16,
+    flex: 1,
+    marginRight: 8,
+  },
+  collectCopyHint: {
+    color: textMuted,
+    fontFamily: 'Geist-Regular',
+    fontSize: 11,
+  },
+  collectBodyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  collectItemName: {
+    color: textPrimary,
+    fontFamily: 'Geist-Medium',
+    fontSize: 13,
+    marginBottom: 2,
   },
   orderThumb: {
     width: 44,

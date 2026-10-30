@@ -37,6 +37,7 @@ import {
 import { fetchCart, syncCartToAccount } from './src/cartApi'
 import { cartItemsToSyncLines } from './src/cartLine'
 import { readPersistedCartItems, writePersistedCartItems } from './src/cartPersistence'
+import { mergeCartItems } from './src/cartMerge'
 import {
   clearPersistedSavedItems,
   readPersistedSavedItems,
@@ -45,14 +46,19 @@ import {
 import type { ShopifyProduct } from './types'
 import { getCartStockError, isProductInStock, maxPurchasableQuantity } from './src/productStock'
 import { getProductSaveImageSource } from './src/productSave'
+import { linePackagingFromItem } from './src/pudoLockerSizes'
 import { Platform } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { KeyboardProvider } from 'react-native-keyboard-controller'
+import * as SplashScreen from 'expo-splash-screen'
+
+SplashScreen.preventAutoHideAsync().catch(() => {
+  /* native splash may be unavailable in some dev clients */
+})
 
 LogBox.ignoreLogs([
   'Key "cancelled" in the image picker result is deprecated and will be removed in SDK 48, use "canceled" instead',
-  'No native splash screen registered',
-  /** Hermes dev noise when Metro serves a stale bundle — harmless once reload clears cache */
+  /** Hermes dev noise when Metro serves a stale bundle; harmless once reload clears cache */
   "Property 'categories' doesn't exist",
   "Property 'SECTION_TITLE' doesn't exist",
   "Property 'NotificationsModal' doesn't exist",
@@ -73,6 +79,7 @@ export default function App() {
   const [modalVisible, setModalVisible] = useState<boolean>(false)
   const skipNextCartSyncRef = useRef(false)
   const cartAccountReadyRef = useRef(false)
+  const cartHydratedRef = useRef(false)
   const cartSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [cartBadgeDismissed, setCartBadgeDismissed] = useState(false)
   const cartQtyTotal = useMemo(() => cartLineQuantityTotal(cartItems), [cartItems])
@@ -95,6 +102,11 @@ export default function App() {
     configureStorage()
   }, [])
 
+  useEffect(() => {
+    if (!fontsLoaded) return
+    SplashScreen.hideAsync().catch(() => {})
+  }, [fontsLoaded])
+
   async function configureStorage() {
     try {
       const _theme = await AsyncStorage.getItem('rnai-theme')
@@ -116,6 +128,8 @@ export default function App() {
       }
     } catch (err) {
       console.log('error configuring storage', err)
+    } finally {
+      cartHydratedRef.current = true
     }
   }
 
@@ -185,10 +199,19 @@ export default function App() {
     }
     const max = maxPurchasableQuantity(item)
     const qty = Math.min(Math.max(1, Math.floor(quantity) || 1), max)
-    setCartItems(prev => {
-      const existingIndex = prev.findIndex(v => v.title === item.title)
+    const packaging = linePackagingFromItem(item)
+    const itemId = String(item?.id || '').trim()
+    setCartItems((prev) => {
+      const existingIndex = prev.findIndex((v) => {
+        const sameId = itemId && String(v.id || '').trim() === itemId
+        const sameTitle =
+          !itemId &&
+          String(v.title || '').trim().toLowerCase() ===
+            String(item.title || '').trim().toLowerCase()
+        return (sameId || sameTitle) && linePackagingFromItem(v) === packaging
+      })
       if (existingIndex === -1) {
-        const next = [...prev, { ...item, quantity: qty }]
+        const next = [...prev, { ...item, quantity: qty, selectedPackaging: packaging }]
         const err = getCartStockError(next)
         if (err) {
           Alert.alert('Out of stock', err)
@@ -213,13 +236,13 @@ export default function App() {
 
   function updateCartItemQuantity(title: string, quantity: number) {
     if (quantity < 1) return
-    setCartItems(prev =>
-      prev.map(item => item.title === title ? { ...item, quantity } : item)
+    setCartItems((prev) =>
+      prev.map((item) => (item.title === title ? { ...item, quantity } : item)),
     )
   }
 
   function removeFromCart(title: string) {
-    setCartItems(prev => prev.filter(item => item.title !== title))
+    setCartItems((prev) => prev.filter((item) => item.title !== title))
   }
 
   function clearCart() {
@@ -247,8 +270,20 @@ export default function App() {
     }
     cartAccountReadyRef.current = false
     try {
-      const items = await fetchCart(activeToken)
-      applyCartItemsFromRemote(items)
+      const [remote, local] = await Promise.all([
+        fetchCart(activeToken),
+        readPersistedCartItems(),
+      ])
+      const merged = mergeCartItems(local, remote)
+      applyCartItemsFromRemote(merged)
+      // Push merge back so account cart catches up with device lines.
+      if (merged.length > 0) {
+        try {
+          await syncCartToAccount(activeToken, cartItemsToSyncLines(merged))
+        } catch (syncErr) {
+          console.log('Failed to push merged cart', syncErr)
+        }
+      }
     } catch (error) {
       console.log('Failed to load cart', error)
     } finally {
@@ -279,6 +314,8 @@ export default function App() {
       skipNextCartSyncRef.current = false
       return
     }
+    // Avoid syncing the initial empty [] before local cart has loaded (that wiped account carts).
+    if (!cartHydratedRef.current) return
     if (!sessionToken || !cartAccountReadyRef.current) return
     if (cartSyncTimerRef.current) clearTimeout(cartSyncTimerRef.current)
     cartSyncTimerRef.current = setTimeout(() => {

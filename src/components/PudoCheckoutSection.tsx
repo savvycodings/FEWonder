@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { ProvinceSelectField } from './ProvinceSelectField'
+import { COLLECT_STORES } from '../collectStores'
 import {
   FREE_DELIVERY_MESSAGE,
   PUDO_LOCKER_LABELS,
@@ -30,6 +31,10 @@ type Props = {
   onShippingCityChange: (v: string) => void
   shippingProvince: string
   onShippingProvinceChange: (v: string) => void
+  collectStoreKey: string
+  onCollectStoreKeyChange: (v: string) => void
+  collectorName: string
+  onCollectorNameChange: (v: string) => void
   hasWholeSet: boolean
   subtotalZar: number
 }
@@ -52,16 +57,23 @@ export function PudoCheckoutSection({
   onShippingCityChange,
   shippingProvince,
   onShippingProvinceChange,
+  collectStoreKey,
+  onCollectStoreKeyChange,
+  collectorName,
+  onCollectorNameChange,
   hasWholeSet,
   subtotalZar,
 }: Props) {
   const styles = useMemo(() => getStyles(theme), [theme])
   const isDoor = pudoLockerTier === 'door'
-  const freeDelivery = qualifiesForFreeDeliveryZar(subtotalZar)
+  const isCollect = pudoLockerTier === 'collect'
+  const freeDelivery = qualifiesForFreeDeliveryZar(subtotalZar) && !isCollect
+  const [storeMenuOpen, setStoreMenuOpen] = useState(false)
+  const selectedStore = COLLECT_STORES.find((s) => s.key === collectStoreKey)
 
   return (
     <>
-      <Text style={styles.sectionHeading}>Pudo delivery</Text>
+      <Text style={styles.sectionHeading}>Delivery</Text>
       {freeDelivery ? (
         <Text style={styles.freeDeliveryBanner}>{FREE_DELIVERY_MESSAGE}</Text>
       ) : null}
@@ -95,92 +107,156 @@ export function PudoCheckoutSection({
       </View>
 
       <View key={pudoLockerTier} collapsable={false}>
-      {isDoor ? (
-        <>
-          <Text style={styles.fieldLabel}>Address line 1</Text>
-          <TextInput
-            key="door-line1"
-            value={shippingLine1}
-            onChangeText={onShippingLine1Change}
-            placeholder="Street address, building, or complex"
-            placeholderTextColor={theme.mutedForegroundColor}
-            style={styles.input}
-            autoCapitalize="words"
-            maxLength={120}
-          />
-          <Text style={styles.fieldLabel}>Address line 2</Text>
-          <TextInput
-            key="door-line2"
-            value={shippingLine2}
-            onChangeText={onShippingLine2Change}
-            placeholder="Apartment, suite, unit, floor"
-            placeholderTextColor={theme.mutedForegroundColor}
-            style={styles.input}
-            autoCapitalize="words"
-            maxLength={80}
-          />
-          <View style={styles.fieldRow}>
-            <View style={styles.fieldHalf}>
-              <Text style={styles.fieldLabel}>Postal code</Text>
-              <TextInput
-                key="door-postal"
-                value={shippingPostalCode}
-                onChangeText={(v) => onShippingPostalCodeChange(v.replace(/\D/g, '').slice(0, 4))}
-                placeholder="0000"
-                placeholderTextColor={theme.mutedForegroundColor}
-                style={styles.input}
-                keyboardType="number-pad"
-                maxLength={4}
-              />
+        {isCollect ? (
+          <>
+            <Text style={styles.fieldLabel}>Select your store</Text>
+            <Pressable
+              style={styles.storeSelect}
+              onPress={() => setStoreMenuOpen((o) => !o)}
+            >
+              {selectedStore ? (
+                <View>
+                  <Text style={styles.storeSelectText}>{selectedStore.name}</Text>
+                  <Text style={styles.storeSelectAddress}>{selectedStore.address}</Text>
+                </View>
+              ) : (
+                <Text style={[styles.storeSelectText, styles.storeSelectPlaceholder]}>
+                  Select your store
+                </Text>
+              )}
+            </Pressable>
+            {storeMenuOpen ? (
+              <View style={styles.storeMenu}>
+                {COLLECT_STORES.map((store) => {
+                  const active = collectStoreKey === store.key
+                  return (
+                    <Pressable
+                      key={store.key}
+                      style={[styles.storeOption, active ? styles.storeOptionActive : null]}
+                      onPress={() => {
+                        onCollectStoreKeyChange(store.key)
+                        setStoreMenuOpen(false)
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.storeOptionText,
+                          active ? styles.storeOptionTextActive : null,
+                        ]}
+                      >
+                        {store.name}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.storeOptionAddress,
+                          active ? styles.storeOptionAddressActive : null,
+                        ]}
+                      >
+                        {store.address}
+                      </Text>
+                    </Pressable>
+                  )
+                })}
+              </View>
+            ) : null}
+            <Text style={styles.fieldLabel}>Collector name</Text>
+            <TextInput
+              key="collector-name"
+              value={collectorName}
+              onChangeText={onCollectorNameChange}
+              placeholder="Name of person collecting"
+              placeholderTextColor={theme.mutedForegroundColor}
+              style={styles.input}
+              autoCapitalize="words"
+              maxLength={80}
+            />
+          </>
+        ) : isDoor ? (
+          <>
+            <Text style={styles.fieldLabel}>Address line 1</Text>
+            <TextInput
+              key="door-line1"
+              value={shippingLine1}
+              onChangeText={onShippingLine1Change}
+              placeholder="Street address, building, or complex"
+              placeholderTextColor={theme.mutedForegroundColor}
+              style={styles.input}
+              autoCapitalize="words"
+              maxLength={120}
+            />
+            <Text style={styles.fieldLabel}>Address line 2</Text>
+            <TextInput
+              key="door-line2"
+              value={shippingLine2}
+              onChangeText={onShippingLine2Change}
+              placeholder="Apartment, suite, unit, floor"
+              placeholderTextColor={theme.mutedForegroundColor}
+              style={styles.input}
+              autoCapitalize="words"
+              maxLength={80}
+            />
+            <View style={styles.fieldRow}>
+              <View style={styles.fieldHalf}>
+                <Text style={styles.fieldLabel}>Postal code</Text>
+                <TextInput
+                  key="door-postal"
+                  value={shippingPostalCode}
+                  onChangeText={(v) => onShippingPostalCodeChange(v.replace(/\D/g, '').slice(0, 4))}
+                  placeholder="0000"
+                  placeholderTextColor={theme.mutedForegroundColor}
+                  style={styles.input}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                />
+              </View>
+              <View style={styles.fieldHalf}>
+                <Text style={styles.fieldLabel}>City</Text>
+                <TextInput
+                  key="door-city"
+                  value={shippingCity}
+                  onChangeText={onShippingCityChange}
+                  placeholder="Cape Town"
+                  placeholderTextColor={theme.mutedForegroundColor}
+                  style={styles.input}
+                  autoCapitalize="words"
+                  maxLength={60}
+                />
+              </View>
             </View>
-            <View style={styles.fieldHalf}>
-              <Text style={styles.fieldLabel}>City</Text>
-              <TextInput
-                key="door-city"
-                value={shippingCity}
-                onChangeText={onShippingCityChange}
-                placeholder="Cape Town"
-                placeholderTextColor={theme.mutedForegroundColor}
-                style={styles.input}
-                autoCapitalize="words"
-                maxLength={60}
-              />
-            </View>
-          </View>
-          <Text style={styles.fieldLabel}>Province</Text>
-          <ProvinceSelectField
-            theme={theme}
-            value={shippingProvince}
-            onChange={onShippingProvinceChange}
-            variant="checkout"
-          />
-        </>
-      ) : (
-        <>
-          <Text style={styles.fieldLabel}>Locker name or code</Text>
-          <TextInput
-            key="locker-name"
-            value={pudoName}
-            onChangeText={onPudoNameChange}
-            placeholder="e.g. Mall locker name"
-            placeholderTextColor={theme.mutedForegroundColor}
-            style={styles.input}
-            autoCapitalize="words"
-            maxLength={120}
-          />
-          <Text style={styles.fieldLabel}>Locker address</Text>
-          <TextInput
-            key="locker-address"
-            value={pudoAddr}
-            onChangeText={onPudoAddrChange}
-            placeholder="Mall or Pudo point"
-            placeholderTextColor={theme.mutedForegroundColor}
-            style={[styles.input, styles.inputMultiline]}
-            multiline
-            maxLength={200}
-          />
-        </>
-      )}
+            <Text style={styles.fieldLabel}>Province</Text>
+            <ProvinceSelectField
+              theme={theme}
+              value={shippingProvince}
+              onChange={onShippingProvinceChange}
+              variant="checkout"
+            />
+          </>
+        ) : (
+          <>
+            <Text style={styles.fieldLabel}>Locker name or code</Text>
+            <TextInput
+              key="locker-name"
+              value={pudoName}
+              onChangeText={onPudoNameChange}
+              placeholder="e.g. Mall locker name"
+              placeholderTextColor={theme.mutedForegroundColor}
+              style={styles.input}
+              autoCapitalize="words"
+              maxLength={120}
+            />
+            <Text style={styles.fieldLabel}>Locker address</Text>
+            <TextInput
+              key="locker-address"
+              value={pudoAddr}
+              onChangeText={onPudoAddrChange}
+              placeholder="Mall or Pudo point"
+              placeholderTextColor={theme.mutedForegroundColor}
+              style={[styles.input, styles.inputMultiline]}
+              multiline
+              maxLength={200}
+            />
+          </>
+        )}
       </View>
     </>
   )
@@ -213,14 +289,14 @@ function getStyles(theme: any) {
     },
     optionRow: {
       flexDirection: 'row',
-      gap: 10,
+      gap: 8,
       marginBottom: 10,
     },
     optionChip: {
       flex: 1,
       borderRadius: 12,
       paddingVertical: 12,
-      paddingHorizontal: 10,
+      paddingHorizontal: 6,
       borderWidth: 1,
       borderColor: border,
       backgroundColor: surface,
@@ -235,7 +311,7 @@ function getStyles(theme: any) {
     },
     optionChipLabel: {
       fontFamily: theme.semiBoldFont,
-      fontSize: 14,
+      fontSize: 13,
       color: theme.textColor,
     },
     optionChipLabelActive: {
@@ -243,7 +319,7 @@ function getStyles(theme: any) {
     },
     optionChipPrice: {
       fontFamily: theme.boldFont,
-      fontSize: 15,
+      fontSize: 14,
       color: theme.mutedForegroundColor,
       marginTop: 4,
     },
@@ -275,5 +351,66 @@ function getStyles(theme: any) {
       backgroundColor: surface,
     },
     inputMultiline: { minHeight: 72, textAlignVertical: 'top' },
+    storeSelect: {
+      borderWidth: 1,
+      borderColor: border,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      backgroundColor: surface,
+      marginBottom: 4,
+    },
+    storeSelectText: {
+      fontFamily: theme.semiBoldFont,
+      fontSize: 15,
+      color: theme.textColor,
+    },
+    storeSelectAddress: {
+      fontFamily: theme.regularFont,
+      fontSize: 13,
+      color: theme.mutedForegroundColor,
+      marginTop: 4,
+      lineHeight: 18,
+    },
+    storeSelectPlaceholder: {
+      color: theme.mutedForegroundColor,
+      fontFamily: theme.mediumFont,
+    },
+    storeMenu: {
+      borderWidth: 1,
+      borderColor: border,
+      borderRadius: 12,
+      backgroundColor: surface,
+      marginBottom: 4,
+      overflow: 'hidden',
+    },
+    storeOption: {
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: border,
+    },
+    storeOptionActive: {
+      backgroundColor: theme.brandAccent ? `${theme.brandAccent}18` : 'rgba(0,0,0,0.04)',
+    },
+    storeOptionText: {
+      fontFamily: theme.semiBoldFont,
+      fontSize: 14,
+      color: theme.textColor,
+    },
+    storeOptionTextActive: {
+      color: theme.brandAccent,
+    },
+    storeOptionAddress: {
+      fontFamily: theme.regularFont,
+      fontSize: 12,
+      color: theme.mutedForegroundColor,
+      marginTop: 3,
+      lineHeight: 17,
+    },
+    storeOptionAddressActive: {
+      color: theme.brandAccent,
+      opacity: 0.85,
+    },
   })
 }

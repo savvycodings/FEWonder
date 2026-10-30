@@ -1,16 +1,18 @@
-export const PUDO_LOCKER_TIERS = ['locker', 'door'] as const
+export const PUDO_LOCKER_TIERS = ['locker', 'collect', 'door'] as const
 export type PudoLockerTier = (typeof PUDO_LOCKER_TIERS)[number]
 
 export const PUDO_LOCKER_PRICES_ZAR: Record<PudoLockerTier, number> = {
   locker: 90,
+  collect: 0,
   door: 110,
 }
 
-/** Orders at or above this ZAR subtotal qualify for free Pudo delivery. */
+/** Orders at or above this ZAR subtotal qualify for free Pudo delivery (not Collect). */
 export const FREE_DELIVERY_MIN_SUBTOTAL_ZAR = 1000
 
 export const PUDO_LOCKER_LABELS: Record<PudoLockerTier, string> = {
   locker: 'Locker',
+  collect: 'Collect',
   door: 'Door',
 }
 
@@ -18,18 +20,19 @@ export const FREE_DELIVERY_MESSAGE =
   'Free delivery on orders of R1,000 or more.'
 
 export const PUDO_DELIVERY_HINT =
-  'Choose locker collection (R90) or door delivery (R110). Free delivery when your order is R1,000 or more.'
+  'Choose locker (R90), in-store collect (free), or door (R110). Free locker/door when your order is R1,000 or more.'
 
 export function qualifiesForFreeDeliveryZar(subtotalZar: number): boolean {
   return Number.isFinite(subtotalZar) && subtotalZar >= FREE_DELIVERY_MIN_SUBTOTAL_ZAR
 }
 
 export function shippingZarForTier(tier: PudoLockerTier, subtotalZar: number): number {
+  if (tier === 'collect') return 0
   if (qualifiesForFreeDeliveryZar(subtotalZar)) return 0
   return PUDO_LOCKER_PRICES_ZAR[tier]
 }
 
-/** @deprecated Legacy size tiers — display only for older orders. */
+/** @deprecated Legacy size tiers; display only for older orders. */
 const LEGACY_TIER_LABELS: Record<string, string> = {
   xs: 'Extra small',
   s: 'Small',
@@ -43,7 +46,7 @@ export function tierAllowedForCart(
   hasWholeSet: boolean,
 ): boolean {
   if (!hasWholeSet) return true
-  return tier === 'door'
+  return tier === 'door' || tier === 'collect'
 }
 
 export function defaultTierForCart(hasWholeSet: boolean): PudoLockerTier {
@@ -51,6 +54,7 @@ export function defaultTierForCart(hasWholeSet: boolean): PudoLockerTier {
 }
 
 export function formatTierPrice(tier: PudoLockerTier, subtotalZar?: number): string {
+  if (tier === 'collect') return 'Free'
   if (subtotalZar != null && qualifiesForFreeDeliveryZar(subtotalZar)) return 'Free'
   return `R${PUDO_LOCKER_PRICES_ZAR[tier]}`
 }
@@ -60,6 +64,9 @@ export function shippingHintForTier(
   hasWholeSet: boolean,
   subtotalZar: number,
 ): string {
+  if (tier === 'collect') {
+    return 'Pick up in store (free). Choose a store and enter the collector name.'
+  }
   if (qualifiesForFreeDeliveryZar(subtotalZar)) {
     return hasWholeSet
       ? 'Your order qualifies for free door delivery.'
@@ -67,7 +74,7 @@ export function shippingHintForTier(
         ? 'Your order qualifies for free door delivery.'
         : 'Your order qualifies for free locker collection.'
   }
-  if (hasWholeSet) return 'Whole set orders use door delivery (R110).'
+  if (hasWholeSet) return 'Whole set orders use door delivery (R110) or in-store collect (free).'
   if (tier === 'door') return 'Door delivery (R110). Use your saved address or enter it below.'
   return 'Locker collection (R90). Enter your Pudo locker details below.'
 }
@@ -81,7 +88,7 @@ export function lockerTierDisplay(tier: string | null | undefined): string {
   if (LEGACY_TIER_LABELS[t]) {
     return `${LEGACY_TIER_LABELS[t]} (${t.toUpperCase()})`
   }
-  return tier ? String(tier).toUpperCase() : '—'
+  return tier ? String(tier).toUpperCase() : '-'
 }
 
 export function packagingLabel(p: string | null | undefined): string {

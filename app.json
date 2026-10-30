@@ -3,7 +3,7 @@
     "name": "Wonderport",
     "slug": "wonderport",
     "scheme": "wonderport",
-    "version": "1.0.2",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -18,6 +18,8 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.chalynai.wonderport",
+      "buildNumber": "4",
+      "icon": "./assets/icon.png",
       "infoPlist": {
         "CFBundleDisplayName": "Wonderport",
         "NSPhotoLibraryUsageDescription": "Wonderport uses your photo library so you can set a profile picture, share images in community chat, and upload EFT payment proof."
@@ -38,6 +40,15 @@
       "expo-font",
       "expo-secure-store",
       "expo-web-browser",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 300,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
       [
         "expo-image-picker",
         {
